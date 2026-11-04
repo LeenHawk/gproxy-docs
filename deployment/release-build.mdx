@@ -205,8 +205,6 @@ pnpm --dir console build
 git submodule update --init docs
 pnpm --dir docs install --frozen-lockfile
 pnpm --dir docs check
-pnpm --dir docs build
-bash docs/scripts/check-docs.sh
 ```
 
 After changing Rust DTOs, run `pnpm --dir console types` to regenerate the TypeScript types.

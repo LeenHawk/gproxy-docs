@@ -174,8 +174,6 @@ pnpm --dir console build
 git submodule update --init docs
 pnpm --dir docs install --frozen-lockfile
 pnpm --dir docs check
-pnpm --dir docs build
-bash docs/scripts/check-docs.sh
 ```
 
 修改 Rust DTO 後，用 `pnpm --dir console types` 更新生成的 TypeScript 型別。
