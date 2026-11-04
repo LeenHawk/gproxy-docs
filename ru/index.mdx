@@ -1,0 +1,54 @@
+---
+title: "GPROXY"
+description: "Управляйте аккаунтами провайдеров, преобразуйте API-запросы, настраивайте маршруты моделей и отслеживайте использование и расходы."
+sidebarTitle: "Обзор"
+mode: "wide"
+---
+
+Единая точка доступа к LLM.
+
+<Columns cols={3}>
+  <Card title="Скачать" href="/ru/download" icon="download" horizontal />
+  <Card title="Быстрый старт" href="/ru/getting-started/quick-start" icon="arrow-right" horizontal />
+  <Card title="GitHub" href="https://github.com/LeenHawk/gproxy" icon="arrow-up-right-from-square" horizontal />
+</Columns>
+
+<a id="start-here"></a>
+
+## Начните здесь
+
+<Columns cols={2}>
+  <Card title="Установить и настроить" href="/ru/download">
+  Выберите «Приложение», «CLI», «Контейнеры» или «Workers» и настройте свою учётную запись.
+</Card>
+  <Card title="Сделайте свой первый запрос" href="/ru/getting-started/quick-start">
+  Добавьте провайдера и учётные данные, создайте маршрут модели и подключите свой клиент.
+</Card>
+  <Card title="Обновление с версии 3" href="/ru/deployment/v3-to-v4">
+  Просмотрите автоматическую миграцию, сохраненные данные и проверки после обновления.
+</Card>
+  <Card title="Подключите клиентов CLI" href="/ru/guides/cli-clients">
+  Настройте Codex CLI, Claude Code и другие инструменты.
+</Card>
+</Columns>
+
+<a id="common-tasks"></a>
+
+## Общие задачи
+
+<Columns cols={2}>
+  <Card title="Управление аккаунтами" icon="gear">
+  Управляйте ключами API, учётными данными OAuth и Cookie в одной консоли, используя информацию о работоспособности и разрешениях провайдера.
+</Card>
+  <Card title="Маршрутизация моделей" icon="shuffle">
+  Дайте клиентам стабильное имя модели, распределите запросы по весу и настройте резервных провайдеров.
+</Card>
+  <Card title="Протоколы подключения" icon="puzzle-piece">
+  Используйте форматы OpenAI, Claude и Gemini API для потоковой передачи. Доступные операции зависят от канала и провайдера.
+</Card>
+  <Card title="Отслеживайте использование и затраты" icon="file-lines">
+  Установите разрешения и бюджеты для пользователей и ключей, а затем проверьте запросы и детали расчёта стоимости.
+</Card>
+</Columns>
+
+Подробности реализации: [Архитектура](/ru/introduction/architecture) и [Встраивание ядра](/ru/reference/embedding).

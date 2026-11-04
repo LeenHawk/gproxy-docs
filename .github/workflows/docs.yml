@@ -1,8 +1,10 @@
 name: Docs
 
+# Mintlify builds and hosts the site from this repository on its own; this
+# workflow only checks that it will build and mirrors every push to CNB.
 on:
   push:
-    branches: [main, dev]
+    branches: [main, dev, mintlify]
   pull_request:
   workflow_dispatch:
 
@@ -14,8 +16,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Build
+  check:
+    name: Check
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -25,59 +27,12 @@ jobs:
           node-version: '24.21.0'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # notifications.json, mint validate, mint broken-links
       - run: pnpm check
-      - run: pnpm build
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: docs-dist
-          path: dist
-          retention-days: 1
-
-  # The site also hosts the signed announcement feed the native binary polls
-  # (notifications.json + .sig). It is signed with the same Ed25519 identity the
-  # gproxy release workflow compiles into the binary, so these secrets must be
-  # the ones in gproxy's `release` environment, not an older key.
-  deploy:
-    name: Deploy
-    needs: build
-    if: ${{ github.event_name != 'pull_request' && github.ref_name == 'main' }}
-    runs-on: ubuntu-24.04
-    environment:
-      name: cloudflare
-    steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: docs-dist
-          path: dist
-      - name: Sign notifications feed
-        env:
-          UPDATE_SIGNING_PRIVATE_KEY_B64: ${{ secrets.UPDATE_SIGNING_PRIVATE_KEY_B64 }}
-          UPDATE_SIGNING_PUBLIC_KEY_B64: ${{ secrets.UPDATE_SIGNING_PUBLIC_KEY_B64 }}
-        run: |
-          test -n "$UPDATE_SIGNING_PRIVATE_KEY_B64" || { echo "UPDATE_SIGNING_PRIVATE_KEY_B64 is empty" >&2; exit 1; }
-          test -n "$UPDATE_SIGNING_PUBLIC_KEY_B64" || { echo "UPDATE_SIGNING_PUBLIC_KEY_B64 is empty" >&2; exit 1; }
-          work="$(mktemp -d)"
-          trap 'rm -rf "$work"' EXIT
-          printf '%s' "$UPDATE_SIGNING_PRIVATE_KEY_B64" | base64 -d > "$work/priv.pem"
-          chmod 600 "$work/priv.pem"
-          derived="$(openssl pkey -in "$work/priv.pem" -pubout -outform DER | tail -c 32 | base64 -w0)"
-          test "$derived" = "$UPDATE_SIGNING_PUBLIC_KEY_B64" || {
-            echo "private key does not match UPDATE_SIGNING_PUBLIC_KEY_B64" >&2; exit 1; }
-          openssl pkeyutl -sign -rawin -inkey "$work/priv.pem" \
-            -in dist/notifications.json -out "$work/sig.bin"
-          base64 -w0 "$work/sig.bin" > dist/notifications.json.sig
-          openssl pkey -in "$work/priv.pem" -pubout -out "$work/pub.pem"
-          openssl pkeyutl -verify -rawin -pubin -inkey "$work/pub.pem" \
-            -sigfile "$work/sig.bin" -in dist/notifications.json >/dev/null || {
-            echo "self-verify of notifications signature failed" >&2; exit 1; }
-      - uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy ./dist --project-name=${{ secrets.CLOUDFLARE_PROJECT_ID }} --branch=${{ github.ref_name }}
 
   # GitLab and git.lin.pub pull from GitHub on their own; CNB has no pull
-  # mirror, so every push is forwarded there.
+  # mirror, so every push is forwarded there. The installers are served from
+  # CNB's raw files (see the redirects in docs.json), so main must reach it.
   mirror-cnb:
     name: Mirror to CNB
     if: ${{ github.event_name == 'push' }}

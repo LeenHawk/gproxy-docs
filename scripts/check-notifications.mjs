@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const docsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const file = path.join(docsDir, "public", "notifications.json");
+const file = path.join(docsDir, "notifications.json");
 const errors = [];
 let feed;
 

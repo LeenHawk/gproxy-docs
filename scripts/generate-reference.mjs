@@ -1,5 +1,6 @@
-// Export the reference JSON from a gproxy checkout. gproxy's CI runs this and
-// commits the result to public/generated/; run it by hand only to preview
+// Export the reference JSON from a gproxy checkout and render it into MDX
+// snippets. gproxy's CI runs this and commits generated/ and
+// snippets/generated/; run it by hand only to preview
 // unreleased Rust changes. The checkout defaults to the parent directory, which
 // is where gproxy keeps this repository as its `docs/` submodule. This uses the
 // SDK's existing channel feature group, so adding a channel needs no docs-only list.
@@ -10,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 const root = process.env.GPROXY_ROOT
   ? resolve(process.env.GPROXY_ROOT)
   : fileURLToPath(new URL('../../', import.meta.url));
-const output = fileURLToPath(new URL('../public/generated/', import.meta.url));
+const output = fileURLToPath(new URL('../generated/', import.meta.url));
 const metadata = JSON.parse(execFileSync('cargo', [
   'metadata', '--locked', '--no-deps', '--format-version', '1',
 ], { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }));
@@ -26,3 +27,4 @@ execFileSync('cargo', [
   '--no-default-features', '--features', ['documentation', ...features].join(','),
   '--', output,
 ], { cwd: root, stdio: 'inherit' });
+await import('./render-reference.mjs');

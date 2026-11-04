@@ -1,0 +1,4 @@
+# Repository files that are not documentation pages.
+README.md
+scripts/
+node_modules/
