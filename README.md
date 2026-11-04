@@ -36,10 +36,8 @@ The Rust exporter writes ignored build inputs to `public/generated/`:
   access or support for every protocol operation. Placeholders are not defaults.
 
 The English, Simplified Chinese, Traditional Chinese and Russian MDX pages render these
-JSON files through Astro components. `src/i18n/reference/` translates all
-generated descriptions; untranslated additions fail the build. Protocol keys,
-enum values, source paths and type identifiers remain unchanged. The build also
-writes `*.zh-cn.json`, `*.zh-tw.json` and `*.ru.json` with localized descriptions.
+JSON files through Astro components. Labels are localized; the generated
+descriptions come from Rust doc comments and stay in English in every locale.
 
 The API reference links every payload to its complete data-structure definition.
 `starlight-llms-txt` renders those same pages into `llms-full.txt`,

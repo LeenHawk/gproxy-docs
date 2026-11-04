@@ -1,17 +1,16 @@
 ---
 import catalog from '../../public/generated/channels.json';
-import { referenceText, description } from '../lib/reference-i18n';
+import { referenceText } from '../lib/reference-i18n';
 const { locale = 'en' } = Astro.props;
 const t = referenceText(locale);
-const suffix = locale === 'en' ? '' : `.${locale}`;
 const configTable = [...catalog.hostConfigKeys];
 ---
 
-<p>GPROXY {catalog.version}. <a href={`/generated/channels${suffix}.json`}>{t.jsonDownload}</a>.</p>
+<p>GPROXY {catalog.version}. <a href={`/generated/channels.json`}>{t.jsonDownload}</a>.</p>
 <h2 id="host-configuration">{t.hostConfig}</h2>
 <table>
   <thead><tr><th>{t.key}</th><th>{t.kind}</th><th>{t.description}</th></tr></thead>
-  <tbody>{configTable.map((key) => <tr><td><code>{key.name}</code></td><td>{t[key.kind]}</td><td>{description(key.description,locale)}</td></tr>)}</tbody>
+  <tbody>{configTable.map((key) => <tr><td><code>{key.name}</code></td><td>{t[key.kind]}</td><td>{key.description}</td></tr>)}</tbody>
 </table>
 {catalog.channels.map(({ descriptor: channel, services }) => (
   <section>
@@ -24,7 +23,7 @@ const configTable = [...catalog.hostConfigKeys];
     {channel.configKeys.length > 0 && <table>
       <thead><tr><th>{t.key}</th><th>{t.kind}</th><th>{t.required}</th><th>{t.description}</th><th>{t.placeholder}</th></tr></thead>
       <tbody>{channel.configKeys.map((key) => <tr>
-        <td><code>{key.name}</code></td><td>{t[key.kind]}</td><td>{key.required ? t.yes : t.no}</td><td>{description(key.description,locale)}</td><td>{key.placeholder ? <code>{key.placeholder}</code> : '—'}</td>
+        <td><code>{key.name}</code></td><td>{t[key.kind]}</td><td>{key.required ? t.yes : t.no}</td><td>{key.description}</td><td>{key.placeholder ? <code>{key.placeholder}</code> : '—'}</td>
       </tr>)}</tbody>
     </table>}
     {services.length > 0 && <details>

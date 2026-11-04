@@ -1,7 +1,3 @@
-import simplified from '../i18n/reference/zh-cn.json';
-import traditional from '../i18n/reference/zh-tw.json';
-import russian from '../i18n/reference/ru.json';
-
 export type ReferenceLocale = 'en' | 'zh-cn' | 'zh-tw' | 'ru';
 const labels = {
   ru: {
@@ -83,21 +79,6 @@ const labels = {
 };
 export function referenceText(locale: ReferenceLocale) {
   return labels[locale];
-}
-export function description(text: string | undefined, locale: ReferenceLocale): string {
-  if (!text || locale === 'en') return text ?? '';
-  const key = text.replace(/\s+/g,' ').trim();
-  const dictionary: Record<string,string> = { 'zh-cn': simplified, 'zh-tw': traditional, ru: russian }[locale];
-  if (!(key in dictionary)) throw new Error(`Missing ${locale} reference translation: ${key}`);
-  return dictionary[key];
-}
-export function localizedSchema(value: any, locale: ReferenceLocale): any {
-  if (Array.isArray(value)) return value.map((item) => localizedSchema(item,locale));
-  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key,item]) => [key,
-    ['default','example','examples','enum','const'].includes(key) ? item :
-      key === 'description' && typeof item === 'string' ? description(item,locale) : localizedSchema(item,locale),
-  ]));
-  return value;
 }
 export function schemaReferences(schema: any): string[] {
   const refs = new Set<string>();

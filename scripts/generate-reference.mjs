@@ -20,4 +20,3 @@ execFileSync('cargo', [
   '--no-default-features', '--features', ['documentation', ...features].join(','),
   '--', output,
 ], { cwd: root, stdio: 'inherit' });
-await import('./localize-reference.mjs');
