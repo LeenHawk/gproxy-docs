@@ -4,9 +4,8 @@ import ApiPayload from './ApiPayload.astro';
 import { referenceText } from '../lib/reference-i18n';
 const { locale = 'en' } = Astro.props;
 const t = referenceText(locale);
-const suffix = locale === 'en' ? '' : `.${locale}`;
 ---
-<p><a href={`/generated/openapi${suffix}.json`}>{t.jsonDownload} (OpenAPI)</a></p>
+<p><a href={`/generated/openapi.json`}>{t.jsonDownload} (OpenAPI)</a></p>
 {Object.entries(api.components.schemas).map(([name,schema]) => <section>
   <h2 id={name}><code>{name}</code></h2>
   <details data-pagefind-ignore>

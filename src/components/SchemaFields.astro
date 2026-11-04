@@ -1,6 +1,6 @@
 ---
 import { createMarkdownProcessor } from '@astrojs/markdown-remark';
-import { referenceText, description } from '../lib/reference-i18n';
+import { referenceText } from '../lib/reference-i18n';
 
 const { schema, locale = 'en' } = Astro.props;
 const t = referenceText(locale);
@@ -18,7 +18,7 @@ const rows = await Promise.all(Object.entries(schema.properties ?? {}).map(async
   type: typeName(value),
   required: (schema.required ?? []).includes(name),
   // Rust intra-doc targets are names, not browser URLs.
-  description: (await markdown.render(description(value.description,locale).replace(
+  description: (await markdown.render((value.description ?? "").replace(
     /\[([^\]]+)\]\((?:crate|self|super)::[^)]+\)/g, '$1',
   ))).code,
 })));
