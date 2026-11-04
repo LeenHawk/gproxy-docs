@@ -63,6 +63,23 @@ description: "选择渠道、添加供应商与凭证，配置登录、额度查
 
 NVIDIA NIM、Vercel AI Gateway 和 Cloudflare AI Gateway 提供专用渠道，优先使用对应渠道以获得专用的认证和额度查询功能。
 
+### Gemini Interactions
+
+AI Studio 同时支持 `gemini`（GenerateContent）和 `gemini_interactions`（Interactions）两种协议。两者都对应 `generate_content` / `stream_generate_content` 操作，但 Interactions 有自己的请求、步骤事件和响应类型。
+
+请求地址为 `POST /v1beta/interactions` 或 `POST /v1/interactions`，也可以挂在某个供应商前缀下。设置 `stream: true` 即使用原生 SSE。`GET /interactions/{id}`、`POST /interactions/{id}/cancel` 和 `DELETE /interactions/{id}` 使用相同的版本前缀。`stream`、`last_event_id` 等查询参数会原样转发，用于读取和续传。创建出的 id 与 `previous_interaction_id` 只对创建它的网关调用方有效，并固定使用最初的凭证。`agent` 目标与模型一样经过路由和权限检查，转发给上游时仍保留 `agent` 字段。
+
+Responses、Chat Completions 和 Claude Messages 都能与 Interactions 直接双向无状态转换。在供应商的操作映射里把目标协议设为 `gemini_interactions`，或者配置一个只讲 Interactions 的 `custom` 上游：
+
+```json
+{ "channel": "custom", "baseUrl": "https://generativelanguage.googleapis.com",
+  "config": { "dialects": ["gemini_interactions"] } }
+```
+
+函数调用与结果、带签名的思考历史、内联图片、文本和 JSON 输出 schema 都会转换。Interactions 步骤签名与 GenerateContent 签名使用不同的载体。不支持的可选字段会产生转换诊断。文件 id 需要先转成数据或 URL。
+
+Agent、后台执行、存储在其他协议里的续接，以及显式 `store: true`，都需要原生 Interactions 上游。从 Interactions 客户端转换到其他协议的上游时，请发送完整历史并设置 `store: false`；转换后的响应 id 并不对应上游存储的 Interaction。原生流式是增量返回的；跨协议流式目前会先收齐上游的完整结果，再合成客户端协议的事件，因此不会缩短首字时间。轮询和续传读取不会重复计费资源的累计用量；创建响应里没有用量的后台任务，网关不会上报其用量。
+
 ### OrcaTerm
 
 `orcaterm` 使用桌面端 LightAI 协议，支持图文对话和模型专属思考参数。新建供应商后使用浏览器 OAuth，或导入 OAuth 凭证。国际站设置 `international=true`，账号地址为 `https://orcaterm.ai`，LightAI 地址为 `https://lightai.tencentcloud.com`。
