@@ -202,6 +202,7 @@ Console and docs:
 pnpm --dir console lint
 pnpm --dir console test
 pnpm --dir console build
+git submodule update --init docs
 pnpm --dir docs install --frozen-lockfile
 pnpm --dir docs check
 pnpm --dir docs build
@@ -213,7 +214,7 @@ After changing Rust DTOs, run `pnpm --dir console types` to regenerate the TypeS
 ## Publish
 
 Run `bash scripts/release.sh` from a clean checkout included in `main`. Before
-pushing a stable tag, it updates Console and docs npm dependencies with
+pushing a stable tag, it updates Console npm dependencies with
 `pnpm update --latest`, upgrades Rust registry requirements with `cargo upgrade`
 (including major and pinned versions), and refreshes `Cargo.lock` with `cargo update`.
 Compatibility bridges for RSA/getrandom, JNI/Tauri, Codex reqwest and WebSocket
