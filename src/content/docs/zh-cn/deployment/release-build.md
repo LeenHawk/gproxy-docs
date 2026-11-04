@@ -183,6 +183,7 @@ cargo check --target wasm32-unknown-unknown \
 pnpm --dir console lint
 pnpm --dir console test
 pnpm --dir console build
+git submodule update --init docs
 pnpm --dir docs install --frozen-lockfile
 pnpm --dir docs check
 pnpm --dir docs build
@@ -194,7 +195,7 @@ bash docs/scripts/check-docs.sh
 ## 发布
 
 在工作区干净、当前提交已进入 `main` 后执行 `bash scripts/release.sh`。
-正式版推送标签前，会用 `pnpm update --latest` 更新前端和文档站的 npm 依赖，
+正式版推送标签前，会用 `pnpm update --latest` 更新前端的 npm 依赖，
 用 `cargo upgrade` 更新 Rust 注册表依赖约束（包括大版本和固定版本），
 再用 `cargo update` 刷新 `Cargo.lock`。需先安装辅助工具：
 `cargo install cargo-edit --locked`。
