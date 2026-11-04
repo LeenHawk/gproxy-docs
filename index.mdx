@@ -1,0 +1,50 @@
+---
+title: "GPROXY"
+description: "Manage upstream accounts, translate API requests, route models, and track usage and costs."
+sidebarTitle: "Overview"
+mode: "wide"
+---
+
+One endpoint for your LLM services.
+
+<Columns cols={3}>
+  <Card title="Download" href="/download" icon="download" horizontal />
+  <Card title="Quick start" href="/getting-started/quick-start" icon="arrow-right" horizontal />
+  <Card title="GitHub" href="https://github.com/LeenHawk/gproxy" icon="arrow-up-right-from-square" horizontal />
+</Columns>
+
+## Start here
+
+<Columns cols={2}>
+  <Card title="Install and set up" href="/download">
+  Choose Application, CLI, containers, or Workers and set up your account.
+</Card>
+  <Card title="Make your first request" href="/getting-started/quick-start">
+  Add a provider and credential, create a model route, and connect your client.
+</Card>
+  <Card title="Upgrade from v3" href="/deployment/v3-to-v4">
+  Review automatic migration, retained data, and checks after upgrading.
+</Card>
+  <Card title="Connect CLI clients" href="/guides/cli-clients">
+  Configure Codex CLI, Claude Code, and other tools.
+</Card>
+</Columns>
+
+## Common tasks
+
+<Columns cols={2}>
+  <Card title="Manage accounts" icon="gear">
+  Manage API keys, OAuth, and Cookie credentials in one console, with health and upstream allowance information.
+</Card>
+  <Card title="Route models" icon="shuffle">
+  Give clients a stable model name, distribute requests by weight, and configure fallback providers.
+</Card>
+  <Card title="Connect protocols" icon="puzzle-piece">
+  Use OpenAI, Claude, and Gemini API formats with streaming. Available operations depend on the channel and upstream.
+</Card>
+  <Card title="Track usage and costs" icon="file-lines">
+  Set user and key permissions and budgets, then inspect requests and billing details.
+</Card>
+</Columns>
+
+For implementation details, see [Architecture](/introduction/architecture) and [Embedding the core](/reference/embedding).

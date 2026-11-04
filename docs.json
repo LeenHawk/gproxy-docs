@@ -1,0 +1,372 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "GPROXY",
+  "description": "Install, configure and operate GPROXY v4: one gateway in front of many LLM providers, as a native binary, a desktop shell or a Cloudflare Worker.",
+  "colors": {
+    "primary": "#2563EB",
+    "light": "#60A5FA",
+    "dark": "#1D4ED8"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "languages": [
+      {
+        "language": "en",
+        "groups": [
+          {
+            "group": "Introduction",
+            "pages": [
+              "index",
+              "introduction/what-is-gproxy",
+              "introduction/architecture"
+            ]
+          },
+          {
+            "group": "Getting Started",
+            "pages": [
+              "download",
+              "getting-started/quick-start",
+              "getting-started/first-request"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/providers",
+              "guides/models",
+              "guides/users-and-keys",
+              "guides/permissions",
+              "guides/rules",
+              "guides/claude-caching",
+              "guides/cli-clients",
+              "guides/console",
+              "guides/observability",
+              "guides/adding-a-channel"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/configuration",
+              "reference/routing-table",
+              "reference/pricing",
+              "reference/database",
+              "reference/embedding",
+              "reference/http-api",
+              "reference/configuration-schema",
+              "reference/channel-catalog"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/edge",
+              "deployment/containers",
+              "deployment/release-build",
+              "deployment/v2-to-v3",
+              "deployment/v2-to-v4",
+              "deployment/v3-to-v4"
+            ]
+          },
+          {
+            "group": "HTTP API",
+            "openapi": "generated/openapi.json"
+          }
+        ]
+      },
+      {
+        "language": "zh-Hans",
+        "groups": [
+          {
+            "group": "介绍",
+            "pages": [
+              "zh-cn/index",
+              "zh-cn/introduction/what-is-gproxy",
+              "zh-cn/introduction/architecture"
+            ]
+          },
+          {
+            "group": "快速上手",
+            "pages": [
+              "zh-cn/download",
+              "zh-cn/getting-started/quick-start",
+              "zh-cn/getting-started/first-request"
+            ]
+          },
+          {
+            "group": "使用指南",
+            "pages": [
+              "zh-cn/guides/providers",
+              "zh-cn/guides/models",
+              "zh-cn/guides/users-and-keys",
+              "zh-cn/guides/permissions",
+              "zh-cn/guides/rules",
+              "zh-cn/guides/claude-caching",
+              "zh-cn/guides/cli-clients",
+              "zh-cn/guides/console",
+              "zh-cn/guides/observability",
+              "zh-cn/guides/adding-a-channel"
+            ]
+          },
+          {
+            "group": "参考手册",
+            "pages": [
+              "zh-cn/reference/configuration",
+              "zh-cn/reference/routing-table",
+              "zh-cn/reference/pricing",
+              "zh-cn/reference/database",
+              "zh-cn/reference/embedding",
+              "zh-cn/reference/http-api",
+              "zh-cn/reference/configuration-schema",
+              "zh-cn/reference/channel-catalog"
+            ]
+          },
+          {
+            "group": "部署",
+            "pages": [
+              "zh-cn/deployment/edge",
+              "zh-cn/deployment/containers",
+              "zh-cn/deployment/release-build",
+              "zh-cn/deployment/v2-to-v3",
+              "zh-cn/deployment/v2-to-v4",
+              "zh-cn/deployment/v3-to-v4"
+            ]
+          },
+          {
+            "group": "HTTP API",
+            "openapi": "generated/openapi.json"
+          }
+        ]
+      },
+      {
+        "language": "zh-Hant",
+        "groups": [
+          {
+            "group": "介紹",
+            "pages": [
+              "zh-tw/index",
+              "zh-tw/introduction/what-is-gproxy",
+              "zh-tw/introduction/architecture"
+            ]
+          },
+          {
+            "group": "快速上手",
+            "pages": [
+              "zh-tw/download",
+              "zh-tw/getting-started/quick-start",
+              "zh-tw/getting-started/first-request"
+            ]
+          },
+          {
+            "group": "使用指南",
+            "pages": [
+              "zh-tw/guides/providers",
+              "zh-tw/guides/models",
+              "zh-tw/guides/users-and-keys",
+              "zh-tw/guides/permissions",
+              "zh-tw/guides/rules",
+              "zh-tw/guides/claude-caching",
+              "zh-tw/guides/cli-clients",
+              "zh-tw/guides/console",
+              "zh-tw/guides/observability",
+              "zh-tw/guides/adding-a-channel"
+            ]
+          },
+          {
+            "group": "參考手冊",
+            "pages": [
+              "zh-tw/reference/configuration",
+              "zh-tw/reference/routing-table",
+              "zh-tw/reference/pricing",
+              "zh-tw/reference/database",
+              "zh-tw/reference/embedding",
+              "zh-tw/reference/http-api",
+              "zh-tw/reference/configuration-schema",
+              "zh-tw/reference/channel-catalog"
+            ]
+          },
+          {
+            "group": "部署",
+            "pages": [
+              "zh-tw/deployment/edge",
+              "zh-tw/deployment/containers",
+              "zh-tw/deployment/release-build",
+              "zh-tw/deployment/v2-to-v3",
+              "zh-tw/deployment/v2-to-v4",
+              "zh-tw/deployment/v3-to-v4"
+            ]
+          },
+          {
+            "group": "HTTP API",
+            "openapi": "generated/openapi.json"
+          }
+        ]
+      },
+      {
+        "language": "ru",
+        "groups": [
+          {
+            "group": "Введение",
+            "pages": [
+              "ru/index",
+              "ru/introduction/what-is-gproxy",
+              "ru/introduction/architecture"
+            ]
+          },
+          {
+            "group": "Начало работы",
+            "pages": [
+              "ru/download",
+              "ru/getting-started/quick-start",
+              "ru/getting-started/first-request"
+            ]
+          },
+          {
+            "group": "Руководства",
+            "pages": [
+              "ru/guides/providers",
+              "ru/guides/models",
+              "ru/guides/users-and-keys",
+              "ru/guides/permissions",
+              "ru/guides/rules",
+              "ru/guides/claude-caching",
+              "ru/guides/cli-clients",
+              "ru/guides/console",
+              "ru/guides/observability",
+              "ru/guides/adding-a-channel"
+            ]
+          },
+          {
+            "group": "Справочник",
+            "pages": [
+              "ru/reference/configuration",
+              "ru/reference/routing-table",
+              "ru/reference/pricing",
+              "ru/reference/database",
+              "ru/reference/embedding",
+              "ru/reference/http-api",
+              "ru/reference/configuration-schema",
+              "ru/reference/channel-catalog"
+            ]
+          },
+          {
+            "group": "Развёртывание",
+            "pages": [
+              "ru/deployment/edge",
+              "ru/deployment/containers",
+              "ru/deployment/release-build",
+              "ru/deployment/v2-to-v3",
+              "ru/deployment/v2-to-v4",
+              "ru/deployment/v3-to-v4"
+            ]
+          },
+          {
+            "group": "HTTP API",
+            "openapi": "generated/openapi.json"
+          }
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/LeenHawk/gproxy"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/LeenHawk/gproxy"
+    }
+  },
+  "api": {
+    "playground": {
+      "display": "simple"
+    }
+  },
+  "seo": {
+    "indexing": "navigable"
+  },
+  "redirects": [
+    {
+      "source": "/getting-started/installation",
+      "destination": "/download"
+    },
+    {
+      "source": "/deployment/v2-postgres-to-v4",
+      "destination": "/deployment/v2-to-v4"
+    },
+    {
+      "source": "/reference/api-schemas",
+      "destination": "/reference/http-api"
+    },
+    {
+      "source": "/llms-api.txt",
+      "destination": "/generated/openapi.json"
+    },
+    {
+      "source": "/zh-cn/getting-started/installation",
+      "destination": "/zh-cn/download"
+    },
+    {
+      "source": "/zh-cn/deployment/v2-postgres-to-v4",
+      "destination": "/zh-cn/deployment/v2-to-v4"
+    },
+    {
+      "source": "/zh-cn/reference/api-schemas",
+      "destination": "/zh-cn/reference/http-api"
+    },
+    {
+      "source": "/zh-cn/llms-api.txt",
+      "destination": "/generated/openapi.json"
+    },
+    {
+      "source": "/zh-tw/getting-started/installation",
+      "destination": "/zh-tw/download"
+    },
+    {
+      "source": "/zh-tw/deployment/v2-postgres-to-v4",
+      "destination": "/zh-tw/deployment/v2-to-v4"
+    },
+    {
+      "source": "/zh-tw/reference/api-schemas",
+      "destination": "/zh-tw/reference/http-api"
+    },
+    {
+      "source": "/zh-tw/llms-api.txt",
+      "destination": "/generated/openapi.json"
+    },
+    {
+      "source": "/ru/getting-started/installation",
+      "destination": "/ru/download"
+    },
+    {
+      "source": "/ru/deployment/v2-postgres-to-v4",
+      "destination": "/ru/deployment/v2-to-v4"
+    },
+    {
+      "source": "/ru/reference/api-schemas",
+      "destination": "/ru/reference/http-api"
+    },
+    {
+      "source": "/ru/llms-api.txt",
+      "destination": "/generated/openapi.json"
+    },
+    {
+      "source": "/install.sh",
+      "destination": "https://cnb.cool/LeenHawk/gproxy-docs/-/git/raw/main/install.sh",
+      "permanent": false
+    },
+    {
+      "source": "/install.ps1",
+      "destination": "https://cnb.cool/LeenHawk/gproxy-docs/-/git/raw/main/install.ps1",
+      "permanent": false
+    },
+    {
+      "source": "/notifications.json.sig",
+      "destination": "https://github.com/LeenHawk/gproxy/releases/download/notifications/notifications.json.sig",
+      "permanent": false
+    }
+  ]
+}
