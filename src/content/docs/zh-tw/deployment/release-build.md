@@ -186,7 +186,7 @@ pnpm --dir console build
 pnpm --dir docs install --frozen-lockfile
 pnpm --dir docs check
 pnpm --dir docs build
-bash scripts/check-docs.sh
+bash docs/scripts/check-docs.sh
 ```
 
 修改 Rust DTO 後，用 `pnpm --dir console types` 更新生成的 TypeScript 型別。
@@ -203,6 +203,6 @@ bash scripts/check-docs.sh
 預先發行標籤不執行這項相依套件更新。
 RSA/getrandom、JNI/Tauri、Codex reqwest 與 WebSocket 設定的相容橋接依賴保留上游要求的版本線，仍透過 `cargo update` 更新相容版本。
 
-版本 tag 必須與 workspace 版本一致，並提供 `docs/release-notes/v<版本>.md`。釋出流程構建包、生成簽名更新清單並上傳附件；構建或簽名要求未滿足時，不能視為釋出完成。
+版本 tag 必須與 workspace 版本一致，並提供 `release-notes/v<版本>.md`。釋出流程構建包、生成簽名更新清單並上傳附件；構建或簽名要求未滿足時，不能視為釋出完成。
 
 版本 tag 還會呼叫 `scripts/publish-crates.sh` 釋出選定的 MIT 庫，其他 crate 使用 git 或路徑依賴。詳情見[嵌入核心庫](/zh-tw/reference/embedding/)。
