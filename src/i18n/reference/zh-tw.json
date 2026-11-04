@@ -628,7 +628,7 @@
   "Which column the aggregate is cut by.": "彙總採用的分組列。",
   "Who the credential belongs to, in the application layer's own vocabulary. Opaque to this crate: it copies the three columns through untouched, and only the layer above knows what an organization or a team is.": "按應用層詞彙描述的憑證所有者。此 crate 不解釋其含義，只原樣傳遞三列，組織和團隊的語義由上層決定。",
   "Why the last check failed, when one did and none has since succeeded. A console shows this rather than an empty panel that looks like \"no update available\".": "最近一次檢查失敗且之後沒有成功檢查時的失敗原因。控制檯展示該原因，避免空面板被誤解為“沒有可用更新”。",
-  "Wire dialects the upstream accepts natively. Empty accepts openai, openai_chat, claude and gemini.": "上游原生接受的傳輸協議。空列表表示接受 openai、openai_chat、claude 和 gemini。",
+  "Wire dialects the upstream accepts natively. Empty accepts openai, openai_chat, claude, gemini and gemini_interactions.": "上游原生接受的傳輸協議。空列表表示接受 openai、openai_chat、claude、gemini 和 gemini_interactions。",
   "Write every row of the document, leaving anything it does not mention alone. This is the additive mode: two deployments can be merged.": "寫入文件中的全部記錄，文件未提及的內容保持不變。這是增量模式，可用於合併兩個部署。",
   "X-Title sent when the client sends none.": "客戶端未提供時傳送的 X-Title。",
   "`1000000` for the token metrics, `1` for counted ones.": "token 指標為 `1000000`，計數指標為 `1`。",
@@ -717,5 +717,10 @@
   "Audio input supplied inline or by uploaded file ID.": "以內嵌資料或已上傳檔案 ID 提供的音訊輸入。",
   "The model the upstream response named, which may differ from `model`.": "上游回應中宣告的模型，可能與 `model` 不同。",
   "The upstream model the call was routed to.": "此次呼叫被路由到的上游模型。",
-  "Required key; the reference allows null.": "必填鍵；參考規範允許為 null。"
+  "Required key; the reference allows null.": "必填鍵；參考規範允許為 null。",
+  "Create with either model or agent; output-only resource fields are absent.": "使用 model 或 agent 建立互動；請求不包含僅用於輸出的資源欄位。",
+  "Fields shared by native step variants; vendor-specific fields remain in rest.": "原生步驟變體共用的欄位；廠商特有欄位保留在 rest 中。",
+  "Native tool declaration, including hosted tools and MCP configuration.": "原生工具宣告，包含託管工具和 MCP 設定。",
+  "Native retrieval/resumption query. api_version selects routing when supplied; it is independent of the resource id and never inserted into the JSON body.": "原生查詢和續流參數。api_version 用於選擇路由，與資源 ID 獨立，不會插入 JSON 請求主體。",
+  "Gemini Interactions, distinct from GenerateContent. Generation uses GenerateContent / StreamGenerateContent with native step-based bodies.": "Gemini Interactions 協定。生成使用 GenerateContent / StreamGenerateContent 操作及原生步驟格式的請求和回應。"
 }

@@ -76,6 +76,46 @@ difference is an origin and a header is a `custom` provider:
 NVIDIA NIM, Vercel AI Gateway and Cloudflare AI Gateway used to be served this
 way; each has a channel now, because a row could not say everything they need.
 
+### Gemini Interactions
+
+AI Studio supports both `gemini` (GenerateContent) and `gemini_interactions`
+(Interactions). Both use `generate_content` / `stream_generate_content`; the
+Interactions dialect has its own request, step events and response types.
+
+Use `POST /v1beta/interactions` or `POST /v1/interactions`, optionally under a
+provider mount. Set `stream: true` for native SSE. `GET /interactions/{id}`,
+`POST /interactions/{id}/cancel`, and `DELETE /interactions/{id}` use the same
+version prefix. Query parameters such as `stream` and `last_event_id` are
+forwarded for retrieval/resumption. Created ids and `previous_interaction_id`
+are scoped to their gateway caller and pinned to the original credential.
+An `agent` target is resolved and permission-checked through the same model
+routing path, while retaining the `agent` field on the upstream request.
+
+Responses, Chat Completions and Claude Messages have direct bidirectional
+stateless conversion pairs with Interactions. Choose `gemini_interactions`
+as the target dialect in the provider's operation mappings, or use a custom
+Interactions-only upstream:
+
+```json
+{ "channel": "custom", "baseUrl": "https://generativelanguage.googleapis.com",
+  "config": { "dialects": ["gemini_interactions"] } }
+```
+
+Function calls/results, signed thinking history, inline images, text and JSON
+output schemas are converted. Interactions step signatures use a separate
+carrier from GenerateContent signatures. Unsupported optional fields produce
+conversion diagnostics. File ids must be materialized as data or URLs first.
+
+Agents, background execution, stored foreign continuations and explicit
+`store: true` require a native Interactions upstream. For conversion from an
+Interactions client to a foreign upstream, send full history and `store: false`;
+the converted response id does not identify a remotely stored Interaction.
+Native streaming is incremental. Cross-protocol streaming currently collects
+the complete upstream result before synthesizing the client's native events,
+so it does not reduce time to first output. Polling and resumed retrieval do
+not bill the resource's cumulative usage again; background work without usage
+in its creation response remains unreported by the gateway.
+
 ### OrcaTerm
 
 `orcaterm` uses the desktop LightAI protocol for text/image conversations and model-specific thinking settings. Create the provider, then use browser OAuth or import an OAuth credential. Set `international=true` for the international service; its account origin is `https://orcaterm.ai` and LightAI origin is `https://lightai.tencentcloud.com`.

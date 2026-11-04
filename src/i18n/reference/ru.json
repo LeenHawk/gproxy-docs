@@ -628,7 +628,7 @@
   "Which column the aggregate is cut by.": "Поле, по которому группируется агрегат.",
   "Who the credential belongs to, in the application layer's own vocabulary. Opaque to this crate: it copies the three columns through untouched, and only the layer above knows what an organization or a team is.": "Владелец учётных данных в терминах прикладного слоя. Этот крейт не интерпретирует значение: он передаёт три столбца без изменений, а понятия организации и команды определены уровнем выше.",
   "Why the last check failed, when one did and none has since succeeded. A console shows this rather than an empty panel that looks like \"no update available\".": "Причина последней неудачной проверки, если после неё не было успешной. Консоль показывает её вместо пустой панели, которую можно принять за отсутствие обновлений.",
-  "Wire dialects the upstream accepts natively. Empty accepts openai, openai_chat, claude and gemini.": "Нативно поддерживаемые протоколы провайдера. Пустой список разрешает openai, openai_chat, claude и gemini.",
+  "Wire dialects the upstream accepts natively. Empty accepts openai, openai_chat, claude, gemini and gemini_interactions.": "Нативно поддерживаемые протоколы провайдера. Пустой список разрешает openai, openai_chat, claude, gemini и gemini_interactions.",
   "Write every row of the document, leaving anything it does not mention alone. This is the additive mode: two deployments can be merged.": "Запишите каждую строку документа, оставляя все, что в ней не упоминается. Это аддитивный режим: можно объединить два развертывания.",
   "X-Title sent when the client sends none.": "X-Title отправляется, когда клиент ничего не отправляет.",
   "`1000000` for the token metrics, `1` for counted ones.": "`1000000` для метрик токена, `1` для счётных.",
@@ -717,5 +717,10 @@
   "Audio input supplied inline or by uploaded file ID.": "Аудиовход, переданный встроенными данными или идентификатором загруженного файла.",
   "The model the upstream response named, which may differ from `model`.": "Модель, указанная в ответе провайдера; может отличаться от `model`.",
   "The upstream model the call was routed to.": "Модель провайдера, на которую был направлен вызов.",
-  "Required key; the reference allows null.": "Обязательный ключ; эталонная спецификация допускает null."
+  "Required key; the reference allows null.": "Обязательный ключ; эталонная спецификация допускает null.",
+  "Create with either model or agent; output-only resource fields are absent.": "Создание с model или agent; поля ресурса, доступные только в ответе, отсутствуют.",
+  "Fields shared by native step variants; vendor-specific fields remain in rest.": "Общие поля нативных вариантов шага; поля поставщика сохраняются в rest.",
+  "Native tool declaration, including hosted tools and MCP configuration.": "Нативное объявление инструмента, включая размещенные инструменты и конфигурацию MCP.",
+  "Native retrieval/resumption query. api_version selects routing when supplied; it is independent of the resource id and never inserted into the JSON body.": "Нативные параметры получения и возобновления. api_version выбирает маршрут независимо от ID ресурса и не включается в JSON-тело.",
+  "Gemini Interactions, distinct from GenerateContent. Generation uses GenerateContent / StreamGenerateContent with native step-based bodies.": "Протокол Gemini Interactions, отдельный от GenerateContent. Генерация использует операции GenerateContent / StreamGenerateContent с нативными телами на основе шагов."
 }
