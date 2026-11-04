@@ -488,7 +488,7 @@ Login flows: API key. Manual credential kinds: `api_key`.
 | Key | Kind | Required | Description | Example / placeholder |
 | --- | --- | --- | --- | --- |
 | `base_url` | String | Yes | Upstream origin, optionally with a path prefix; the native request path is appended. Provider column, not config JSON. | — |
-| `dialects` | JSON | No | Wire dialects the upstream accepts natively. Empty accepts openai, openai_chat, claude and gemini. | — |
+| `dialects` | JSON | No | Wire dialects the upstream accepts natively. Empty accepts openai, openai_chat, claude, gemini and gemini_interactions. | — |
 | `auth_header` | String | No | Header carrying the API key instead of each family's own, e.g. `api-key`. | — |
 | `auth_prefix` | String | No | Prefix written before the key when auth_header is set. | — |
 | `headers` | HTTP headers | No | Static headers added to every upstream request. | — |

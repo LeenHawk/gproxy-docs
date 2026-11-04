@@ -488,7 +488,7 @@ GPROXY 4.1.14. [下載 JSON](/generated/channels.json).
 | 設定項目 | 型別 | 必填 | 說明 | 範例／預留位置 |
 | --- | --- | --- | --- | --- |
 | `base_url` | 字串 | 是 | Upstream origin, optionally with a path prefix; the native request path is appended. Provider column, not config JSON. | — |
-| `dialects` | JSON | 否 | Wire dialects the upstream accepts natively. Empty accepts openai, openai_chat, claude and gemini. | — |
+| `dialects` | JSON | 否 | Wire dialects the upstream accepts natively. Empty accepts openai, openai_chat, claude, gemini and gemini_interactions. | — |
 | `auth_header` | 字串 | 否 | Header carrying the API key instead of each family's own, e.g. `api-key`. | — |
 | `auth_prefix` | 字串 | 否 | Prefix written before the key when auth_header is set. | — |
 | `headers` | HTTP 請求標頭 | 否 | Static headers added to every upstream request. | — |
