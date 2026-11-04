@@ -9036,6 +9036,121 @@
         ],
         "type": "object"
       },
+      "Input_CreateInteractionRequestBody": {
+        "additionalProperties": true,
+        "description": "Create with either model or agent; output-only resource fields are absent.",
+        "properties": {
+          "agent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "agent_config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Input_InteractionAgentConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "background": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "continuation_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "environment": true,
+          "generation_config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Input_InteractionGenerationConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "input": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Input_InteractionInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previous_interaction_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "response_format": true,
+          "safety_settings": {
+            "items": {
+              "$ref": "#/components/schemas/Input_InteractionSafetySetting"
+            },
+            "type": "array"
+          },
+          "service_tier": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "store": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "stream": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "system_instruction": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/Input_InteractionTool"
+            },
+            "type": "array"
+          },
+          "webhook_config": true
+        },
+        "type": "object"
+      },
       "Input_CreateLiveCallMultipartForm": {
         "properties": {
           "sdp": {
@@ -15829,6 +15944,623 @@
             ]
           }
         },
+        "type": "object"
+      },
+      "Input_InteractionAgentConfig": {
+        "additionalProperties": true,
+        "properties": {
+          "collaborative_planning": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "max_total_tokens": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thinking_summaries": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "type": "string"
+          },
+          "visualization": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "type": "object"
+      },
+      "Input_InteractionContent": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/Input_InteractionText",
+            "properties": {
+              "type": {
+                "const": "text",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionMedia",
+            "properties": {
+              "type": {
+                "const": "image",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionMedia",
+            "properties": {
+              "type": {
+                "const": "audio",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionMedia",
+            "properties": {
+              "type": {
+                "const": "video",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionMedia",
+            "properties": {
+              "type": {
+                "const": "document",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "Input_InteractionGenerationConfig": {
+        "additionalProperties": true,
+        "properties": {
+          "max_output_tokens": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "seed": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "stop_sequences": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "structured_speech_config": true,
+          "thinking_level": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thinking_summaries": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tool_choice": true,
+          "transcription_config": true,
+          "video_config": true
+        },
+        "type": "object"
+      },
+      "Input_InteractionInput": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "items": {
+              "$ref": "#/components/schemas/Input_InteractionInputItem"
+            },
+            "type": "array"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionContent"
+          }
+        ]
+      },
+      "Input_InteractionInputItem": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Input_InteractionStep"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionContent"
+          }
+        ]
+      },
+      "Input_InteractionMedia": {
+        "additionalProperties": true,
+        "properties": {
+          "channels": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "data": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "metadata": true,
+          "mime_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolution": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sample_rate": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "uri": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Input_InteractionSafetySetting": {
+        "additionalProperties": true,
+        "properties": {
+          "method": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "threshold": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "threshold"
+        ],
+        "type": "object"
+      },
+      "Input_InteractionStep": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/Input_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "user_input",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "model_output",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "thought",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "function_call",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "function_result",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "code_execution_call",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "code_execution_result",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "google_search_call",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "google_search_result",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "google_maps_call",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "google_maps_result",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "url_context_call",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "url_context_result",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "file_search_call",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "file_search_result",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "mcp_server_tool_call",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "mcp_server_tool_result",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "processing_call",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Input_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "processing_result",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "Input_InteractionStepBody": {
+        "additionalProperties": true,
+        "description": "Fields shared by native step variants; vendor-specific fields remain in rest.",
+        "properties": {
+          "arguments": true,
+          "call_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "content": {
+            "items": {
+              "$ref": "#/components/schemas/Input_InteractionContent"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_error": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "result": true,
+          "server_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "signature": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary": {
+            "items": {
+              "$ref": "#/components/schemas/Input_InteractionContent"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "Input_InteractionText": {
+        "additionalProperties": true,
+        "properties": {
+          "annotations": {
+            "items": true,
+            "type": "array"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "Input_InteractionTool": {
+        "additionalProperties": true,
+        "description": "Native tool declaration, including hosted tools and MCP configuration.",
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parameters": true,
+          "server_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "type": "string"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "type"
+        ],
         "type": "object"
       },
       "Input_InternalChatMessageMetadataPassthrough": {
@@ -47863,6 +48595,358 @@
         ],
         "type": "object"
       },
+      "Output_Interaction": {
+        "additionalProperties": true,
+        "properties": {
+          "agent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "continuation_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "environment_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/Output_InteractionError"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "object": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previous_interaction_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "service_tier": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/Output_InteractionStep"
+            },
+            "type": "array"
+          },
+          "updated": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_InteractionUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "type": "object"
+      },
+      "Output_InteractionContent": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/Output_InteractionText",
+            "properties": {
+              "type": {
+                "const": "text",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionMedia",
+            "properties": {
+              "type": {
+                "const": "image",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionMedia",
+            "properties": {
+              "type": {
+                "const": "audio",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionMedia",
+            "properties": {
+              "type": {
+                "const": "video",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionMedia",
+            "properties": {
+              "type": {
+                "const": "document",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "Output_InteractionDelta": {
+        "additionalProperties": true,
+        "properties": {
+          "arguments": true,
+          "content": true,
+          "data": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mime_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "signature": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total_usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_InteractionUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": {
+            "type": "string"
+          },
+          "uri": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "type": "object"
+      },
+      "Output_InteractionError": {
+        "additionalProperties": true,
+        "properties": {
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Output_InteractionErrorEvent": {
+        "additionalProperties": true,
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/Output_InteractionError"
+          },
+          "event_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "Output_InteractionEvent": {
+        "additionalProperties": true,
+        "properties": {
+          "event_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "interaction": {
+            "$ref": "#/components/schemas/Output_Interaction"
+          }
+        },
+        "required": [
+          "interaction"
+        ],
+        "type": "object"
+      },
+      "Output_InteractionGroundingToolCount": {
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "count"
+        ],
+        "type": "object"
+      },
+      "Output_InteractionMedia": {
+        "additionalProperties": true,
+        "properties": {
+          "channels": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "data": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "metadata": true,
+          "mime_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolution": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sample_rate": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "uri": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Output_InteractionModalityTokens": {
+        "additionalProperties": true,
+        "properties": {
+          "modality": {
+            "type": "string"
+          },
+          "tokens": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "modality",
+          "tokens"
+        ],
+        "type": "object"
+      },
       "Output_InteractionStatus": {
         "enum": [
           "INTERACTION_STATUS_UNSPECIFIED",
@@ -47871,6 +48955,615 @@
           "IDLE"
         ],
         "type": "string"
+      },
+      "Output_InteractionStatusEvent": {
+        "additionalProperties": true,
+        "properties": {
+          "event_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "interaction_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_InteractionUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "interaction_id",
+          "status"
+        ],
+        "type": "object"
+      },
+      "Output_InteractionStep": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "user_input",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "model_output",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "thought",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "function_call",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "function_result",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "code_execution_call",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "code_execution_result",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "google_search_call",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "google_search_result",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "google_maps_call",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "google_maps_result",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "url_context_call",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "url_context_result",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "file_search_call",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "file_search_result",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "mcp_server_tool_call",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "mcp_server_tool_result",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "processing_call",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepBody",
+            "properties": {
+              "type": {
+                "const": "processing_result",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "Output_InteractionStepBody": {
+        "additionalProperties": true,
+        "description": "Fields shared by native step variants; vendor-specific fields remain in rest.",
+        "properties": {
+          "arguments": true,
+          "call_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "content": {
+            "items": {
+              "$ref": "#/components/schemas/Output_InteractionContent"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_error": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "result": true,
+          "server_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "signature": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary": {
+            "items": {
+              "$ref": "#/components/schemas/Output_InteractionContent"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "Output_InteractionStepEvent": {
+        "additionalProperties": true,
+        "properties": {
+          "delta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_InteractionDelta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "event_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "index": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_InteractionStep"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "step_usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_InteractionUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "total_usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_InteractionUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "index"
+        ],
+        "type": "object"
+      },
+      "Output_InteractionStreamEvent": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/Output_InteractionEvent",
+            "properties": {
+              "event_type": {
+                "const": "interaction.created",
+                "type": "string"
+              }
+            },
+            "required": [
+              "event_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionEvent",
+            "properties": {
+              "event_type": {
+                "const": "interaction.completed",
+                "type": "string"
+              }
+            },
+            "required": [
+              "event_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStatusEvent",
+            "properties": {
+              "event_type": {
+                "const": "interaction.status_update",
+                "type": "string"
+              }
+            },
+            "required": [
+              "event_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepEvent",
+            "properties": {
+              "event_type": {
+                "const": "step.start",
+                "type": "string"
+              }
+            },
+            "required": [
+              "event_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepEvent",
+            "properties": {
+              "event_type": {
+                "const": "step.delta",
+                "type": "string"
+              }
+            },
+            "required": [
+              "event_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionStepEvent",
+            "properties": {
+              "event_type": {
+                "const": "step.stop",
+                "type": "string"
+              }
+            },
+            "required": [
+              "event_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/Output_InteractionErrorEvent",
+            "properties": {
+              "event_type": {
+                "const": "error",
+                "type": "string"
+              }
+            },
+            "required": [
+              "event_type"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "Output_InteractionText": {
+        "additionalProperties": true,
+        "properties": {
+          "annotations": {
+            "items": true,
+            "type": "array"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "Output_InteractionUsage": {
+        "additionalProperties": true,
+        "properties": {
+          "cached_tokens_by_modality": {
+            "items": {
+              "$ref": "#/components/schemas/Output_InteractionModalityTokens"
+            },
+            "type": "array"
+          },
+          "grounding_tool_count": {
+            "items": {
+              "$ref": "#/components/schemas/Output_InteractionGroundingToolCount"
+            },
+            "type": "array"
+          },
+          "initial_input_tokens": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "input_tokens_by_modality": {
+            "items": {
+              "$ref": "#/components/schemas/Output_InteractionModalityTokens"
+            },
+            "type": "array"
+          },
+          "output_tokens_by_modality": {
+            "items": {
+              "$ref": "#/components/schemas/Output_InteractionModalityTokens"
+            },
+            "type": "array"
+          },
+          "tool_use_tokens_by_modality": {
+            "items": {
+              "$ref": "#/components/schemas/Output_InteractionModalityTokens"
+            },
+            "type": "array"
+          },
+          "total_cached_tokens": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "total_input_tokens": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "total_output_tokens": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "total_thought_tokens": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "total_tokens": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "total_tool_use_tokens": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
       },
       "Output_InterruptEvent": {
         "oneOf": [
@@ -96952,6 +98645,504 @@
         ]
       }
     },
+    "/v1/interactions": {
+      "post": {
+        "description": "Available at the instance root or under a provider/namespace prefix. Shared paths select the wire dialect from client headers; without dialect evidence, the first listed route wins.",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Input_CreateInteractionRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "2XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Interaction"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "x-event-schema": {
+                  "$ref": "#/components/schemas/Output_InteractionStreamEvent"
+                }
+              }
+            },
+            "description": "Successful protocol response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Output_Envelope"
+                    },
+                    {
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/Output_ErrorDetail"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/Output_ErrorEvent"
+                        },
+                        {
+                          "properties": {
+                            "type": {
+                              "const": "error"
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    },
+                    {
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/Output_GenerateContentError"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Gateway or upstream error"
+          }
+        },
+        "summary": "POST /v1/interactions",
+        "tags": [
+          "Forwarding"
+        ],
+        "x-gproxy-routes": [
+          {
+            "dialect": "gemini_interactions",
+            "modelParameter": null,
+            "operation": "generate_content",
+            "requestContent": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Input_CreateInteractionRequestBody"
+                }
+              }
+            },
+            "responseContent": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Interaction"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "x-event-schema": {
+                  "$ref": "#/components/schemas/Output_InteractionStreamEvent"
+                }
+              }
+            },
+            "streaming": "stream_generate_content",
+            "streamingResponseContent": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "x-event-schema": {
+                  "$ref": "#/components/schemas/Output_InteractionStreamEvent"
+                }
+              }
+            },
+            "websocket": false
+          }
+        ]
+      }
+    },
+    "/v1/interactions/{id}": {
+      "delete": {
+        "description": "Available at the instance root or under a provider/namespace prefix. Shared paths select the wire dialect from client headers; without dialect evidence, the first listed route wins.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful response without a body"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Output_Envelope"
+                    },
+                    {
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/Output_ErrorDetail"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/Output_ErrorEvent"
+                        },
+                        {
+                          "properties": {
+                            "type": {
+                              "const": "error"
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    },
+                    {
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/Output_GenerateContentError"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Gateway or upstream error"
+          }
+        },
+        "summary": "DELETE /v1/interactions/{id}",
+        "tags": [
+          "Forwarding"
+        ],
+        "x-gproxy-routes": [
+          {
+            "dialect": "gemini_interactions",
+            "modelParameter": null,
+            "operation": "delete_interaction",
+            "requestContent": {},
+            "responseContent": {},
+            "streaming": null,
+            "websocket": false
+          }
+        ]
+      },
+      "get": {
+        "description": "Available at the instance root or under a provider/namespace prefix. Shared paths select the wire dialect from client headers; without dialect evidence, the first listed route wins.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "api_version",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "last_event_id",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "stream",
+            "required": false,
+            "schema": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Interaction"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "x-event-schema": {
+                  "$ref": "#/components/schemas/Output_InteractionStreamEvent"
+                }
+              }
+            },
+            "description": "Successful protocol response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Output_Envelope"
+                    },
+                    {
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/Output_ErrorDetail"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/Output_ErrorEvent"
+                        },
+                        {
+                          "properties": {
+                            "type": {
+                              "const": "error"
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    },
+                    {
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/Output_GenerateContentError"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Gateway or upstream error"
+          }
+        },
+        "summary": "GET /v1/interactions/{id}",
+        "tags": [
+          "Forwarding"
+        ],
+        "x-gproxy-routes": [
+          {
+            "dialect": "gemini_interactions",
+            "modelParameter": null,
+            "operation": "retrieve_interaction",
+            "requestContent": {},
+            "responseContent": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Interaction"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "x-event-schema": {
+                  "$ref": "#/components/schemas/Output_InteractionStreamEvent"
+                }
+              }
+            },
+            "streaming": null,
+            "websocket": false
+          }
+        ]
+      }
+    },
+    "/v1/interactions/{id}/cancel": {
+      "post": {
+        "description": "Available at the instance root or under a provider/namespace prefix. Shared paths select the wire dialect from client headers; without dialect evidence, the first listed route wins.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Interaction"
+                }
+              }
+            },
+            "description": "Successful protocol response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Output_Envelope"
+                    },
+                    {
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/Output_ErrorDetail"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/Output_ErrorEvent"
+                        },
+                        {
+                          "properties": {
+                            "type": {
+                              "const": "error"
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    },
+                    {
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/Output_GenerateContentError"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Gateway or upstream error"
+          }
+        },
+        "summary": "POST /v1/interactions/{id}/cancel",
+        "tags": [
+          "Forwarding"
+        ],
+        "x-gproxy-routes": [
+          {
+            "dialect": "gemini_interactions",
+            "modelParameter": null,
+            "operation": "cancel_interaction",
+            "requestContent": {},
+            "responseContent": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Interaction"
+                }
+              }
+            },
+            "streaming": null,
+            "websocket": false
+          }
+        ]
+      }
+    },
     "/v1/live": {
       "get": {
         "description": "Available at the instance root or under a provider/namespace prefix. Shared paths select the wire dialect from client headers; without dialect evidence, the first listed route wins.",
@@ -101151,6 +103342,504 @@
                 "schema": {
                   "format": "binary",
                   "type": "string"
+                }
+              }
+            },
+            "streaming": null,
+            "websocket": false
+          }
+        ]
+      }
+    },
+    "/v1beta/interactions": {
+      "post": {
+        "description": "Available at the instance root or under a provider/namespace prefix. Shared paths select the wire dialect from client headers; without dialect evidence, the first listed route wins.",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Input_CreateInteractionRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "2XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Interaction"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "x-event-schema": {
+                  "$ref": "#/components/schemas/Output_InteractionStreamEvent"
+                }
+              }
+            },
+            "description": "Successful protocol response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Output_Envelope"
+                    },
+                    {
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/Output_ErrorDetail"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/Output_ErrorEvent"
+                        },
+                        {
+                          "properties": {
+                            "type": {
+                              "const": "error"
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    },
+                    {
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/Output_GenerateContentError"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Gateway or upstream error"
+          }
+        },
+        "summary": "POST /v1beta/interactions",
+        "tags": [
+          "Forwarding"
+        ],
+        "x-gproxy-routes": [
+          {
+            "dialect": "gemini_interactions",
+            "modelParameter": null,
+            "operation": "generate_content",
+            "requestContent": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Input_CreateInteractionRequestBody"
+                }
+              }
+            },
+            "responseContent": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Interaction"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "x-event-schema": {
+                  "$ref": "#/components/schemas/Output_InteractionStreamEvent"
+                }
+              }
+            },
+            "streaming": "stream_generate_content",
+            "streamingResponseContent": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "x-event-schema": {
+                  "$ref": "#/components/schemas/Output_InteractionStreamEvent"
+                }
+              }
+            },
+            "websocket": false
+          }
+        ]
+      }
+    },
+    "/v1beta/interactions/{id}": {
+      "delete": {
+        "description": "Available at the instance root or under a provider/namespace prefix. Shared paths select the wire dialect from client headers; without dialect evidence, the first listed route wins.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful response without a body"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Output_Envelope"
+                    },
+                    {
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/Output_ErrorDetail"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/Output_ErrorEvent"
+                        },
+                        {
+                          "properties": {
+                            "type": {
+                              "const": "error"
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    },
+                    {
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/Output_GenerateContentError"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Gateway or upstream error"
+          }
+        },
+        "summary": "DELETE /v1beta/interactions/{id}",
+        "tags": [
+          "Forwarding"
+        ],
+        "x-gproxy-routes": [
+          {
+            "dialect": "gemini_interactions",
+            "modelParameter": null,
+            "operation": "delete_interaction",
+            "requestContent": {},
+            "responseContent": {},
+            "streaming": null,
+            "websocket": false
+          }
+        ]
+      },
+      "get": {
+        "description": "Available at the instance root or under a provider/namespace prefix. Shared paths select the wire dialect from client headers; without dialect evidence, the first listed route wins.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "api_version",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "last_event_id",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "stream",
+            "required": false,
+            "schema": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Interaction"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "x-event-schema": {
+                  "$ref": "#/components/schemas/Output_InteractionStreamEvent"
+                }
+              }
+            },
+            "description": "Successful protocol response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Output_Envelope"
+                    },
+                    {
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/Output_ErrorDetail"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/Output_ErrorEvent"
+                        },
+                        {
+                          "properties": {
+                            "type": {
+                              "const": "error"
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    },
+                    {
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/Output_GenerateContentError"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Gateway or upstream error"
+          }
+        },
+        "summary": "GET /v1beta/interactions/{id}",
+        "tags": [
+          "Forwarding"
+        ],
+        "x-gproxy-routes": [
+          {
+            "dialect": "gemini_interactions",
+            "modelParameter": null,
+            "operation": "retrieve_interaction",
+            "requestContent": {},
+            "responseContent": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Interaction"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "x-event-schema": {
+                  "$ref": "#/components/schemas/Output_InteractionStreamEvent"
+                }
+              }
+            },
+            "streaming": null,
+            "websocket": false
+          }
+        ]
+      }
+    },
+    "/v1beta/interactions/{id}/cancel": {
+      "post": {
+        "description": "Available at the instance root or under a provider/namespace prefix. Shared paths select the wire dialect from client headers; without dialect evidence, the first listed route wins.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Interaction"
+                }
+              }
+            },
+            "description": "Successful protocol response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Output_Envelope"
+                    },
+                    {
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/Output_ErrorDetail"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/Output_ErrorEvent"
+                        },
+                        {
+                          "properties": {
+                            "type": {
+                              "const": "error"
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    },
+                    {
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/Output_GenerateContentError"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Gateway or upstream error"
+          }
+        },
+        "summary": "POST /v1beta/interactions/{id}/cancel",
+        "tags": [
+          "Forwarding"
+        ],
+        "x-gproxy-routes": [
+          {
+            "dialect": "gemini_interactions",
+            "modelParameter": null,
+            "operation": "cancel_interaction",
+            "requestContent": {},
+            "responseContent": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Interaction"
                 }
               }
             },
