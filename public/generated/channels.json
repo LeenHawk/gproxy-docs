@@ -2449,7 +2449,7 @@
             "required": true
           },
           {
-            "description": "Wire dialects the upstream accepts natively. Empty accepts openai, openai_chat, claude, gemini and gemini_interactions.",
+            "description": "Wire dialects the upstream accepts natively. Empty accepts openai, openai_chat, claude and gemini.",
             "kind": "json",
             "name": "dialects",
             "placeholder": null,
