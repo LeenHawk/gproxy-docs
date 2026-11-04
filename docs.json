@@ -137,7 +137,8 @@
             "group": "HTTP API",
             "openapi": "generated/openapi.json"
           }
-        ]
+        ],
+        "default": true
       },
       {
         "language": "zh-Hant",
