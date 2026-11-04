@@ -186,7 +186,7 @@ pnpm --dir console build
 pnpm --dir docs install --frozen-lockfile
 pnpm --dir docs check
 pnpm --dir docs build
-bash scripts/check-docs.sh
+bash docs/scripts/check-docs.sh
 ```
 
 修改 Rust DTO 后，用 `pnpm --dir console types` 更新生成的 TypeScript 类型。
@@ -203,6 +203,6 @@ bash scripts/check-docs.sh
 预发布标签不执行这项依赖刷新。
 RSA/getrandom、JNI/Tauri、Codex reqwest 和 WebSocket 配置的兼容桥接依赖保留上游要求的版本线，仍通过 `cargo update` 更新兼容版本。
 
-版本 tag 必须与 workspace 版本一致，并提供 `docs/release-notes/v<版本>.md`。发布流程构建包、生成签名更新清单并上传附件；构建或签名要求未满足时，不能视为发布完成。
+版本 tag 必须与 workspace 版本一致，并提供 `release-notes/v<版本>.md`。发布流程构建包、生成签名更新清单并上传附件；构建或签名要求未满足时，不能视为发布完成。
 
 版本 tag 还会调用 `scripts/publish-crates.sh` 发布选定的 MIT 库，其他 crate 使用 git 或路径依赖。详情见[嵌入核心库](/zh-cn/reference/embedding/)。

@@ -205,7 +205,7 @@ pnpm --dir console build
 pnpm --dir docs install --frozen-lockfile
 pnpm --dir docs check
 pnpm --dir docs build
-bash scripts/check-docs.sh
+bash docs/scripts/check-docs.sh
 ```
 
 After changing Rust DTOs, run `pnpm --dir console types` to regenerate the TypeScript types.
@@ -224,6 +224,6 @@ If these commands change tracked files, the script stops before creating or
 pushing the tag. Resolve compatibility changes, run the checks above, commit and
 push to `main`, then rerun the script. Prerelease tags skip this dependency refresh.
 
-A version tag must match the workspace version and have a `docs/release-notes/v<version>.md` file. The workflow builds packages, creates a signed update manifest, and uploads assets. A build or signing failure means publication is incomplete.
+A version tag must match the workspace version and have a `release-notes/v<version>.md` file. The workflow builds packages, creates a signed update manifest, and uploads assets. A build or signing failure means publication is incomplete.
 
 Version tags also invoke `scripts/publish-crates.sh` for selected MIT libraries. Other crates use git or path dependencies; see [Embedding the core](/reference/embedding/).

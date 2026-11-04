@@ -1,0 +1,38 @@
+{
+  "host": "127.0.0.1",
+  "port": 8787,
+  "data_dir": null,
+  "store": {
+    "kind": "sqlite",
+    "path": "gproxy.db"
+  },
+  "cache": {
+    "kind": "memory"
+  },
+  "master_key": {
+    "key": {
+      "kind": "none"
+    },
+    "next": {
+      "kind": "none"
+    },
+    "rotate": false
+  },
+  "file_storage": null,
+  "public_base_url": null,
+  "cors_origins": [],
+  "trusted_proxies": [],
+  "console": {
+    "enabled": true,
+    "path": null
+  },
+  "audit_enabled": true,
+  "session_ttl_secs": 2592000,
+  "oauth": {
+    "access_ttl_secs": 3600,
+    "refresh_ttl_secs": 2592000,
+    "code_ttl_secs": 300,
+    "device_ttl_secs": 900,
+    "cli_client_ids": []
+  }
+}

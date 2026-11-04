@@ -1,23 +1,41 @@
-# Documentation build
+# GPROXY documentation
 
-Use the Rust and Node versions pinned in `.github/workflows/ci.yml`, then:
+The source of <https://gproxy.leenhawk.com>. It is also the `docs/` submodule of
+[LeenHawk/gproxy](https://github.com/LeenHawk/gproxy), and is mirrored to
+GitLab, CNB and git.lin.pub.
 
-```sh
-pnpm --dir docs install --frozen-lockfile
-pnpm --dir docs build
-```
+## Build
 
-Both `build` and `dev` first run `generate:reference`. That command runs the
-`gproxy-host-axum` `export-docs` example with the optional `documentation`
-feature and all channels named by the SDK's existing `channels` feature group.
-It does not start the gateway, open a database or contact upstream providers.
-After editing Rust while `astro dev` is running, regenerate with:
+Use the Node version pinned in `.github/workflows/docs.yml`, then:
 
 ```sh
-pnpm --dir docs generate:reference
+pnpm install --frozen-lockfile
+pnpm check
+pnpm build
 ```
 
-The Rust exporter writes ignored build inputs to `public/generated/`:
+`bash scripts/check-docs.sh` reports sidebar slugs without a page, locale page
+parity, forbidden references and oversized pages.
+
+Pushes to `main` deploy to Cloudflare Pages and sign `public/notifications.json`
+with the update signing key; `dev` only builds. Every push is mirrored to CNB.
+
+## Reference JSON
+
+`public/generated/` is committed by gproxy's CI. On every push to gproxy's
+`main` or `dev`, it runs `scripts/generate-reference.mjs` against that commit
+and commits the result to the branch of the same name here. To preview an
+unreleased Rust change, run it yourself from a gproxy checkout (the parent
+directory when this repository is gproxy's submodule, or `GPROXY_ROOT`):
+
+```sh
+pnpm generate:reference
+```
+
+That runs the `gproxy-host-axum` `export-docs` example with the optional
+`documentation` feature and all channels named by the SDK's `channels` feature
+group. It does not start the gateway, open a database or contact upstream
+providers. It writes:
 
 - `openapi.json`: `utoipa` describes the HTTP operations; `schemars` derives
   complete request/response schemas from wire types and management DTOs.
@@ -43,7 +61,7 @@ The API reference links every payload to its complete data-structure definition.
 `starlight-llms-txt` renders those same pages into `llms-full.txt`,
 `llms-small.txt` and `_llms-txt/api-and-configuration.txt`. `llms.txt` links
 the documentation sets and machine-readable exports. The JSON files are also
-published as static files; generated outputs are never committed.
+published as static files.
 
 `/llms-api.txt`, `/zh-cn/llms-api.txt`, `/zh-tw/llms-api.txt` and `/ru/llms-api.txt` contain the
 complete OpenAPI schemas, configuration schema and channel catalogue in each
