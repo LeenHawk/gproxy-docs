@@ -303,10 +303,6 @@
       "destination": "/reference/http-api"
     },
     {
-      "source": "/llms-api.txt",
-      "destination": "/generated/openapi.json"
-    },
-    {
       "source": "/zh-cn/getting-started/installation",
       "destination": "/zh-cn/download"
     },
@@ -317,10 +313,6 @@
     {
       "source": "/zh-cn/reference/api-schemas",
       "destination": "/zh-cn/reference/http-api"
-    },
-    {
-      "source": "/zh-cn/llms-api.txt",
-      "destination": "/generated/openapi.json"
     },
     {
       "source": "/zh-tw/getting-started/installation",
@@ -335,10 +327,6 @@
       "destination": "/zh-tw/reference/http-api"
     },
     {
-      "source": "/zh-tw/llms-api.txt",
-      "destination": "/generated/openapi.json"
-    },
-    {
       "source": "/ru/getting-started/installation",
       "destination": "/ru/download"
     },
@@ -349,10 +337,6 @@
     {
       "source": "/ru/reference/api-schemas",
       "destination": "/ru/reference/http-api"
-    },
-    {
-      "source": "/ru/llms-api.txt",
-      "destination": "/generated/openapi.json"
     },
     {
       "source": "/install.sh",
