@@ -1,4 +1,6 @@
 # GPROXY documentation
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FLeenHawk%2Fgproxy-docs.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FLeenHawk%2Fgproxy-docs?ref=badge_shield)
+
 
 The source of <https://gproxy.leenhawk.com>, built and hosted by
 [Mintlify](https://mintlify.com) from this repository. It is also the `docs/`
@@ -53,3 +55,7 @@ feature and every channel in the SDK's `channels` feature group; it does not
 start a gateway or contact upstream providers. Descriptions come from Rust doc
 comments and stay in English in every language; table labels are localized in
 `scripts/reference-labels.mjs`.
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FLeenHawk%2Fgproxy-docs.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FLeenHawk%2Fgproxy-docs?ref=badge_large)
