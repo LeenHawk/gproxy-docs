@@ -74,6 +74,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
       "store": "Также в Microsoft Store",
       "storeDesktop": "GPROXY Desktop",
       "storeCli": "GPROXY CLI",
+      "fdroid": "Приложение также доступно в F-Droid",
       "quick": "Установка одной командой",
       "quickBody": "Устанавливает CLI и помогает настроить базу данных, администратора и прокси. Приложение с графическим интерфейсом можно скачать ниже.",
       "quickUnix": "Linux · macOS · Termux",
@@ -85,8 +86,6 @@ export const DownloadPage = ({ locale = 'en' }) => {
       "setupAppBody": "Откройте GPROXY. Мастер запросит порт, каталог данных, имя и пароль администратора, а также необязательную конфигурацию для импорта. Сохраните показанные в конце адрес и ключ API.",
       "setupCli": "CLI",
       "setupCliBody": "Если использовали установочный скрипт, запустите GPROXY указанной им командой. Иначе выполните команду ниже. Затем откройте консоль в браузере и войдите. Новый экземпляр показывает пароль администратора и ключ API только один раз — сохраните их.",
-      "experimental": "экспериментальная версия",
-      "unsigned": "без подписи",
       "arch": {
           "x86_64": "x86_64",
           "aarch64": "ARM64",
@@ -158,6 +157,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
       store: 'Also on the Microsoft Store',
       storeDesktop: 'GPROXY Desktop',
       storeCli: 'GPROXY CLI',
+      fdroid: 'The Application is also on F-Droid',
       quick: 'One-line install',
       quickBody: 'Installs the CLI for this computer and walks you through the database, administrator account and proxy. For the desktop Application, download it below.',
       quickUnix: 'Linux · macOS · Termux',
@@ -169,8 +169,6 @@ export const DownloadPage = ({ locale = 'en' }) => {
       setupAppBody: 'Open GPROXY. A short wizard asks for the port and data folder, an administrator name and password, and an optional configuration to import. Keep the address and API key it shows at the end.',
       setupCli: 'CLI',
       setupCliBody: 'If you used the one-line installer, start GPROXY with the command it printed. Otherwise run the command below. Then open the console in your browser and sign in. A new instance prints its administrator password and API key once, so save them.',
-      experimental: 'experimental',
-      unsigned: 'unsigned',
       arch: { x86_64: 'x86_64', aarch64: 'ARM64', riscv64: 'RISC-V 64' },
       os: {
         linux: { name: 'Linux', hint: 'GNU builds suit most distributions. musl builds offer Alpine APKs (apk-tools 3; import the signing key first). The CLI is static; the Application needs Alpine edge GTK/WebKitGTK.' },
@@ -223,6 +221,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
       store: '也可从 Microsoft Store 获取',
       storeDesktop: 'GPROXY Desktop',
       storeCli: 'GPROXY CLI',
+      fdroid: 'Application 也可从 F-Droid 安装',
       quick: '一键安装',
       quickBody: '为本机安装 CLI，并引导你设置数据库、管理员账户和代理。需要桌面应用版请在下方下载。',
       quickUnix: 'Linux · macOS · Termux',
@@ -234,8 +233,6 @@ export const DownloadPage = ({ locale = 'en' }) => {
       setupAppBody: '打开 GPROXY，简短的设置向导会依次询问端口和数据目录、管理员用户名和密码，以及是否导入已有配置。请记下最后显示的地址和 API 密钥。',
       setupCli: 'CLI',
       setupCliBody: '用一键安装的话，按脚本最后打印的命令启动即可；否则运行下面的命令。然后在浏览器打开控制台登录。新实例只会打印一次管理员密码和 API 密钥，请妥善保存。',
-      experimental: '实验性',
-      unsigned: '未签名',
       arch: { x86_64: 'x86_64', aarch64: 'ARM64', riscv64: 'RISC-V 64' },
       os: {
         linux: { name: 'Linux', hint: 'GNU 构建适用于大多数发行版。musl 版提供 Alpine APK 包（需要 apk-tools 3，先导入签名公钥）。CLI 为静态链接；应用版依赖 Alpine edge 的 GTK/WebKitGTK。' },
@@ -288,6 +285,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
       store: '也可從 Microsoft Store 取得',
       storeDesktop: 'GPROXY Desktop',
       storeCli: 'GPROXY CLI',
+      fdroid: 'Application 也可從 F-Droid 安裝',
       quick: '一鍵安裝',
       quickBody: '為本機安裝 CLI，並引導你設定資料庫、管理員帳戶和代理。需要桌面應用版請在下方下載。',
       quickUnix: 'Linux · macOS · Termux',
@@ -299,8 +297,6 @@ export const DownloadPage = ({ locale = 'en' }) => {
       setupAppBody: '開啟 GPROXY，簡短的設定精靈會依序詢問埠和資料目錄、管理員使用者名稱和密碼，以及是否匯入既有設定。請記下最後顯示的位址和 API 金鑰。',
       setupCli: 'CLI',
       setupCliBody: '使用一鍵安裝的話，依腳本最後列印的指令啟動即可；否則執行下方指令。接著在瀏覽器開啟控制台登入。新實例只會列印一次管理員密碼和 API 金鑰，請妥善保存。',
-      experimental: '實驗性',
-      unsigned: '未簽章',
       arch: { x86_64: 'x86_64', aarch64: 'ARM64', riscv64: 'RISC-V 64' },
       os: {
         linux: { name: 'Linux', hint: 'GNU 建置適用於大多數發行版。musl 版提供 Alpine APK 套件（需要 apk-tools 3，先匯入簽章公鑰）。CLI 為靜態連結；應用版依賴 Alpine edge 的 GTK/WebKitGTK。' },
@@ -322,8 +318,8 @@ export const DownloadPage = ({ locale = 'en' }) => {
     { id: 'linux', rows: linuxRows },
     { id: 'windows', store: true, rows: ['x86_64', 'aarch64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-windows-${arch}.zip`, label: 'ZIP' }, { asset: `gproxy-tauri-windows-${arch}.msix`, label: 'MSIX' }], cli: [{ asset: `gproxy-windows-${arch}.zip`, label: 'ZIP' }, { asset: `gproxy-windows-${arch}.msix`, label: 'MSIX' }] })) },
     { id: 'macos', rows: ['aarch64', 'x86_64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-macos-${arch}.dmg`, label: 'DMG' }, { asset: `gproxy-tauri-macos-${arch}.zip`, label: 'ZIP' }], cli: [{ asset: `gproxy-macos-${arch}.zip`, label: 'ZIP' }, { asset: `gproxy-macos-${arch}.dmg`, label: 'DMG' }] })) },
-    { id: 'android', rows: ['aarch64', 'x86_64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-android-${arch}.apk`, label: 'APK' }], cli: [{ asset: `gproxy-android-${arch}.deb`, label: 'Termux DEB' }, { asset: `gproxy-android-${arch}.zip`, label: 'ZIP' }] })) },
-    { id: 'ohos', rows: ['aarch64', 'x86_64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-ohos-${arch}-unsigned.hap`, label: 'HAP', tag: `${copy.experimental} · ${copy.unsigned}` }], cli: [{ asset: `gproxy-ohos-${arch}.zip`, label: 'ZIP' }] })) },
+    { id: 'android', fdroid: true, rows: ['aarch64', 'x86_64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-android-${arch}.apk`, label: 'APK' }], cli: [{ asset: `gproxy-android-${arch}.deb`, label: 'Termux DEB' }, { asset: `gproxy-android-${arch}.zip`, label: 'ZIP' }] })) },
+    { id: 'ohos', rows: ['aarch64', 'x86_64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-ohos-${arch}-unsigned.hap`, label: 'HAP' }], cli: [{ asset: `gproxy-ohos-${arch}.zip`, label: 'ZIP' }] })) },
   ];
   // Two independently stacked columns: a grid row would size Linux's neighbours
   // to whichever side is taller and leave a gap on the other.
@@ -377,12 +373,29 @@ export const DownloadPage = ({ locale = 'en' }) => {
     const tag = `v${manifest.version}`;
     const encodedTag = encodeURIComponent(tag);
     const release = await json(`${gitlabApi}/${encodedTag}`);
+    // Release links carry no size; read it from the generic package the links
+    // point into. Sizes are cosmetic, so a failure only hides them.
+    const sizes = new Map();
+    try {
+      const packageVersion = release.assets.links[0]?.url.match(/\/packages\/generic\/gproxy\/([^/]+)\//)?.[1];
+      const projectApi = gitlabApi.replace(/\/releases$/, '');
+      const [pkg] = await json(`${projectApi}/packages?package_type=generic&package_name=gproxy&package_version=${packageVersion}`);
+      for (let page = 1; page; ) {
+        const response = await fetch(`${projectApi}/packages/${pkg.id}/package_files?per_page=100&page=${page}`, { signal });
+        if (!response.ok) break;
+        for (const file of await response.json()) sizes.set(file.file_name, file.size);
+        page = Number(response.headers.get('X-Next-Page')) || 0;
+      }
+    } catch (error) {
+      if (signal.aborted) throw error;
+    }
     return {
       tag_name: tag,
       html_url: `${base}/${encodedTag}`,
       published_at: release.released_at,
       assets: release.assets.links.map((asset) => ({
         name: asset.name,
+        size: sizes.get(asset.name),
         browser_download_url: source === 'cnb'
           ? `${base}/download/${encodedTag}/${encodeURIComponent(asset.name)}`
           : asset.direct_asset_url,
@@ -570,6 +583,12 @@ export const DownloadPage = ({ locale = 'en' }) => {
                     <footer className="dl-store">
                       <a href="https://raw.githubusercontent.com/LeenHawk/gproxy/dev/distribution/alpine/gproxy-alpine.rsa.pub">{copy.alpineKey} ↗</a>
                       <a href="https://github.com/LeenHawk/gproxy/blob/dev/distribution/alpine/README.txt">{copy.alpineGuide} ↗</a>
+                    </footer>
+                  ) : null}
+                  {platform.fdroid ? (
+                    <footer className="dl-store dl-fdroid">
+                      <span>{copy.fdroid}</span>
+                      <a href="https://f-droid.org/packages/com.leenhawk.gproxy.desktop/"><img src="https://f-droid.org/badge/get-it-on.png" alt="Get it on F-Droid" height="56" /></a>
                     </footer>
                   ) : null}
                   {platform.store ? (
