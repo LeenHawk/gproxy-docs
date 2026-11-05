@@ -1,5 +1,0 @@
-# FOSSA CLI configuration (`fossa analyze` in .github/workflows/fossa.yml).
-version: 3
-
-project:
-  name: gproxy-docs
