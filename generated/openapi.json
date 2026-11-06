@@ -22865,6 +22865,24 @@
           },
           "proxy": {
             "default": null
+          },
+          "requestTimeoutMs": {
+            "description": "Upstream response wait in milliseconds; None inherits the global setting.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "streamIdleTimeoutMs": {
+            "description": "Maximum stream silence in milliseconds; None inherits the global setting.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "required": [
@@ -23051,6 +23069,25 @@
           },
           "proxy": {
             "default": null
+          },
+          "requestTimeoutMs": {
+            "default": null,
+            "description": "Omitted preserves the override; null restores global inheritance.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "streamIdleTimeoutMs": {
+            "default": null,
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "type": "object"
@@ -23361,6 +23398,26 @@
           },
           "proxy": {
             "default": null
+          },
+          "requestTimeoutMs": {
+            "default": null,
+            "description": "Upstream response wait in milliseconds; None inherits the global setting.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "streamIdleTimeoutMs": {
+            "default": null,
+            "description": "Maximum stream silence in milliseconds; None inherits the global setting.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "required": [
@@ -58199,6 +58256,24 @@
           },
           "proxy": {
             "default": null
+          },
+          "requestTimeoutMs": {
+            "description": "Upstream response wait in milliseconds; None inherits the global setting.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "streamIdleTimeoutMs": {
+            "description": "Maximum stream silence in milliseconds; None inherits the global setting.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "required": [
@@ -58208,6 +58283,8 @@
           "channel",
           "baseUrl",
           "connectionProfileId",
+          "requestTimeoutMs",
+          "streamIdleTimeoutMs",
           "proxy",
           "config",
           "enabled",
