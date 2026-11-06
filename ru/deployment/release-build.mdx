@@ -17,18 +17,18 @@ CLI (`gproxy-*`) и Приложение (`gproxy-tauri-*`) — отдельны
 | --- | --- | --- |
 | Linux GNU (x86_64, aarch64, riscv64) | ZIP, DEB | ZIP, DEB |
 | Linux musl (x86_64, aarch64, riscv64) | ZIP, Альпийский APK | ZIP, Альпийский APK |
-| Windows (x86_64, аарх64) | ZIP, MSIX | ZIP, MSIX |
+| Windows (x86_64, aarch64) | ZIP, MSIX | ZIP, MSIX |
 | macOS (x86_64, aarch64) | ZIP, DMG | ZIP, DMG |
-| Android (x86_64, aarch64) | ZIP, Термукс DEB | только APK |
+| Android (x86_64, aarch64) | ZIP, Termux DEB | только APK |
 | OpenHarmony / HarmonyOS NEXT | ARM64 / x86_64 ZIP | ARM64 беззнаковый HAP |
 
-Linux CLI DEB устанавливает `gproxy` под `/usr/bin`; Termux DEB устанавливается под `/data/data/com.termux/files/usr`. В сборках Android CLI используется исходный код `distribution/termux/` и закрепленный официальный сборщик Termux. И DEB, и ZIP используют сертификаты Termux `libc++`, OpenSSL и CA; ZIP-файлы включают программу запуска, исполняемый файл и `TERMUX.txt` с инструкциями по установке/обновлению. В этих сборках отключено самообновление: установите более новую версию DEB с APT или используйте `pkg upgrade gproxy`, как только включенный репозиторий предоставит ее. Windows CLI MSIX использует отдельный идентификатор `.CLI` и псевдоним выполнения консоли. DMG для macOS CLI включают исполняемый файл и инструкции по установке терминала. ZIP-архивы приложений сохраняют ресурсы рабочего стола, а в macOS — полный `.app`.
+Linux CLI DEB устанавливает `gproxy` под `/usr/bin`; Termux DEB устанавливается под `/data/data/com.termux/files/usr`. В сборках Android CLI используется исходный код `distribution/termux/` и закрепленный официальный сборщик Termux. И DEB, и ZIP используют сертификаты Termux `libc++`, OpenSSL и CA; ZIP-файлы включают программу запуска, исполняемый файл и `TERMUX.txt` с инструкциями по установке/обновлению. В этих сборках отключено самообновление: установите более новую версию DEB с APT или используйте `pkg upgrade gproxy`, как только включенный репозиторий предоставит ее. Windows CLI MSIX использует собственный идентификатор из Partner Center, `LeenHawk.GPROXYCLI`, и псевдоним выполнения консоли. DMG для macOS CLI включают исполняемый файл и инструкции по установке терминала. ZIP-архивы приложений сохраняют ресурсы рабочего стола, а в macOS — полный `.app`.
 
 В сборках OHOS используется кэшированный образ цепочки инструментов и закрепленная экспериментальная ветка Tauri; на других платформах сохраняется стабильная версия Tauri. Файлы HAP требуют подписи перед установкой. HAP был проверен на эмуляторе. Реализовано непрерывное фоновое выполнение, но доступность зависит от устройства, версии OS и предоставленных разрешений; прокси-сервер останавливается при выходе из процесса приложения.
 
 Ночные имена файлов остаются фиксированными; в манифесте записан коммит SHA. GNU Для приложений Linux требуются пакеты GTK 3 и WebKitGTK 4.1. musl собирает целевой Alpine и поставляет его в виде APK, а не DEB. macOS использует специальную подпись; Подписание и нотариальное заверение разработчика ID не настроены.
 
-Windows использует идентификатор пакета Microsoft Store. Настройте четыре переменные в среде `release`: `MS_STORE_IDENTITY_NAME`, `MS_STORE_DISPLAY_NAME`, `MS_STORE_IDENTITY_PUBLISHER` и `MS_STORE_PUBLISHER_DISPLAY_NAME`. Стабильные выпуски сохраняют оба пакета архитектуры для отправки в Магазин. Если `MS_STORE_PUBLISH_ENABLED` включен, успешная публикация GitHub запускает рабочий процесс отправки в Магазин. Файлы MSIX на GitHub не подписаны, как и пакеты отправки в Магазин; Магазин подписывает их для распространения. Это не доверенные пакеты, которые можно установить двойным щелчком мыши. Приложению требуется системная среда выполнения WebView2.
+Windows использует идентификатор пакета Microsoft Store. Настройте четыре переменные в среде `release`: `MS_STORE_IDENTITY_NAME`, `MS_STORE_DISPLAY_NAME`, `MS_STORE_IDENTITY_PUBLISHER` и `MS_STORE_PUBLISHER_DISPLAY_NAME`; CLI использует соответствующие переменные `MS_STORE_CLI_*`. У Headless идентификатор и отображаемое имя фиксированы, поэтому для его отправки в Магазин к общим переменным издателя добавляется только `MS_STORE_HEADLESS_PRODUCT_ID`. Стабильные выпуски сохраняют оба пакета архитектуры для отправки в Магазин. Если `MS_STORE_PUBLISH_ENABLED` включен, успешная публикация GitHub запускает рабочий процесс отправки в Магазин. Пакеты для отправки в Магазин не подписаны; Магазин подписывает их для распространения. Если включён SignPath, файлы MSIX на GitHub пересобираются с издателем сертификата подписи и подписываются, поэтому устанавливаются напрямую; без него они тоже не подписаны. Приложению требуется системная среда выполнения WebView2.
 
 APK-файлы Android подписываются и проверяются с использованием существующих секретов `ANDROID_SIGNING_*`. Запись `<target-triple>-tauri-apk` каждого приложения присоединяется к манифесту обновления, подписанному Ed25519, отдельно от обновлений CLI ZIP. Устаревшая серверная оболочка APK больше не создается. При отсутствии необходимых ключей или переменных идентификатора магазина не удается выполнить упаковку.
 
@@ -86,11 +86,11 @@ PostgreSQL, MySQL, Redis и S3 требуют `postgres`, `mysql`, `redis` и `s
 | --- | --- | --- |
 | Линукс GNU | x86_64, aarch64, riscv64 | `gproxy-headless-linux-<arch>.zip` |
 | Linux musl | x86_64, aarch64, riscv64 | `gproxy-headless-linux-<arch>-musl.zip`, `gproxy-headless-linux-<arch>-musl.apk` |
-| Окна | x86_64, аарх64 | `gproxy-headless-windows-<arch>.zip` |
-| macOS | x86_64, аарх64 | `gproxy-headless-macos-<arch>.zip` |
-| Андроид (Термукс) | x86_64, аарх64 | `gproxy-headless-android-<arch>.zip`, `gproxy-headless-android-<arch>.deb` |
+| Windows | x86_64, aarch64 | `gproxy-headless-windows-<arch>.zip`, `gproxy-headless-windows-<arch>.msix` |
+| macOS | x86_64, aarch64 | `gproxy-headless-macos-<arch>.zip` |
+| Android (Termux) | x86_64, aarch64 | `gproxy-headless-android-<arch>.zip`, `gproxy-headless-android-<arch>.deb` |
 
-Загрузите с [Релизы](https://github.com/LeenHawk/gproxy/releases): `nightly` для разработчиков, `staging` для бета-версии или стабильную версию. Самообновление выбирает соответствующий безголовый пакет. На Android установите пакет Termux с `pkg install ./gproxy-headless-android-<arch>.deb` и запустите `gproxy serve --console=false`. Он заменяет полный пакет `gproxy`, поскольку оба предоставляют команду `gproxy`. Чтобы вместо этого использовать ZIP, запустите `pkg install libc++ openssl ca-certificates`, распакуйте его в домашний каталог Termux, затем запустите `./gproxy serve --console=false`. В Windows используйте `gproxy.exe` вместо `gproxy`.
+Загрузите с [Релизы](https://github.com/LeenHawk/gproxy/releases): `nightly` для разработчиков, `staging` для бета-версии или стабильную версию. Самообновление выбирает соответствующий безголовый пакет. На Android установите пакет Termux с `pkg install ./gproxy-headless-android-<arch>.deb` и запустите `gproxy serve --console=false`. Он заменяет полный пакет `gproxy`, поскольку оба предоставляют команду `gproxy`. Чтобы вместо этого использовать ZIP, запустите `pkg install libc++ openssl ca-certificates`, распакуйте его в домашний каталог Termux, затем запустите `./gproxy serve --console=false`. В Windows используйте `gproxy.exe` вместо `gproxy`. Windows MSIX имеет идентификатор `LeenHawk.GPROXYHeadless` и псевдоним `gproxy-headless.exe`, поэтому не заменяет `gproxy.exe` из CLI. GPROXY Headless также доступен в Microsoft Store (`9ND7FQQMV566`).
 
 Этот вариант исключает встроенную веб-консоль и сохраняет прокси-маршруты, API управления, все каналы, SQLite, кэш памяти, локальное хранилище файлов и встроенный словарь. Настройте его через CLI или управление API. Для сборки не нужны библиотеки Node.js, pnpm или настольные системы:
 

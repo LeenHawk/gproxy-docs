@@ -21,8 +21,8 @@ CLI（`gproxy-*`）和 Application（`gproxy-tauri-*`）是兩類獨立程式，
 Linux CLI DEB 將 `gproxy` 安裝到 `/usr/bin`；Termux DEB 安裝到
 `/data/data/com.termux/files/usr`。Android CLI 使用 `distribution/termux/` 中的原始碼配方和固定版本的 Termux 官方構建器。DEB 和 ZIP 都依賴 Termux 的 `libc++`、OpenSSL 和
 CA 證書；ZIP 包含啟動指令碼、二進位制及安裝更新說明 `TERMUX.txt`。這些構建禁用程式自更新，透過 APT 安裝新版 DEB；啟用的軟體倉庫收錄後可使用
-`pkg upgrade gproxy`。Windows CLI MSIX 使用獨立的
-`.CLI` 包身份和控制台命令別名；macOS CLI DMG 包含二進位制及終端安裝說明。
+`pkg upgrade gproxy`。Windows CLI MSIX 使用 Partner Center 分配的獨立包身份
+`LeenHawk.GPROXYCLI` 和控制台命令別名；macOS CLI DMG 包含二進位制及終端安裝說明。
 Application ZIP 保留桌面資源，macOS ZIP 包含完整 `.app`。
 
 鴻蒙構建使用快取工具鏈映像和固定版本的實驗性 Tauri 分支，其他平台繼續使用穩定版。
@@ -34,9 +34,10 @@ macOS 使用 ad-hoc 簽名，尚未接入 Developer ID 簽名和公證。
 
 Windows 使用 Microsoft Store 的包身份。`release` 環境需配置四個變數：
 `MS_STORE_IDENTITY_NAME`、`MS_STORE_DISPLAY_NAME`、`MS_STORE_IDENTITY_PUBLISHER`、
-`MS_STORE_PUBLISHER_DISPLAY_NAME`。正式版保留兩架構的 Store 提交包；啟用
+`MS_STORE_PUBLISHER_DISPLAY_NAME`；CLI 使用對應的 `MS_STORE_CLI_*` 變數。Headless 的包身份和顯示名稱固定，
+Store 提交只需在共用的發行者變數之外再設定 `MS_STORE_HEADLESS_PRODUCT_ID`。正式版保留兩架構的 Store 提交包；啟用
 `MS_STORE_PUBLISH_ENABLED` 後，GitHub Release 釋出成功會觸發 Store 提交流程。
-GitHub 附帶的 MSIX 與提交包一樣未簽名，由 Store 簽發後分發；它不是可直接雙擊安裝的可信簽名包。應用依賴系統的 WebView2 Runtime。
+Store 提交包未簽名，由 Store 簽發後分發。啟用 SignPath 時，GitHub 附帶的 MSIX 會依簽章憑證的發行者重新打包並簽名，可直接安裝；未啟用時同樣未簽名。應用依賴系統的 WebView2 Runtime。
 
 Android 使用已有 `ANDROID_SIGNING_*` secrets 簽名並驗證 APK。應用的
 `<target-triple>-tauri-apk` 條目進入 Ed25519 簽名更新清單，與 CLI ZIP 更新分開；不再構建舊服務包裝 APK。缺少必需的金鑰或 Store 身份會使打包失敗。
@@ -90,14 +91,16 @@ Release 工作流程獨立構建以下無前端包，無需等待前端構建：
 | --- | --- | --- |
 | Linux GNU | x86_64、aarch64、riscv64 | `gproxy-headless-linux-<arch>.zip` |
 | Linux musl | x86_64、aarch64、riscv64 | `gproxy-headless-linux-<arch>-musl.zip`, `gproxy-headless-linux-<arch>-musl.apk` |
-| Windows | x86_64、aarch64 | `gproxy-headless-windows-<arch>.zip` |
+| Windows | x86_64、aarch64 | `gproxy-headless-windows-<arch>.zip`、`gproxy-headless-windows-<arch>.msix` |
 | macOS | x86_64、aarch64 | `gproxy-headless-macos-<arch>.zip` |
 | Android（Termux） | x86_64、aarch64 | `gproxy-headless-android-<arch>.zip`, `gproxy-headless-android-<arch>.deb` |
 
 在 [Releases](https://github.com/LeenHawk/gproxy/releases) 下載：開發版選 `nightly`，
 beta 選 `staging`，穩定版選正式版本。自更新也會選擇對應的無前端包。
 Android 可在 Termux 執行 `pkg install ./gproxy-headless-android-<arch>.deb`，再執行 `gproxy serve --console=false`；它與完整版 `gproxy` 套件提供同一個命令，安裝時會取代後者。使用 ZIP 時，先執行 `pkg install libc++ openssl ca-certificates`，將 ZIP 解壓到 Termux 主目錄，再執行 `./gproxy serve --console=false`。
-Windows 使用 `gproxy.exe`。
+Windows 使用 `gproxy.exe`。Windows MSIX 的包身份為 `LeenHawk.GPROXYHeadless`，命令別名為
+`gproxy-headless.exe`，不會取代 CLI 的 `gproxy.exe`。GPROXY Headless 也已上架
+Microsoft Store（`9ND7FQQMV566`）。
 
 此版本不打包 Web 控制台，保留代理、管理 API、全部渠道、SQLite、記憶體快取、本地檔案儲存和內建詞表，透過 CLI 或管理 API 配置。原始碼構建不需要 Node.js、
 pnpm 或桌面函式庫：

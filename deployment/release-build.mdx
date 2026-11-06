@@ -36,7 +36,7 @@ Both DEB and ZIP use Termux's `libc++`, OpenSSL and CA certificates; ZIPs includ
 the launcher, executable and `TERMUX.txt` with installation/update instructions.
 Self-update is disabled in these builds: install a newer DEB with APT, or use
 `pkg upgrade gproxy` once an enabled repository provides it. Windows CLI
-MSIX uses a distinct `.CLI` identity and a console execution alias. macOS CLI
+MSIX uses its own Partner Center identity, `LeenHawk.GPROXYCLI`, and a console execution alias. macOS CLI
 DMGs include the executable and Terminal installation instructions.
 Application ZIPs retain desktop resources and, on macOS, the complete `.app`.
 
@@ -51,13 +51,17 @@ notarization are not configured.
 
 Windows uses the Microsoft Store package identity. Configure four variables in
 the `release` environment: `MS_STORE_IDENTITY_NAME`, `MS_STORE_DISPLAY_NAME`,
-`MS_STORE_IDENTITY_PUBLISHER`, and `MS_STORE_PUBLISHER_DISPLAY_NAME`. Stable
+`MS_STORE_IDENTITY_PUBLISHER`, and `MS_STORE_PUBLISHER_DISPLAY_NAME`; CLI uses
+the `MS_STORE_CLI_*` counterparts. Headless has a fixed identity and display
+name, so its Store submission adds only `MS_STORE_HEADLESS_PRODUCT_ID` to the
+shared publisher variables. Stable
 releases retain both architecture packages for Store submission. With
 `MS_STORE_PUBLISH_ENABLED` enabled, successful GitHub publication triggers the
-Store submission workflow. The MSIX files on GitHub are unsigned, just like the
-Store submission packages; the Store signs them for distribution. They are not
-trusted packages that can be installed by double-clicking. The app requires the
-system WebView2 Runtime.
+Store submission workflow. Store submission packages are unsigned; the Store
+signs them for distribution. With SignPath enabled, the MSIX files on GitHub are
+rebuilt with the signing certificate's publisher and signed, so they install
+directly; without it they are unsigned too. The app requires the system WebView2
+Runtime.
 
 Android APKs are signed and verified using the existing `ANDROID_SIGNING_*`
 secrets. Each app's `<target-triple>-tauri-apk` entry joins the Ed25519-signed
@@ -113,7 +117,7 @@ The Release workflow builds headless packages independently of the frontend:
 | --- | --- | --- |
 | Linux GNU | x86_64, aarch64, riscv64 | `gproxy-headless-linux-<arch>.zip` |
 | Linux musl | x86_64, aarch64, riscv64 | `gproxy-headless-linux-<arch>-musl.zip`, `gproxy-headless-linux-<arch>-musl.apk` |
-| Windows | x86_64, aarch64 | `gproxy-headless-windows-<arch>.zip` |
+| Windows | x86_64, aarch64 | `gproxy-headless-windows-<arch>.zip`, `gproxy-headless-windows-<arch>.msix` |
 | macOS | x86_64, aarch64 | `gproxy-headless-macos-<arch>.zip` |
 | Android (Termux) | x86_64, aarch64 | `gproxy-headless-android-<arch>.zip`, `gproxy-headless-android-<arch>.deb` |
 
@@ -124,7 +128,10 @@ headless package. On Android, install the Termux package with
 It replaces the full `gproxy` package, as both provide the `gproxy` command. To use
 the ZIP instead, run `pkg install libc++ openssl ca-certificates`, extract it under
 Termux's home directory, then run `./gproxy serve --console=false`.
-On Windows, use `gproxy.exe` in place of `gproxy`.
+On Windows, use `gproxy.exe` in place of `gproxy`. The Windows MSIX has the
+identity `LeenHawk.GPROXYHeadless` and the `gproxy-headless.exe` alias, so it
+does not replace the CLI's `gproxy.exe`. GPROXY Headless is also on Microsoft
+Store (`9ND7FQQMV566`).
 
 This variant excludes the bundled Web console and retains proxy routes,
 management APIs, all channels, SQLite, memory cache, local file storage and
