@@ -3596,6 +3596,64 @@
       "descriptor": {
         "capabilities": {
           "paidUsage": false,
+          "quotaQuery": false,
+          "quotaReset": false,
+          "refresh": false,
+          "services": false,
+          "websocket": false
+        },
+        "configKeys": [
+          {
+            "description": "Upstream origin, without `/v1`. Provider column, not config JSON.",
+            "kind": "string",
+            "name": "base_url",
+            "placeholder": "https://amr-link.open-design.ai",
+            "required": false
+          },
+          {
+            "description": "Static headers added to every upstream request.",
+            "kind": "header_list",
+            "name": "headers",
+            "placeholder": null,
+            "required": false
+          },
+          {
+            "description": "Forward thinking blocks from request history. Defaults to true; disabling removes reasoning content and signatures without disabling model thinking.",
+            "kind": "bool",
+            "name": "forward_thinking",
+            "placeholder": null,
+            "required": false
+          },
+          {
+            "description": "How the host picks among this provider's credentials.",
+            "kind": "string",
+            "name": "credential_strategy",
+            "placeholder": null,
+            "required": false
+          },
+          {
+            "description": "Additional client headers to forward, unioned with the global allow-list and channel defaults.",
+            "kind": "header_list",
+            "name": "allowed_headers",
+            "placeholder": null,
+            "required": false
+          }
+        ],
+        "credentialKinds": [
+          "api_key"
+        ],
+        "displayName": "OpenDesign",
+        "id": "opendesign",
+        "loginModes": [
+          "api_key"
+        ]
+      },
+      "services": []
+    },
+    {
+      "descriptor": {
+        "capabilities": {
+          "paidUsage": false,
           "quotaQuery": true,
           "quotaReset": false,
           "refresh": false,
