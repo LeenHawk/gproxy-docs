@@ -74,6 +74,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
       "store": "Также в Microsoft Store",
       "storeDesktop": "GPROXY Desktop",
       "storeCli": "GPROXY CLI",
+      "storeHeadless": "GPROXY Headless",
       "fdroid": "Приложение также доступно в F-Droid",
       "scoop": "Также через Scoop",
       "winget": "Через WinGet (Microsoft Store)",
@@ -159,6 +160,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
       store: 'Also on the Microsoft Store',
       storeDesktop: 'GPROXY Desktop',
       storeCli: 'GPROXY CLI',
+      storeHeadless: 'GPROXY Headless',
       fdroid: 'The Application is also on F-Droid',
       scoop: 'Also with Scoop',
       winget: 'With WinGet (Microsoft Store)',
@@ -225,6 +227,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
       store: '也可从 Microsoft Store 获取',
       storeDesktop: 'GPROXY Desktop',
       storeCli: 'GPROXY CLI',
+      storeHeadless: 'GPROXY Headless',
       fdroid: 'Application 也可从 F-Droid 安装',
       scoop: '也可通过 Scoop 安装',
       winget: '通过 WinGet 安装（Microsoft Store）',
@@ -291,6 +294,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
       store: '也可從 Microsoft Store 取得',
       storeDesktop: 'GPROXY Desktop',
       storeCli: 'GPROXY CLI',
+      storeHeadless: 'GPROXY Headless',
       fdroid: 'Application 也可從 F-Droid 安裝',
       scoop: '也可透過 Scoop 安裝',
       winget: '透過 WinGet 安裝（Microsoft Store）',
@@ -604,12 +608,13 @@ export const DownloadPage = ({ locale = 'en' }) => {
                       <span>{copy.store}</span>
                       <a href="https://apps.microsoft.com/detail/9P2FJRB9RS4Z?mode=direct">{copy.storeDesktop} ↗</a>
                       <a href="https://apps.microsoft.com/detail/9NBMH3S5K0L9?mode=direct">{copy.storeCli} ↗</a>
+                      <a href="https://apps.microsoft.com/detail/9ND7FQQMV566?mode=direct">{copy.storeHeadless} ↗</a>
                     </footer>
                   ) : null}
                   {platform.store ? (
                     <footer className="dl-store dl-scoop">
                       <span>{copy.winget}</span>
-                      <pre className="dl-code"><code>{'winget install --id 9P2FJRB9RS4Z --source msstore   # GPROXY Desktop\nwinget install --id 9NBMH3S5K0L9 --source msstore   # GPROXY CLI'}</code></pre>
+                      <pre className="dl-code"><code>{'winget install --id 9P2FJRB9RS4Z --source msstore   # GPROXY Desktop\nwinget install --id 9NBMH3S5K0L9 --source msstore   # GPROXY CLI\nwinget install --id 9ND7FQQMV566 --source msstore   # GPROXY Headless'}</code></pre>
                     </footer>
                   ) : null}
                   {platform.scoop ? (
