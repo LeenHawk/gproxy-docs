@@ -37,7 +37,7 @@ Windows 使用 Microsoft Store 的包身份。`release` 环境需配置四个变
 `MS_STORE_PUBLISHER_DISPLAY_NAME`；CLI 使用对应的 `MS_STORE_CLI_*` 变量。Headless 的包身份和显示名固定，
 Store 提交只需在共用的发布者变量之外再配置 `MS_STORE_HEADLESS_PRODUCT_ID`。正式版保留两架构的 Store 提交包；启用
 `MS_STORE_PUBLISH_ENABLED` 后，GitHub Release 发布成功会触发 Store 提交流程。
-Store 提交包未签名，由 Store 签发后分发。启用 SignPath 时，GitHub 附带的 MSIX 会按签名证书的发布者重新打包并签名，可直接安装；未启用时同样未签名。应用依赖系统的 WebView2 Runtime。
+Store 提交包未签名，由 Store 签发后分发。启用 SignPath 时，版本发布在 GitHub 附带的 MSIX 会按签名证书的发布者重新打包，并在维护者于 SignPath 批准签名请求后签名，可直接安装；未启用时同样未签名。应用依赖系统的 WebView2 Runtime。
 
 Android 使用已有 `ANDROID_SIGNING_*` secrets 签名并验证 APK。应用的
 `<target-triple>-tauri-apk` 条目进入 Ed25519 签名更新清单，与 CLI ZIP 更新分开；不再构建旧服务包装 APK。缺少必需的密钥或 Store 身份会使打包失败。

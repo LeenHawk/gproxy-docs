@@ -58,9 +58,9 @@ shared publisher variables. Stable
 releases retain both architecture packages for Store submission. With
 `MS_STORE_PUBLISH_ENABLED` enabled, successful GitHub publication triggers the
 Store submission workflow. Store submission packages are unsigned; the Store
-signs them for distribution. With SignPath enabled, the MSIX files on GitHub are
-rebuilt with the signing certificate's publisher and signed, so they install
-directly; without it they are unsigned too. The app requires the system WebView2
+signs them for distribution. With SignPath enabled, a version release's MSIX files on GitHub are
+rebuilt with the signing certificate's publisher and signed once a maintainer
+approves the requests in SignPath, so they install directly; without it they are unsigned too. The app requires the system WebView2
 Runtime.
 
 Android APKs are signed and verified using the existing `ANDROID_SIGNING_*`
