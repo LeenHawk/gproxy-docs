@@ -120,6 +120,7 @@ body:has(.gp-download) #header:has(#page-title) { display: none; }
 .gp-download .dl-fdroid { align-items: center; }
 .gp-download .dl-fdroid a, .gp-download .dl-fdroid a:hover { border-bottom: 0; }
 .gp-download .dl-fdroid img { display: block; height: 56px; width: auto; margin: -0.5rem 0; }
+.gp-download .dl-scoop .dl-code { flex-basis: 100%; }
 
 .gp-download .dl-more { display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); margin-top: 3rem; }
 .gp-download .dl-code { margin: 0; padding: 0.6rem 0.8rem; border-radius: 8px; font-family: var(--gp-mono); font-size: 0.8rem; line-height: 1.5; color: var(--gp-strong); background: var(--gp-bg); border: 1px solid var(--gp-border); overflow-x: auto; white-space: pre; }

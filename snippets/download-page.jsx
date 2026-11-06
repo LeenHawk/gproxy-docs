@@ -75,6 +75,8 @@ export const DownloadPage = ({ locale = 'en' }) => {
       "storeDesktop": "GPROXY Desktop",
       "storeCli": "GPROXY CLI",
       "fdroid": "Приложение также доступно в F-Droid",
+      "scoop": "Также через Scoop",
+      "winget": "Через WinGet (Microsoft Store)",
       "quick": "Установка одной командой",
       "quickBody": "Устанавливает CLI и помогает настроить базу данных, администратора и прокси. Приложение с графическим интерфейсом можно скачать ниже.",
       "quickUnix": "Linux · macOS · Termux",
@@ -158,6 +160,8 @@ export const DownloadPage = ({ locale = 'en' }) => {
       storeDesktop: 'GPROXY Desktop',
       storeCli: 'GPROXY CLI',
       fdroid: 'The Application is also on F-Droid',
+      scoop: 'Also with Scoop',
+      winget: 'With WinGet (Microsoft Store)',
       quick: 'One-line install',
       quickBody: 'Installs the CLI for this computer and walks you through the database, administrator account and proxy. For the desktop Application, download it below.',
       quickUnix: 'Linux · macOS · Termux',
@@ -222,6 +226,8 @@ export const DownloadPage = ({ locale = 'en' }) => {
       storeDesktop: 'GPROXY Desktop',
       storeCli: 'GPROXY CLI',
       fdroid: 'Application 也可从 F-Droid 安装',
+      scoop: '也可通过 Scoop 安装',
+      winget: '通过 WinGet 安装（Microsoft Store）',
       quick: '一键安装',
       quickBody: '为本机安装 CLI，并引导你设置数据库、管理员账户和代理。需要桌面应用版请在下方下载。',
       quickUnix: 'Linux · macOS · Termux',
@@ -286,6 +292,8 @@ export const DownloadPage = ({ locale = 'en' }) => {
       storeDesktop: 'GPROXY Desktop',
       storeCli: 'GPROXY CLI',
       fdroid: 'Application 也可從 F-Droid 安裝',
+      scoop: '也可透過 Scoop 安裝',
+      winget: '透過 WinGet 安裝（Microsoft Store）',
       quick: '一鍵安裝',
       quickBody: '為本機安裝 CLI，並引導你設定資料庫、管理員帳戶和代理。需要桌面應用版請在下方下載。',
       quickUnix: 'Linux · macOS · Termux',
@@ -316,7 +324,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
   ]);
   const platforms = [
     { id: 'linux', rows: linuxRows },
-    { id: 'windows', store: true, rows: ['x86_64', 'aarch64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-windows-${arch}.zip`, label: 'ZIP' }, { asset: `gproxy-tauri-windows-${arch}.msix`, label: 'MSIX' }], cli: [{ asset: `gproxy-windows-${arch}.zip`, label: 'ZIP' }, { asset: `gproxy-windows-${arch}.msix`, label: 'MSIX' }] })) },
+    { id: 'windows', store: true, scoop: true, rows: ['x86_64', 'aarch64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-windows-${arch}.zip`, label: 'ZIP' }, { asset: `gproxy-tauri-windows-${arch}.msix`, label: 'MSIX' }], cli: [{ asset: `gproxy-windows-${arch}.zip`, label: 'ZIP' }, { asset: `gproxy-windows-${arch}.msix`, label: 'MSIX' }] })) },
     { id: 'macos', rows: ['aarch64', 'x86_64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-macos-${arch}.dmg`, label: 'DMG' }, { asset: `gproxy-tauri-macos-${arch}.zip`, label: 'ZIP' }], cli: [{ asset: `gproxy-macos-${arch}.zip`, label: 'ZIP' }, { asset: `gproxy-macos-${arch}.dmg`, label: 'DMG' }] })) },
     { id: 'android', fdroid: true, rows: ['aarch64', 'x86_64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-android-${arch}.apk`, label: 'APK' }], cli: [{ asset: `gproxy-android-${arch}.deb`, label: 'Termux DEB' }, { asset: `gproxy-android-${arch}.zip`, label: 'ZIP' }] })) },
     { id: 'ohos', rows: ['aarch64', 'x86_64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-ohos-${arch}-unsigned.hap`, label: 'HAP' }], cli: [{ asset: `gproxy-ohos-${arch}.zip`, label: 'ZIP' }] })) },
@@ -596,6 +604,19 @@ export const DownloadPage = ({ locale = 'en' }) => {
                       <span>{copy.store}</span>
                       <a href="https://apps.microsoft.com/detail/9P2FJRB9RS4Z?mode=direct">{copy.storeDesktop} ↗</a>
                       <a href="https://apps.microsoft.com/detail/9NBMH3S5K0L9?mode=direct">{copy.storeCli} ↗</a>
+                    </footer>
+                  ) : null}
+                  {platform.store ? (
+                    <footer className="dl-store dl-scoop">
+                      <span>{copy.winget}</span>
+                      <pre className="dl-code"><code>{'winget install --id 9P2FJRB9RS4Z --source msstore   # GPROXY Desktop\nwinget install --id 9NBMH3S5K0L9 --source msstore   # GPROXY CLI'}</code></pre>
+                    </footer>
+                  ) : null}
+                  {platform.scoop ? (
+                    <footer className="dl-store dl-scoop">
+                      <span>{copy.scoop}</span>
+                      <a href="https://github.com/LeenHawk/scoop-bucket">LeenHawk/scoop-bucket ↗</a>
+                      <pre className="dl-code"><code>{'scoop bucket add gproxy https://github.com/LeenHawk/scoop-bucket\nscoop install gproxy/gproxy-desktop   # gproxy, gproxy-headless'}</code></pre>
                     </footer>
                   ) : null}
                 </article>
