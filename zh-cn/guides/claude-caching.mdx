@@ -3,15 +3,17 @@ title: "提示缓存"
 description: "通过缓存断点规则或魔法字符串配置提示缓存，查看用量与计价。"
 ---
 
-提示缓存由上游提供，命中情况取决于模型、提示前缀和有效期。GPROXY 可以通过缓存断点规则或提示中的魔法字符串添加标记；添加标记不保证命中，也不能让不支持缓存的上游获得缓存能力。
+本页介绍 GPROXY 如何为 Claude 和 OpenAI 上游放置提示缓存标记（通过缓存断点规则，或通过写在提示中的魔法字符串），以及缓存 token 如何记录和计价。
 
-## 在控制台添加缓存断点
+缓存本身由上游提供，能否命中取决于模型、提示前缀和有效期（TTL）。添加标记不保证命中，也不能让不支持缓存的上游获得缓存能力。
 
-在供应商的重写规则中新增“缓存断点”，选择上游协议和位置。位置包括全局、系统和消息；Claude 还支持工具。局部位置可填写索引，正数从 1 开始，负数从末尾计数，留空选择最后一个可用位置。
+## 缓存断点规则
 
-Claude 可选择默认、5 分钟或 1 小时 TTL；OpenAI 局部断点可选择默认、30 分钟或 12 小时；全局规则可选择默认或 30 分钟。实际生效方式取决于上游。规则中的协议是转换后的上游协议，Gemini 不提供这个规则类型。
+在供应商的“重写规则”页面新增“缓存断点”规则，选择上游协议和位置。位置包括全局、系统和消息，Claude 还支持工具。局部位置可以填写索引：正数从 1 开始，负数从末尾倒数，留空则选择最后一个可用位置。
 
-通过 API 配置时使用 `action: "cache_breakpoint"`，`replacement` 是配置对象的 JSON 字符串，例如：
+Claude 可选默认、5 分钟或 1 小时 TTL；OpenAI 局部断点可选默认、30 分钟或 12 小时，OpenAI 全局规则可选默认或 30 分钟。TTL 实际如何生效由上游决定。规则中的协议指转换后的上游协议。Gemini 不支持这种规则。
+
+通过 API 配置时，使用 `action: "cache_breakpoint"`，并在 `replacement` 中填写配置对象的 JSON 字符串，例如：
 
 ```json
 {"dialect":"claude","target":"message","index":-1,"ttl":"5m"}
@@ -21,13 +23,11 @@ Claude 可选择默认、5 分钟或 1 小时 TTL；OpenAI 局部断点可选择
 {"dialect":"openai","target":"message","index":-1,"ttl":"12h"}
 ```
 
-这条规则作用于请求正文，与其他重写规则按配置顺序执行。客户端能自行提交缓存标记时，也可以直接使用上游支持的字段。
+这条规则作用于请求正文，与其他[重写规则](/zh-cn/guides/rules)按同一顺序执行。正文中已有四个标记时，规则不再添加，这与下文魔法字符串的上限相同。能够自行设置原生缓存字段的客户端，也可以直接发送上游支持的字段。
 
-## 使用魔法字符串
+## 魔法字符串
 
-无法直接设置缓存字段的客户端，可以在提示文本中放置以下标记，并启用供应商对应的 magic cache 选项。
-
-### 三个字符串
+无法设置缓存字段的客户端，可以在提示文本中写入以下字符串之一。供应商为目标协议开启 magic cache 选项后，GPROXY 会去掉该字符串，并在原位置放置一个断点。
 
 ```text
 GPROXY_MAGIC_STRING_TRIGGER_CACHING_CREATE_7D9ASD7A98SD7A9S8D79ASC98A7FNKJBVV80SCMSHDSIUCH
@@ -35,64 +35,61 @@ GPROXY_MAGIC_STRING_TRIGGER_CACHING_CREATE_49VA1S5V19GR4G89W2V695G9W9GV52W95V198
 GPROXY_MAGIC_STRING_TRIGGER_CACHING_CREATE_1FAS5GV9R5H29T5Y2J9584K6O95M2NBVW52C95CX984FRJY
 ```
 
-| 字符串 | 在 Claude 目标上 | 在 OpenAI 目标上 |
+| 字符串 | Claude 目标 | OpenAI 目标 |
 | --- | --- | --- |
-| …`7D9ASD…` | `cache_control`，用 API 的默认 TTL | 一个显式断点 |
+| …`7D9ASD…` | `cache_control`，使用 API 默认 TTL | 显式断点 |
 | …`49VA1S…` | `cache_control`，`"ttl": "5m"` | `prompt_cache_breakpoint` (`"ttl": "30m"`) |
 | …`1FAS5G…` | `cache_control`，`"ttl": "1h"` | `prompt_cache_breakpoint` (`"ttl": "12h"`) |
 
-同一组字符串按目标协议选择短期和长期缓存：Claude 的 `5m` / `1h` 对应 OpenAI 的 `30m` / `12h`，默认字符串不指定 TTL。局部规则将 TTL 写在选中的断点上，不修改整个请求的缓存选项。
+同一个字符串按目标协议选择短期或长期缓存：Claude 的 `5m`、`1h` 分别对应 OpenAI 的 `30m`、`12h`，默认字符串不设置 TTL。TTL 写在断点本身上，不修改整个请求的缓存选项。
 
-原生缓存字段在 Claude ↔ OpenAI Chat/Responses 转换中也使用同一双向映射。有标记的系统提示、消息、图片/文档和工具结果保留块边界。Claude 的自动缓存策略在末尾块有目标协议表示时转换为该块的显式断点；没有 OpenAI 对应字段的工具定义级标记仍由转换报告列出。
+这些字符串属于客户端与 GPROXY 之间的协议，不会随版本变化。
 
-OpenAI 转 Claude 时，只有明确传入 `prompt_cache_options.mode: "implicit"` 才生成顶层 `cache_control`。省略整个选项对象或省略 `mode`（包括空对象、只传 TTL）都不会启用 Claude 自动缓存；块上的显式标记仍独立转换。
+### 开启 magic cache
 
-它们是**冻结的**：它们是客户端到代理之间协议的一部分，不随版本变化。
-
-## 最要紧的那条规则
-
-**无论缓存是否启用，token 总是被剥掉。** 一个泄漏到别人提示里的标记，任何时候都不是想要的东西。
-
-开关决定的只是要不要在 token 所在的位置放一个*断点*。magic cache 关闭时，token 被取走，别的什么也不动：客户端自己的 `cache_control` 或 `prompt_cache_breakpoint` 原样保留，而不含 token 的 body 逐字节转发，既不解析也不重新序列化。
-
-只剥不放的那一趟也正是 `claudeweb` 所做的，因为浏览器会话根本没有缓存控制。
-
-## 启用它
-
-两个供应商 `config` 开关，每族一个：
+供应商 `config` 中有两个开关，每个协议族一个：
 
 ```json
 { "config": { "enable_claude_magic_cache": true,
               "enable_openai_magic_cache": true } }
 ```
 
-| 开关 | 提供它的渠道 |
+| 开关 | 提供该开关的渠道 |
 | --- | --- |
-| `enable_claude_magic_cache` | `aws_bedrock`、`azure`、`claudeapi`、`claudecode`、`custom`、`opencodego`、`opencodezen`、`openrouter` |
-| `enable_openai_magic_cache` | `aws_bedrock`、`azure`、`openai`、`codex`、`custom`、`opencodego`、`opencodezen`、`openrouter` |
+| `enable_claude_magic_cache` | `aws_bedrock`、`azure`、`claudeapi`、`claudecode`、`custom`、`opencodego`、`opencodezen`、`openrouter`、`vercel` |
+| `enable_openai_magic_cache` | `aws_bedrock`、`azure`、`openai`、`codex`、`custom`、`opencodego`、`opencodezen`、`openrouter`、`vercel` |
 
-开关是对着**目标方言**读的，不是客户端的。一个被路由到 Claude 供应商的 OpenAI 形状请求会先转成 Claude Messages，因此起作用的是 Claude 开关，写下的标记是 `cache_control`。客户端收到的仍然是它自己的格式。
+控制台中这两个开关显示为“Claude 魔法缓存”和“OpenAI 魔法缓存”。
 
-## 标记落在哪
+起作用的是目标协议对应的开关，而不是客户端协议的开关。OpenAI 格式的客户端请求路由到 Claude 供应商时，会先转换为 Claude Messages，因此由 Claude 开关决定，写入的标记是 `cache_control`。客户端收到的响应仍是它自己的格式。
+
+### 字符串的移除
+
+上表中的渠道无论是否开启 magic cache，都会移除这些字符串，因为残留在提示中的标记对上游没有任何用处。
+
+开关只决定是否在字符串原来的位置放置断点。magic cache 关闭时，只移除字符串，其他内容都不变：客户端自己的 `cache_control` 或 `prompt_cache_breakpoint` 原样保留；不含字符串的正文按原字节转发，不解析，也不重新序列化。
+
+`claudeweb` 渠道同样只移除字符串而不放置断点，因为浏览器会话没有缓存控制。
+
+## 标记的位置
+
+开启 magic cache 后，魔法字符串对应的标记按目标协议放置在以下位置。
 
 ### Claude Messages
 
-body 先被规范化：字符串 content 变成块数组，空文本块被丢弃，落在被丢弃块上的
-`cache_control` 移到最近的可缓存块上——这正是让一个单独成行的 token 也能工作的原因。
-thinking 块只在 assistant 轮次保留。
+先对正文做规范化：字符串形式的 content 转为块数组，空文本块被删除，删除的块上若带有 `cache_control`，会移到最近的可缓存块上。因此，单独占一行的字符串也能正常生效。thinking 块只在 assistant 轮次中保留。
 
-然后 `system` 在 `messages` **之前**被遍历，因此预算按提示顺序花掉，而不是按 JSON 键序。每个带 token 的文本块都被标记：
+随后先处理 `system`，再处理 `messages`，断点名额因此按提示顺序分配，而不是按 JSON 键的顺序。每个包含字符串的文本块都会加上标记：
 
 ```json
 { "cache_control": { "type": "ephemeral", "ttl": "1h" } }
 ```
 
-已经带 `cache_control` 的块保持不动。
+已经带有 `cache_control` 的块保持不变。
 
 ### OpenAI Chat Completions
 
-除 `function` 角色外的每条消息都可以被标记。纯字符串 `content` 会被拆成一个被标记的
-`text` part，因为标记需要一个落脚处；数组 content 则就地标记它的 part。
+除 `function` 角色以外的消息都可以加标记。纯字符串的 `content` 会拆成一个带标记的 `text` part，因为标记必须放在某个 part 上；数组形式的 content 则直接在原有 part 上加标记。
 
 ```json
 { "type": "text", "text": "…", "prompt_cache_breakpoint": { "mode": "explicit" } }
@@ -100,45 +97,48 @@ thinking 块只在 assistant 轮次保留。
 
 ### OpenAI Responses
 
-三个位置，依次是：
+依次在三个位置放置标记：
 
-1. **`instructions`。** 那里的 token 被剥掉，并在 `input` 前面插入一条被标记的 developer
-   消息——`instructions` 是字符串，自己承载不了标记。
-2. **`prompt.variables`**，像 Chat 的 part 一样标记。
-3. **`input`**，无论它是裸字符串（变成一条被标记的 user 消息）还是一组 item，后者的
-   `content` 与 `output` 用 `input_text` / `output_text` 类型标记。
+1. `instructions`。其中的字符串被移除，并在 `input` 开头插入一条带标记的 developer 消息，因为 `instructions` 是纯字符串，无法携带标记。
+2. `prompt.variables`，标记方式与 Chat 的 part 相同。
+3. `input`。裸字符串会变成一条带标记的 user 消息；如果是 item 数组，则用 `input_text` 和 `output_text` 类型标记其中的 `content` 与 `output`。
 
 ### Gemini
 
-没有断点。token 被剥掉，别的什么都不发生。
+Gemini 没有断点。字符串被移除，不做其他处理。
 
-## 四个的上限
+## 四个断点的上限
 
-**最多四个断点离开代理，含客户端自己的。** 预算是数 body 里已有的标记算出来的，所以一个自己放了三个的客户端还剩一个名额。
+离开代理的断点最多四个，客户端自己设置的也计算在内。可用名额等于四减去正文中已有的标记数，所以客户端已经放了三个时，只剩一个名额。
 
-超出上限的 token 仍然被剥掉——只是不变成标记。这和别处是同一条规则：这些字符串永远不会到达上游。
+超出上限的字符串仍会被移除，只是不再变成标记。
+
+## 协议转换中的原生缓存字段
+
+在 Claude 与 OpenAI Chat/Responses 之间转换时，原生缓存字段按同样的 TTL 对应关系双向映射。带标记的系统提示、消息、图片/文档和工具结果块保留各自的边界。Claude 的自动缓存策略会转换为对应末尾块上的显式断点，前提是该块在目标协议中有对应表示。没有 OpenAI 对应字段的工具定义级标记会列在转换报告中。
+
+从 OpenAI 转换到 Claude 时，只有明确传入 `prompt_cache_options.mode: "implicit"` 才会生成顶层 `cache_control`。省略整个选项对象或省略 `mode`（包括空对象、只传 TTL）都不会开启 Claude 自动缓存。块上的显式标记不受此影响，单独转换。
+
+OpenAI Responses 和 Chat 的显式断点支持 `prompt_cache_breakpoint: {"mode":"explicit","ttl":"12h"}`（也支持 `"30m"`），Chat 与 Responses 互相转换时保留这个 TTL。当前的[官方 OpenAPI](https://github.com/openai/openai-openapi/blob/master/openapi.json) 中，请求级的 `prompt_cache_options.ttl` 仍只允许 `"30m"`；`prompt_cache_retention` 是另一套较早的策略。
 
 ## 用量与计价
 
-缓存 token 有自己的指标，结算时按你的费率行定价：
+缓存 token 作为独立的指标记录，并按你配置的费率行计价：
 
-| 上游报了什么 | 指标 |
+| 上游报告的内容 | 指标 |
 | --- | --- |
-| 缓存读 | `cached_input_tokens` |
+| 缓存读取 | `cached_input_tokens` |
 | 缓存写入，按 TTL 分桶 | `cache_creation_tokens` + `ttl_seconds` |
 | 缓存写入，TTL 未知 | `cache_creation_tokens` |
 
-缓存写入统一使用 `cache_creation_tokens`。费率条件 `{"ttl_seconds":43200}` 匹配 12 小时写入，省略该条件则为默认价格；同一次请求中的各个写入桶分别计费。缓存读取仍是单一的 `cached_input_tokens` 计数，没有 TTL。阶梯价格使用 `cacheCreationPerMillion: [{"ttlSeconds":43200,"price":"5"}]`，其中 `ttlSeconds: null` 表示默认价格。价格按百万 Token 计，不能再乘 TTL。
+缓存写入统一使用 `cache_creation_tokens`。费率条件 `{"ttl_seconds":43200}` 匹配 12 小时写入的价格，不带该条件的费率作为默认价格；上游报告的每个写入桶分别计费。缓存读取是单一的 `cached_input_tokens` 计数，没有 TTL。阶梯价格使用 `cacheCreationPerMillion: [{"ttlSeconds":43200,"price":"5"}]`，其中 `ttlSeconds: null` 的条目是默认价格。价格按每百万 token 计，不再乘以 TTL。
 
-OpenAI Responses 和 Chat 的显式断点支持 `prompt_cache_breakpoint: {"mode":"explicit","ttl":"12h"}`（也支持 `"30m"`），Chat ↔ Responses 转换会保留这个 TTL。当前[官方 OpenAPI](https://github.com/openai/openai-openapi/blob/master/openapi.json) 的请求级 `prompt_cache_options.ttl` 仍只列出 `"30m"`；`prompt_cache_retention` 是独立的旧策略。单次 usage 目前只声明 `cache_write_tokens` 总量，因此 GPROXY 将其 TTL 记为未知，不猜测混合断点的写入分布。
+OpenAI 单次调用的 usage 只报告 `cache_write_tokens` 总量，因此 GPROXY 把这些写入的 TTL 记为未知，不去猜测它们在不同 TTL 的断点之间如何分配。
 
-`cached_input_tokens` 以 `input_tokens` 为上限：未命中的余量按 input 价计，命中部分按缓存读价计，而缓存读**没有价时继承 input 价**。没有自己费率行的缓存写按 0 结算。见
-[价格与分层](/zh-cn/reference/pricing)。
+`cached_input_tokens` 以 `input_tokens` 为上限。未命中的部分按输入价格计费，命中的部分按缓存读取价格计费；没有设置缓存读取价格时按输入价格计费。没有单独费率的缓存写入不计费。参见[价格与分层](/zh-cn/reference/pricing)。
 
-单条记录上的 token 数是可空的——上游没报某个字段，不等于它测到了 0——而每个合计都是普通数值，因为"什么都没报"的求和确实是 0。
+用量记录中的各项 token 数可以为空，因为上游没有报告某个字段，不代表它测得的是 0。合计值则总是普通数值，因为对“没有报告”的字段求和，结果就是 0。
 
-## 保住命中
+## 避免缓存未命中
 
-改写规则跑在转换**之后**、渠道之前，所以一条改提示文本的规则可以把一次本该命中的缓存变成未命中。把稳定内容放在最前、标记放在它之后、每请求都变的内容全部放在边界之后——并且检查没有哪条 `paths` 选得过宽的改写规则在改这段前缀。
-
-见[改写规则与操作覆盖](/zh-cn/guides/rules)。
+重写规则在协议转换之后、渠道发送之前执行，因此修改提示文本的规则可能把本应命中的请求变成未命中。把稳定的内容放在最前面，标记放在它后面，每次请求都会变化的内容放在标记之后。同时检查是否有 `paths` 范围过宽的重写规则改动了缓存前缀。

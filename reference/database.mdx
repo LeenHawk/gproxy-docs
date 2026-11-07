@@ -1,57 +1,55 @@
 ---
-title: "Storage & Cache Backends"
-description: "The database backends and how they are selected, entity-first schema synchronization, the cache contract and what needs a shared one, file storage, and backups."
+title: "Storage and cache backends"
+description: "Database backends and how one is selected, schema synchronization, exact amounts, the cache and when it must be shared, configuration synchronization between instances, file storage, and backups."
 ---
 
-Three storage extension points, chosen independently: the **database**, the
-**cache**, and optional **file content**.
+GPROXY has three storage components, each configured on its own: the
+database, the cache, and optional file storage. This page describes the
+backends for each, how they are selected, and what you need when you run more
+than one instance or plan backups.
 
-## The Database
+## Database
 
-| `GPROXY_PERSISTENCE` | Connection | Build |
+The database holds all configuration, identities, usage and logs. The native
+binary (`gproxy`) opens SQLite, PostgreSQL or MySQL; the Cloudflare Workers
+host opens D1 or libSQL.
+
+| Backend | Connection | Availability |
 | --- | --- | --- |
-| `sqlite` *(default)* | `<data-dir>/gproxy.db`, or a path / `sqlite://` URL in `--dsn` | always compiled in |
-| `postgres` | `postgres://…` in `--dsn` | `--features postgres` |
-| `mysql` | `mysql://…` in `--dsn` | `--features mysql` |
-| D1 | the Cloudflare binding | the Workers host |
-| libSQL / Turso | over the Hrana HTTP pipeline | `--features libsql` |
+| SQLite (default) | `<data-dir>/gproxy.db`, or a file path or `sqlite://` URL in `--dsn` | native binary, always compiled in |
+| PostgreSQL | `postgres://…` in `--dsn` | native binary, `postgres` feature (on by default) |
+| MySQL | `mysql://…` in `--dsn` | native binary, `mysql` feature (on by default) |
+| D1 | the Worker's D1 binding (`DB` by default) | Workers host |
+| libSQL / Turso | a `libsql://` or `https://` URL in `GPROXY_DATABASE_URL`, token in `GPROXY_LIBSQL_TOKEN` | Workers host |
 
-MySQL requires 8.0.13 or later for JSON default expressions. PostgreSQL and MySQL drivers include TLS support.
+MySQL must be 8.0.13 or later, which is the first version that accepts JSON
+default expressions. The PostgreSQL and MySQL drivers are built with TLS
+support.
 
-`--dsn` names its own backend when `--persistence` is absent, so the scheme is
-usually enough.
+### Selecting a backend
 
-**A backend this build does not have is refused at startup**, naming the
-feature that would provide it, rather than at the first request.
+For the native binary, `--dsn` (`GPROXY_DSN`) is usually enough: when
+`--persistence` (`GPROXY_PERSISTENCE`) is not set, the URL scheme selects the
+backend.
 
 ```sh
 gproxy serve --dsn 'postgres://gproxy:…@db.internal:5432/gproxy'
 ```
 
-libSQL is the option for a host that has no D1 — for example, Netlify — because the
-HTTP half is provided by the caller's own transport and it therefore works on
-every target.
+`GPROXY_PERSISTENCE` accepts `sqlite`, `postgres` or `mysql`. A `sqlite://`
+DSN left over from a v2 or v3 deployment is accepted, and the file path inside
+it is used. `:memory:` is refused, because an instance whose database
+disappears with the process would bootstrap an administrator, serve traffic
+and then lose all of it.
 
-### One API over all of them
-
-Native SeaORM connections and Cloudflare D1 share **one** store API. Every
-entity accessor goes through one generic repository, so ordinary CRUD is not
-hand-written per table, and each method executes **one atomic batch**.
-
-Constructing the store neither opens a database nor changes a schema.
-
-Two consequences worth knowing:
-
-- Reads preserve input order, duplicates and a `None` for a missing id, so a
-  caller can zip a result back onto its request.
-- A key predicate is split to fit D1's 100-bind statement limit **within the
-  same batch**. Arbitrary caller SQL is not split, and database request and
-  size limits still apply.
-
-SQL errors roll back transactional writes. A conditional zero-row write returns
-a conflict rather than rolling back the rest of its batch. **There is no
-automatic retry**: an ambiguous commit result means checking durable state
-first.
+A backend that the build does not include is refused at startup, with an
+error that names the feature that provides it. You find out when the process
+starts, not at the first request. The native binary also refuses D1 and
+libSQL, which only the Workers host can open; see
+[Cloudflare Workers](/deployment/edge) for its bindings. In the Workers host,
+`GPROXY_DATABASE_URL` takes precedence over the D1 binding. libSQL reaches the
+database over HTTP with the same fetch transport the Worker uses for upstream
+calls.
 
 ### Schema synchronization
 
@@ -60,104 +58,147 @@ $ gproxy migrate --data-dir ./data
 INFO gproxy::instance: schema is up to date warnings=0
 ```
 
-Synchronization is **entity-first**, not a numbered migration ladder: one
-registry describes the tables, and a sync creates what is missing on a new
-database and incrementally adds supported missing columns and indexes on an
-existing one. Repeat calls preserve rows.
+The schema is derived from the entity definitions rather than from a numbered
+series of migrations. One registry describes the tables. Synchronization
+creates the missing tables on a new database and, on an existing one, adds
+missing columns and indexes where the backend supports that. Running it again
+keeps all rows.
 
-`serve` does this too. The separate command exists for a deployment that runs
-it as its own step, **with one writer**, before any instance starts — which is
-what more than one instance over one database requires.
+`gproxy serve` synchronizes the schema at startup as well. `gproxy migrate`
+exists for deployments that run it as a separate step, with a single writer,
+before any instance starts. Do it that way when several instances share one
+database, so that they do not all alter the schema at once.
 
-What synchronization does **not** do: it does not create default settings or
-administrators, it does not run versioned migrations, and it does not convert a
-column's type, its data, or an existing foreign key. Those need an explicit
-migration, and there is no promise of one atomic transaction across every
-native backend.
+Synchronization does not:
 
-A report carries warnings — D1 type differences, for instance — and an empty
-list **is not proof** that every change was applied. Read the diagnostics
-before considering a startup complete.
+- create default settings or administrators;
+- run versioned migrations;
+- change a column's type, convert its data, or change an existing foreign key.
+
+Those changes need an explicit migration, and GPROXY does not guarantee that a
+migration runs in a single transaction on every native backend.
+
+The synchronization report lists warnings, for example type differences on
+D1. An empty list does not prove that every change was applied. Read the
+diagnostics in the log before you treat a startup as complete.
+
+### Store API and batches
+
+Native SeaORM connections and Cloudflare D1 are accessed through the same
+store API. Every entity accessor goes through one generic repository, so
+ordinary CRUD is not written per table, and each method runs as one atomic
+batch. Creating the store does not open a database or change the schema.
+
+Some properties of this API that callers rely on:
+
+- Reads return results in input order, keep duplicates, and return `None` for
+  a missing id, so a caller can match each result to its request.
+- A key predicate is split so that each statement stays under D1's limit of
+  100 bound parameters. The parts still run in the same batch. SQL written by a
+  caller is not split, and the database's own request and size limits still
+  apply.
+- An SQL error rolls back a transactional write. A conditional write that
+  affects zero rows returns a conflict and does not roll back the rest of its
+  batch.
+- Nothing is retried automatically. If the result of a commit is unknown (for
+  example the connection dropped), check the stored state before you repeat
+  the write.
 
 ### Exact amounts
 
-Money and limits are stored as scaled integers, not floats. One atom is
-`0.000000001`, and the representable range is about ±9.2 billion.
+Money and limits are stored as scaled integers, not floating point. One unit
+is `0.000000001`, and the representable range is about ±9.2 billion.
 
-SQL columns are `BIGINT`, and the entities carry the atoms as text across D1's
-JavaScript boundary so that comparisons, ordering and addition stay numeric in
-the database. JSON uses decimal **strings** for the same reason.
+The SQL columns are `BIGINT`. The entities pass these values across D1's
+JavaScript boundary as text, so that comparison, ordering and addition stay
+numeric inside the database; JSON uses decimal strings for the same reason.
 
-Arithmetic happens in a decimal type and is rounded **once**, for the complete
-settlement, ties to even. Settlement checks for negative values and signed
-overflow before it increments a counter.
+Arithmetic is done in a decimal type and rounded once, on the complete
+settlement, with ties rounded to even. Before a counter is incremented,
+settlement checks for negative values and signed overflow.
 
-## The Cache
+## The cache
 
-| Backend | Selected by | Scope |
+The cache holds short-lived state: values with a TTL, exact counters, permits
+and leases, and the invalidation topic. It holds no business entities and no
+durable ledger; anything that must survive goes to the database.
+
+| Backend | Selected by | Shared between |
 | --- | --- | --- |
-| Memory *(default natively)* | `--features memory` | one process |
-| Redis / Valkey | `GPROXY_REDIS_URL` | shared |
-| The database | automatic on wasm, configurable elsewhere | shared, through the same database |
+| Memory | default in the native binary (`memory` feature) | nothing; one process |
+| Redis / Valkey | `GPROXY_REDIS_URL`; the binary must be built with the `redis` feature | all instances using the same Redis |
+| Database | default in the Workers host | all isolates using the same database |
 
-The cache holds TTL state, exact counters, permits and leases, and the
-invalidation topic. It holds **no** business entities and **no** durable ledger.
+The native binary connects to Redis at startup and exits if it cannot. Rate
+limits are counted in the cache, so an instance that cannot reach Redis would
+otherwise accept traffic only to reject each rate-limited request. The
+database-backed cache is only for the Workers host; the native binary refuses
+it. The default feature set, which release binaries use, does not include
+`redis` or `s3`; a deployment that needs either builds its own binary (see
+[Building](/development/building)).
 
-| Operation | Semantics |
+### Operations
+
+| Operation | Behaviour |
 | --- | --- |
-| `get` / `put` / `delete` | opaque bytes, a mandatory positive TTL, a fresh version on every put |
-| `compare_exchange` | an expected version or absence; replace or delete |
+| `get` / `put` / `delete` | opaque bytes; a positive TTL is required; every put creates a new version |
+| `compare_exchange` | replace or delete if the current version matches, or if the key is absent |
 | `counter` / `increment` / `decrement` | exact non-negative integers, with an atomic ceiling check |
 | `acquire_permit` | at most N live holders, each with its own TTL |
-| `acquire_lease` | the same domain with a limit of 1 — a refresh lease |
-| `publish` / `subscribe` | lossy invalidation hints |
+| `acquire_lease` | a permit with a limit of 1, used as a refresh lease |
+| `publish` / `subscribe` | invalidation hints; delivery is not guaranteed |
 
-Operations are atomic **per key**, never across keys. Key/value, counter,
-permit and topic domains are separate, so the same logical name may exist in
-each.
+Each operation is atomic for one key; nothing is atomic across keys.
+Key/value entries, counters, permits and topics are separate namespaces, so
+the same name can exist in each.
 
-A counter has a **fixed window**: only its creation establishes the TTL, so
-every instance agrees on a boundary from the clock alone. A permit is **not**
-keyed by window — it measures requests in flight, which no boundary divides,
-and its period is only how long the cache waits before reclaiming one from a
-request that died without releasing it.
+A counter uses a fixed window. Only the call that creates it sets its TTL, so
+every instance can compute the window boundary from the clock alone. A permit
+has no window: it counts requests in flight, which a window boundary does not
+divide. Its TTL only bounds how long the cache waits before reclaiming a
+permit from a request that died without releasing it.
 
-### Failure is a refusal, never a local fallback
+### Cache failures
 
-A Redis failure does **not** silently degrade to the in-process cache. Two
-instances each falling back would hold contradictory locks and count the same
-limit twice, which is worse than an error.
+If Redis fails, GPROXY does not switch to an in-process cache. Two instances
+that each fell back to local state would hold conflicting locks and each count
+the same limit separately, which is worse than returning an error.
 
-A rate-limited request whose cache cannot answer is **refused with 429**.
-Passing it turns a cache outage into "every limit on the instance is off" — the
-one moment an attacker wants and an operator cannot see.
+A request subject to a rate limit that the cache cannot evaluate is refused
+with `429`, without a `Retry-After` hint. If such requests were let through,
+a cache outage would silently turn off every rate limit on the instance, and
+the operator would not see it.
 
-### What needs a shared one
+### Running more than one instance
 
-Running more than one instance requires Redis, or the database-backed cache.
-Without it, each instance counts its own rate limits, each refreshes the same
-OAuth token, and none sees the others' configuration invalidations.
+Several instances need a shared cache: Redis for native instances, or the
+database-backed cache on Workers. With a per-process cache each instance
+counts its own rate limits, each refreshes the same OAuth token, and none of
+them sees the others' configuration invalidations.
 
-A login session also lives in the cache rather than in a process, which is what
-lets any instance finish a login another one started — behind a load balancer
-it usually is another one.
+Sign-in sessions are also kept in the cache, so a login started on one
+instance can be completed on another. Behind a load balancer this is the usual
+case.
 
-For a deployment with separate environments, give each its own Redis namespace.
-The notification channel encodes the database number explicitly, because Redis
-Pub/Sub itself ignores `SELECT`.
+If several deployments or environments use one Redis server, give each its
+own namespace (the default is `gproxy`). The notification channel name
+includes the database number, because Redis Pub/Sub ignores `SELECT`.
 
-### The database as a cache
+### Database-backed cache
 
-For a host with no memory-resident process and no Redis — an edge isolate on D1
-or libSQL — the cache can be three tables in the database itself. Expiry is
-compared in SQL, so peers on one database agree on what is live.
+A Workers isolate has no long-lived process and no Redis, so the Workers host
+keeps the cache in three tables of its D1 or libSQL database. Expiry is
+compared in SQL, so all isolates on one database agree on which entries are
+live.
 
-It carries **no notification transport**: a subscription yields the initial
-resync hint and then nothing, so such a host catches up on its own schedule.
-That is the whole of the Workers host's synchronization: one revision read at
-the top of every request.
+This backend has no notification transport. A subscription yields the initial
+resync hint and nothing after it. Instead, the Workers host reads the
+configuration revision at the start of every request; that is its whole
+synchronization mechanism.
 
-## Configuration Synchronization
+## Configuration synchronization
+
+A configuration write goes through these steps:
 
 ```text
 commit_revision([statements…, config_revision += 1, read back])   one transaction
@@ -167,58 +208,65 @@ reload   this instance's snapshot
 publish  ConfigurationChanged { revision, scopes }
 ```
 
-Two mechanisms, because neither alone is enough:
+The rows and the revision increment are written in one transaction. If they
+were separate, another instance could read the new revision before the rows
+exist.
 
-| | Carries | Fails by |
+Other instances learn about the change in two ways, and both are needed:
+
+| Mechanism | What it carries | How it fails |
 | --- | --- | --- |
-| an invalidation on the shared cache | "look again", within milliseconds | losing messages |
-| the `settings.config_revision` poll | the durable truth, every 30 s | being slow |
+| an invalidation on the shared cache | "check again", within milliseconds | messages can be lost |
+| polling `settings.config_revision` | the durable revision, every 30 seconds | it is slow |
 
-A notification never carries state. It says which revision exists, and an
-instance reloads only when that is ahead of the one it serves. An unreadable
-payload reloads rather than guesses.
+A notification never carries configuration. It names a revision, and an
+instance reloads only if that revision is newer than the one it is serving.
+A payload that cannot be parsed triggers a reload.
 
-**The cache's own counter cannot replace the database's revision.** A Redis
-restart or eviction may lose it, and two independent commits — one to the
-database, one to the topic — do not become a transaction by being adjacent.
+A counter kept in the cache cannot replace the revision in the database. A
+Redis restart or eviction can lose it, and a commit to the database followed
+by a publish to the topic are still two separate operations, not one
+transaction.
 
-Reloads are serialized and monotonic: an older revision never replaces a newer
-one, and a failed reload leaves the previous snapshot serving.
+Reloads run one at a time and only move forward: an older revision never
+replaces a newer one, and if a reload fails, the previous snapshot keeps
+serving.
 
-## File Storage
+## File storage
 
-Optional, and off unless a backend is chosen.
+File storage is optional and disabled until you configure a backend.
 
-| Backend | Selected by | Native | Workers |
+| Backend | Selected by | Native binary | Workers host |
 | --- | --- | --- | --- |
-| Local filesystem | `--features fs` + `--file-storage-dir` | yes | no |
-| S3-compatible, including R2 | `--features s3` + the `[file_storage]` block | yes | yes |
+| Local filesystem | `--file-storage-dir` (`fs` feature, on by default) | yes | no |
+| S3-compatible, including R2 | the `[file_storage]` block (`s3` feature) | yes | yes |
 
-It holds published bodies — the bytes behind `/publications/{id}` — and
-downloaded tokenizer vocabularies. **File metadata and ownership stay in the
-database**; the storage layer holds content and nothing else.
+It stores the bodies of publications (the bytes served at
+`/publications/{id}`) and downloaded tokenizer vocabularies. File metadata and
+ownership are kept in the database; the storage backend holds only content.
 
-With no file storage configured, publication and vocabulary fetching answer
-"unsupported": there is nowhere to put the bytes.
+Without file storage, publishing and vocabulary downloads answer
+"unsupported", because there is nowhere to put the bytes.
 
-A publication link also needs `GPROXY_PUBLIC_BASE_URL`. With none configured
-the publish fails *before* any body is written and the caller is told to ask
-for the bytes inline. Building the link from the request's `Host` — chosen by
-the client — would be worse than no link: the upstream answer is accepted, the
-bytes are stored, the URL is handed out, and it 404s somewhere else.
+A publication link also needs `GPROXY_PUBLIC_BASE_URL`. Without it, the
+publish fails before any body is written, and the caller is told to request
+the bytes inline. GPROXY does not build the link from the request's `Host`
+header, because the client chooses that header: the upstream would accept the
+answer, the bytes would be stored, and the URL handed out could point to a
+host where it returns 404.
 
 ## Backups
 
-- **SQLite** — stop the process and copy `<data-dir>/gproxy.db`, or use
-  SQLite's own online backup. **Keep the master key with the copy**: a sealed
-  database is unreadable without it.
-- **PostgreSQL and MySQL** — the database's own dump tools.
-- **D1, libSQL / Turso** — the platform's snapshots.
-- **Logical** — `gproxy export --out config.json --include-secrets`. This
-  carries the *configuration*, not the history: identity, usage and captures
-  are deliberately out of it. See
+- SQLite: stop the process and copy `<data-dir>/gproxy.db`, or use SQLite's
+  online backup. Keep the master key together with the copy; credential
+  secrets in a sealed database cannot be read without it.
+- PostgreSQL and MySQL: use the database's own dump tools.
+- D1 and libSQL / Turso: use the platform's snapshots.
+- Logical export: `gproxy export --out config.json --include-secrets`. The
+  export contains configuration, not history; identities, usage and captures
+  are not included. See
   [Configuration](/reference/configuration#moving-a-configuration).
 
-A sealed blob is bound to its row's id, so restoring one row's secret onto
-another row does not work — which is a safety property, not an obstacle to a
-whole-database restore.
+Each sealed secret is bound to the id of its row. Restoring one row's secret
+onto a different row does not work. This protects against secrets being
+swapped between rows and does not affect restoring a whole database.

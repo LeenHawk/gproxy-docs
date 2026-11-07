@@ -1,50 +1,41 @@
 ---
 title: "GPROXY"
-description: "管理上游账户、转换 API 协议、配置模型路由，并查看用量与费用。"
-sidebarTitle: "概览"
-mode: "wide"
+description: "GPROXY 是一个自行部署的大模型 API 网关，把多个上游服务放在同一个入口后面。"
+sidebarTitle: "概述"
 ---
 
-一个入口，连接你的大模型服务。
+GPROXY 是一个自行部署的大模型 API 网关。上游账户（API Key、Codex 或 Claude Code 这类 OAuth 登录、浏览器 Cookie）交给 GPROXY 保管，客户端只需要一个网关地址、一个 GPROXY API Key 和你自己定义的模型名。
 
-<Columns cols={3}>
-  <Card title="下载" href="/zh-cn/download" icon="download" horizontal />
-  <Card title="快速开始" href="/zh-cn/getting-started/quick-start" icon="arrow-right" horizontal />
-  <Card title="GitHub" href="https://github.com/LeenHawk/gproxy" icon="arrow-up-right-from-square" horizontal />
-</Columns>
+每个请求到达后，GPROXY 根据模型名选出供应商和凭证；客户端与上游的格式不同时，在 OpenAI、Claude、Gemini 三种格式之间转换；检查调用者的权限、限流和预算；最后记录 token 用量和费用。某个凭证或供应商失败时，请求会换到下一个继续尝试。
 
-## 从这里开始
+GPROXY 不运行模型，推理由上游服务完成。它也不能替上游补上缺失的能力：把请求转换成另一种格式，并不会让一个不支持工具调用或图像输入的模型变得支持。
 
-<Columns cols={2}>
-  <Card title="安装与首次设置" href="/zh-cn/download">
-  选择应用、CLI、容器或 Workers，完成账户设置。
-</Card>
-  <Card title="发送第一个请求" href="/zh-cn/getting-started/quick-start">
-  添加供应商和凭证，配置模型路由，连接你的客户端。
-</Card>
-  <Card title="从 v3 升级" href="/zh-cn/deployment/v3-to-v4">
-  了解自动迁移、数据保留范围和升级后的检查步骤。
-</Card>
-  <Card title="连接 CLI 客户端" href="/zh-cn/guides/cli-clients">
-  配置 Codex CLI、Claude Code 等工具。
-</Card>
-</Columns>
+它可以作为带 Web 控制台的原生服务（CLI 或容器）运行，也可以作为内置控制台的桌面或手机应用使用，或者配合托管数据库部署在 Cloudflare Workers、Netlify 和 Vercel 上。Rust 程序还可以把它当作库嵌入。
 
-## 常用功能
+## 一个例子
 
-<Columns cols={2}>
-  <Card title="管理上游账户" icon="gear">
-  在一个控制台管理 API Key、OAuth 和 Cookie 凭证，查看健康状态和上游额度。
-</Card>
-  <Card title="配置模型路由" icon="shuffle">
-  为客户端设置固定的模型名，按权重分配请求，并配置备用供应商。
-</Card>
-  <Card title="连接不同协议" icon="puzzle-piece">
-  支持 OpenAI、Claude 和 Gemini API 格式及流式响应，具体操作取决于渠道和上游能力。
-</Card>
-  <Card title="查看用量与费用" icon="file-lines">
-  管理用户和密钥的访问权限与费用预算，查看请求记录和计费明细。
-</Card>
-</Columns>
+假设有一个名为 `openai-main` 的供应商，里面保存了 OpenAI API Key；再建一个名为 `fast` 的模型路由，指向它的 `gpt-4o-mini`。客户端这样请求：
 
-需要了解内部实现时，参阅[架构](/zh-cn/introduction/architecture)和[嵌入核心库](/zh-cn/reference/embedding)。
+```sh
+curl http://127.0.0.1:8787/v1/chat/completions \
+  -H "Authorization: Bearer $GPROXY_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"fast","messages":[{"role":"user","content":"你好"}]}'
+```
+
+客户端始终接触不到 OpenAI 的 Key。以后给 `fast` 再加一个供应商，或者换掉背后的模型，客户端都不用改。同一个路由也可以用 Claude 格式请求 `/v1/messages`，或用 Gemini 格式请求 `/v1beta/models/fast:generateContent`。
+
+## 本手册的组织
+
+- [基本概念](/zh-cn/introduction/concepts)解释全书通用的术语：渠道、供应商、凭证、模型路由、网关 API Key 和规则。
+- “安装与升级”介绍各平台的[安装包](/zh-cn/download)、[容器](/zh-cn/deployment/containers)、[托管部署](/zh-cn/deployment/edge)，以及从旧版本升级，最常用的是[从 v3 升级到 v4](/zh-cn/deployment/v3-to-v4)。
+- “入门”中的[快速开始](/zh-cn/getting-started/quick-start)从一个新实例做到第一个请求成功，[第一个请求](/zh-cn/getting-started/first-request)再用每种协议各发一遍。
+- “管理指南”是日常使用的说明：[供应商与凭证](/zh-cn/guides/providers)、[模型路由](/zh-cn/guides/models)、[用户与密钥](/zh-cn/guides/users-and-keys)、[权限与限额](/zh-cn/guides/permissions)、[重写规则](/zh-cn/guides/rules)、[提示缓存](/zh-cn/guides/claude-caching)、[CLI 客户端](/zh-cn/guides/cli-clients)、[控制台](/zh-cn/guides/console)和[用量与日志](/zh-cn/guides/observability)。
+- “参考”列出配置项、端点、计价规则、存储后端、渠道目录和 HTTP API。
+- “开发”面向贡献者：[架构](/zh-cn/development/architecture)、[嵌入](/zh-cn/development/embedding)、[添加渠道](/zh-cn/development/adding-a-channel)和[从源码构建](/zh-cn/development/building)。
+
+## 获取帮助
+
+Bug 请提交到 [GitHub Issues](https://github.com/LeenHawk/gproxy/issues)，使用问题可以到 [Discussions](https://github.com/LeenHawk/gproxy/discussions) 讨论。安全问题请私下报告，见 [SECURITY.md](https://github.com/LeenHawk/gproxy/blob/main/SECURITY.md)。
+
+GPROXY 是以 AGPL-3.0-or-later 发布的自由软件，其中的库 crate 采用 MIT 许可证。

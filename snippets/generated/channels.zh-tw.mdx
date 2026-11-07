@@ -828,6 +828,27 @@ GPROXY 4.2.0. [下載 JSON](/generated/channels.json).
 | `credential_strategy` | 字串 | 否 | How the host picks among this provider's credentials. | — |
 | `allowed_headers` | HTTP 請求標頭 | 否 | Additional client headers to forward, unioned with the global allow-list and channel defaults. | — |
 
+## OpenDesign `opendesign`
+
+登入方式: API 金鑰. 手動新增憑證的型別: `api_key`.
+
+| 能力 | 宣告支援 |
+| --- | --- |
+| 付費用量 | 否 |
+| 查詢額度 | 否 |
+| 重設額度 | 否 |
+| 更新憑證 | 否 |
+| 廠商服務路由 | 否 |
+| WebSocket 訊息 | 否 |
+
+| 設定項目 | 型別 | 必填 | 說明 | 範例／預留位置 |
+| --- | --- | --- | --- | --- |
+| `base_url` | 字串 | 否 | Upstream origin, without `/v1`. Provider column, not config JSON. | `https://amr-link.open-design.ai` |
+| `headers` | HTTP 請求標頭 | 否 | Static headers added to every upstream request. | — |
+| `forward_thinking` | 布林值 | 否 | Forward thinking blocks from request history. Defaults to true; disabling removes reasoning content and signatures without disabling model thinking. | — |
+| `credential_strategy` | 字串 | 否 | How the host picks among this provider's credentials. | — |
+| `allowed_headers` | HTTP 請求標頭 | 否 | Additional client headers to forward, unioned with the global allow-list and channel defaults. | — |
+
 ## OpenRouter `openrouter`
 
 登入方式: API 金鑰. 手動新增憑證的型別: `api_key`.

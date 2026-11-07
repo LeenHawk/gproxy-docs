@@ -1,0 +1,255 @@
+---
+title: "从源码构建"
+description: "从源码构建 GPROXY v4 的各个目标（带或不带控制台的 CLI、桌面与移动端应用、Worker），运行 CI 执行的检查，以及发布版本。"
+---
+
+本文说明如何自行构建 GPROXY、各发布包包含什么、CI 对每次改动执行哪些检查，以及版本的发布和签名方式。如果只是想运行 GPROXY，直接从 [Releases](https://github.com/LeenHawk/gproxy/releases) 下载预构建包更简单，选哪个包见[发布包](#发布包)中的表格。
+
+## 发布包
+
+每个版本包含三个程序，各自提供便携包和安装包：
+
+- `gproxy-*`：CLI，内置 Web 控制台。
+- `gproxy-headless-*`：不带控制台的同一个 CLI，用于 CI 和小型服务器，见[无前端 CLI](#无前端-cli)。
+- `gproxy-tauri-*`：桌面与移动端应用，同样内嵌控制台。
+
+| 平台 | CLI | Application |
+| --- | --- | --- |
+| Linux GNU（x86_64、aarch64、riscv64） | ZIP、DEB | ZIP、DEB |
+| Linux musl（x86_64、aarch64、riscv64） | ZIP、Alpine APK | ZIP、Alpine APK |
+| Windows（x86_64、aarch64） | ZIP、MSIX | ZIP、MSIX |
+| macOS（x86_64、aarch64） | ZIP、DMG | ZIP、DMG |
+| Android（x86_64、aarch64） | ZIP、Termux DEB | 仅 APK |
+| OpenHarmony / HarmonyOS NEXT | ARM64 / x86_64 ZIP | ARM64 未签名 HAP |
+
+发布工作流还会发布 serverless 可执行文件（`gproxy-serverless-linux-<arch>-musl`，x86_64 和 aarch64）、Cloudflare Workers 包（`gproxy-edge-cloudflare.zip`），以及 GNU 和 musl 容器镜像。应用包会生成托管在 GitHub 上的构建证明（attestation）。公开的发布附件只包括各个包、`manifest.json` 和 `SHA256SUMS`；单独的校验文件和构建证明属于 CI 内部输入。
+
+各平台说明：
+
+- Linux：CLI DEB 把 `gproxy` 安装到 `/usr/bin`。GNU Linux 应用依赖发行版的 GTK 3 和 WebKitGTK 4.1。musl 构建面向 Alpine，只提供 APK，不提供 DEB。
+- Android CLI：Termux DEB 安装到 `/data/data/com.termux/files/usr`。Android CLI 使用 `distribution/termux/` 中的源码配方和固定版本的 Termux 官方构建器构建。DEB 和 ZIP 都依赖 Termux 的 `libc++`、OpenSSL 和 CA 证书；ZIP 包含启动脚本、可执行文件以及记录安装和更新方法的 `TERMUX.txt`。这些构建禁用了自更新：用 APT 安装新版 DEB，或在已启用的软件仓库收录后执行 `pkg upgrade gproxy`。
+- Android 应用：APK 使用 `ANDROID_SIGNING_*` secrets 签名并验证。每个应用的 `<target-triple>-tauri-apk` 条目写入 Ed25519 签名的更新清单，与 CLI ZIP 的更新分开。旧的服务包装 APK 不再构建。
+- Windows：CLI MSIX 使用 Partner Center 分配的独立包身份 `LeenHawk.GPROXYCLI`，并提供控制台命令别名。应用依赖系统的 WebView2 Runtime。
+- macOS：CLI DMG 包含可执行文件和在终端中安装的说明。应用 ZIP 保留桌面资源，macOS 版包含完整的 `.app`。构建只做 ad-hoc 签名，尚未接入 Developer ID 签名和公证。
+- 鸿蒙：使用缓存的工具链镜像和固定版本的实验性 Tauri 分支构建，其他平台使用稳定版 Tauri。HAP 安装前需要自行签名，已在模拟器上验证。已实现持续后台运行，但能否生效取决于设备、系统版本和授予的权限；应用进程退出后代理随之停止。
+
+nightly 附件的文件名固定不变，提交 SHA 记录在更新清单中。
+
+## 构建环境
+
+需要 stable Rust（edition 2024）、Go、Clang、Node.js 22.12+（推荐 24 LTS）和 pnpm。Linux 桌面构建还需要 `webkit2gtk-4.1`、`gtk+-3.0`、`libsoup-3.0` 开发包。其他平台的工具链由发布工作流配置。
+
+## CLI 与控制台
+
+在仓库根目录执行：
+
+```sh
+pnpm --dir console install --frozen-lockfile
+pnpm --dir console build
+cargo build -p gproxy --release
+./target/release/gproxy serve --data-dir ./data
+```
+
+`pnpm --dir console build` 会把构建好的控制台复制到 HTTP 宿主和 Tauri 宿主的嵌入目录，之后的 Rust 构建会把它编译进去。顺序不能颠倒：只执行 Rust 构建的全新检出没有控制台资源，`/console` 会返回 404。如果要使用单独构建的控制台，传入 `--console-path console/dist`。
+
+### Cargo feature
+
+`gproxy` crate 的默认 feature 集合是 `channels,memory,fs,bundled-vocabulary,embedded-console,postgres,mysql`。
+
+| Feature | 作用 |
+| --- | --- |
+| `channels` | 本仓库的全部渠道。也可以逐个列出（`codex`、`claudecode`、`openai` 等），只带部署需要的渠道 |
+| `embedded-console` | 把 Web 控制台编译进二进制 |
+| `memory` | 进程内缓存 |
+| `redis` | Redis 缓存，同一部署运行多个实例时必须使用 |
+| `fs` | 本地文件存储，用于发布的 body 和下载的词表 |
+| `s3` | S3 对象存储 |
+| `bundled-vocabulary` | 为目录中没有词表文件的模型内置 DeepSeek 的分词词表 |
+| `postgres`、`mysql` | PostgreSQL 和 MySQL 驱动。SQLite 始终编译在内；未启用这两项时，指向其他数据库的 `GPROXY_PERSISTENCE`/`GPROXY_DSN` 会在启动时被拒绝 |
+
+只带四个渠道、不带外部数据库驱动的精简构建：
+
+```sh
+cargo build -p gproxy --release --no-default-features \
+  --features embedded-console,memory,fs,codex,claudecode,openai,custom
+```
+
+该 crate 还有一个面向 serverless 平台的 `gproxy-serverless` 二进制，需要启用 `postgres` feature。
+
+## 无前端 CLI
+
+无前端 CLI 就是不启用 `embedded-console` 构建的 `gproxy` 二进制。它保留代理路由、管理 API、全部渠道、SQLite、PostgreSQL 和 MySQL 驱动、内存缓存、本地文件存储和内置词表，通过 CLI 或管理 API 配置。构建不需要 Node.js、pnpm 或桌面库：
+
+```sh
+cargo build --locked --release -p gproxy --bin gproxy \
+  --no-default-features --features channels,memory,fs,bundled-vocabulary,postgres,mysql
+./target/release/gproxy serve --console=false
+```
+
+不启用 `embedded-console` 时，即使检出目录中已有构建好的控制台，也不会嵌入二进制。`--console=false` 还会关闭对外部控制台目录的服务。自定义 feature 集合如果需要内嵌控制台，加上 `embedded-console`。
+
+发布工作流独立于控制台构建生成以下无前端包：
+
+| 平台 | 架构 | 下载包 |
+| --- | --- | --- |
+| Linux GNU | x86_64、aarch64、riscv64 | `gproxy-headless-linux-<arch>.zip` |
+| Linux musl | x86_64、aarch64、riscv64 | `gproxy-headless-linux-<arch>-musl.zip`、`gproxy-headless-linux-<arch>-musl.apk` |
+| Windows | x86_64、aarch64 | `gproxy-headless-windows-<arch>.zip`、`gproxy-headless-windows-<arch>.msix` |
+| macOS | x86_64、aarch64 | `gproxy-headless-macos-<arch>.zip` |
+| Android（Termux） | x86_64、aarch64 | `gproxy-headless-android-<arch>.zip`、`gproxy-headless-android-<arch>.deb` |
+
+从 [Releases](https://github.com/LeenHawk/gproxy/releases) 下载：开发通道选 `nightly`，beta 选 `staging`，稳定版选对应版本。无前端安装的自更新会选择对应的无前端包。
+
+在 Android 的 Termux 中安装并启动：
+
+```sh
+pkg install ./gproxy-headless-android-<arch>.deb
+gproxy serve --console=false
+```
+
+无前端包与完整版 `gproxy` 包提供同一个命令，安装时会替换后者。如果使用 ZIP，先安装运行库，再把 ZIP 解压到 Termux 主目录下的某个目录（Android 共享存储中的文件不能执行），然后在该目录中运行：
+
+```sh
+pkg install libc++ openssl ca-certificates
+./gproxy serve --console=false
+```
+
+Windows 上用 `gproxy.exe` 代替 `gproxy`。Windows MSIX 的包身份为 `LeenHawk.GPROXYHeadless`，命令别名为 `gproxy-headless.exe`，不会替换 CLI 的 `gproxy.exe`。GPROXY Headless 也已上架 Microsoft Store（`9ND7FQQMV566`）。
+
+## 桌面与移动端应用
+
+构建控制台后执行：
+
+```sh
+cargo run -p gproxy-host-tauri --bin gproxy-desktop
+```
+
+全新实例会打开设置向导。窗口通过 IPC 管理实例，HTTP 监听端口供网关客户端调用。移动端构建请使用发布工作流中的平台工具链和打包脚本。
+
+workspace 的默认成员不包含 Tauri 宿主，因此构建后端不需要桌面依赖；`--workspace` 会把它包含进来。
+
+要在本地生成发布包，先构建控制台，再运行打包脚本。`pnpm --dir console build` 已经会执行 `sync-to-embed.mjs`，再执行一次也没有影响。
+
+```sh
+pnpm --dir console build
+node console/scripts/sync-to-embed.mjs
+pnpm --dir crates/gproxy-host-tauri install --frozen-lockfile
+TARGET_OS=linux TARGET_TRIPLE=x86_64-unknown-linux-gnu \
+  ARTIFACT_NAME=gproxy-tauri-linux-x86_64 \
+  GPROXY_BUILD_VERSION=$(scripts/release-metadata.sh version) \
+  scripts/package-tauri-release.sh
+```
+
+产物写入 `dist/release/`。
+
+## Cloudflare Workers
+
+在仓库根目录执行：
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install worker-build
+pnpm --dir console install --frozen-lockfile
+pnpm --dir deploy/cloudflare install
+pnpm --dir deploy/cloudflare build
+pnpm --dir deploy/cloudflare check
+```
+
+`worker-build` 负责编译和优化 WebAssembly 模块；`check` 用 Wrangler 做一次部署预演，不会发布。配置和运行限制见[边缘部署](/zh-cn/deployment/edge)；构建带自有渠道的 Worker 见[新增渠道](/zh-cn/development/adding-a-channel#构建-worker)。
+
+## CI 执行的检查
+
+提交 PR 前请先在本地运行。CI 对每次改动都会执行，分为后端、桌面和 WebAssembly 三个任务。
+
+后端（workspace 默认成员）：
+
+```sh
+cargo fmt --all --check
+cargo clippy --all-targets -- -D warnings
+cargo test
+```
+
+CI 还会对不属于默认成员的 serverless 二进制和仓库外渠道示例执行 lint：
+
+```sh
+cargo clippy -p gproxy --bin gproxy-serverless --no-default-features --features channels,postgres,embedded-console -- -D warnings
+cargo clippy -p gproxy-example-channel -p gproxy-example-native --all-targets -- -D warnings
+```
+
+桌面宿主：
+
+```sh
+cargo clippy -p gproxy-host-tauri --all-targets -- -D warnings
+cargo test -p gproxy-host-tauri
+```
+
+WebAssembly：检查只覆盖支持该目标的库和宿主，不包括 CLI 和 Tauri。不要对整个 workspace 执行；这两者都会用到 tokio 的 `net` feature，而 mio 无法在该目标上编译。
+
+```sh
+cargo check --target wasm32-unknown-unknown \
+  -p gproxy-protocol -p gproxy-store -p gproxy-seaorm -p gproxy-client \
+  -p gproxy-cache -p gproxy-channel -p gproxy-core -p gproxy-file \
+  -p gproxy-tokenizer -p gproxy-sdk -p gproxy-app -p gproxy-host-axum \
+  -p gproxy-host-edge
+```
+
+CI 还会检查各 crate README 中注明可编译到 wasm 的非默认 feature 集合。由于 cargo 会在同一次调用内合并 feature，每个集合单独调用一次：
+
+```sh
+cargo check --target wasm32-unknown-unknown -p gproxy-sdk --features libsql
+cargo check --target wasm32-unknown-unknown -p gproxy-cache --all-features
+cargo check --target wasm32-unknown-unknown -p gproxy-file --no-default-features --features s3
+cargo check --target wasm32-unknown-unknown -p gproxy-channel --all-features --lib
+cargo check --target wasm32-unknown-unknown -p gproxy-example-edge --lib
+```
+
+控制台与文档：
+
+```sh
+pnpm --dir console lint
+pnpm --dir console test
+pnpm --dir console build
+git submodule update --init docs
+pnpm --dir docs install --frozen-lockfile
+pnpm --dir docs check
+```
+
+`pnpm --dir console lint` 包含翻译一致性检查（`pnpm i18n:check`）。修改 Rust DTO 后，执行 `pnpm --dir console types` 重新生成 TypeScript 类型。
+
+## 发布
+
+### 分支与更新通道
+
+Release 工作流（`.github/workflows/release.yml`）在推送时发布：
+
+- `dev` 开发新功能，推送后只发布到 `nightly`（dev 更新通道）。
+- `main` 维护已发布的功能并修复 bug，推送后只发布到 `staging`（beta 更新通道）。
+- 正式版本 tag 从 `main` 创建，同时发布到 release 和 beta 通道，不会覆盖 dev 通道。
+
+推送 `dev` 前执行 `bash scripts/push-dev.sh`。脚本会获取最新的 `origin/main`，把 `dev` rebase 到它上面，再以针对上一次已发布 `dev` 的显式 `--force-with-lease` 推送。用 `git config core.hooksPath .githooks` 启用本地推送检查。
+
+### 发布版本
+
+在最新的 `main` 之上执行 `bash scripts/release.sh`，其间只允许新增 `chore(release):` 提交。以下条件不满足时脚本会停止：
+
+- tag 与 workspace 版本一致，且存在 `release-notes/v<版本>.md`；
+- 已跟踪的工作区是干净的；
+- `HEAD` 包含最新的 `origin/main`，且其后的提交都是 `chore(release):` 提交。
+
+对于正式版，脚本接着刷新依赖：用 `pnpm update --latest` 更新控制台的 npm 依赖，用 `cargo upgrade` 升级 Rust 注册表依赖约束（包括大版本和固定版本），再用 `cargo update` 刷新 `Cargo.lock`。RSA/getrandom、JNI/Tauri、Codex reqwest 和 WebSocket 配置的兼容桥接依赖保留上游要求的版本线，但兼容版本仍会通过 `cargo update` 更新。需要先安装辅助工具：`cargo install cargo-edit --locked`。如果刷新改动了已跟踪文件，脚本会在打 tag 之前停止：处理兼容性变更，执行上面的检查，提交并推送到 `main`，然后重新运行脚本。预发布 tag 不执行依赖刷新。
+
+随后脚本创建 tag，并把 `main` 和 tag 在一次原子推送中推上去。tag 触发的工作流发布 release 和 beta 通道，`main` 在该 tag 提交上的运行不发布任何内容。完成后用 `scripts/push-dev.sh` 推送 `dev`。
+
+工作流负责构建各个包、生成签名的更新清单并上传附件。构建或签名任一步失败，发布就不完整。
+
+版本 tag 还会执行 `scripts/publish-crates.sh`，把选定的 MIT 许可库发布到 crates.io。其他 crate 通过 git 或路径依赖使用，见[嵌入核心库](/zh-cn/development/embedding)。
+
+### 签名与商店提交
+
+缺少签名密钥或 Store 身份变量时，打包会失败。
+
+- 更新清单：使用 Ed25519 签名，自更新在安装前校验。
+- Android：APK 使用 `ANDROID_SIGNING_*` secrets 签名。
+- macOS：只做 ad-hoc 签名。
+- Windows：各包使用 Microsoft Store 的包身份。在 `release` 环境中配置四个变量：`MS_STORE_IDENTITY_NAME`、`MS_STORE_DISPLAY_NAME`、`MS_STORE_IDENTITY_PUBLISHER`、`MS_STORE_PUBLISHER_DISPLAY_NAME`；CLI 使用对应的 `MS_STORE_CLI_*` 变量。Headless 的包身份和显示名固定，Store 提交只需在共用的发布者变量之外再配置 `MS_STORE_HEADLESS_PRODUCT_ID`。正式版保留两种架构的 Store 提交包；设置 `MS_STORE_PUBLISH_ENABLED` 后，GitHub 发布成功会触发 Store 提交流程。Store 提交包不签名，由 Store 在分发时签名。
+- GitHub 上的 Windows 包：启用 SignPath（`SIGNPATH_ENABLED`）时，版本发布附带的 MSIX 会按签名证书的发布者重新打包，并在单独的任务中签名，可以直接安装。SignPath 要求维护者逐个批准签名请求，该任务会一直等待批准；未在时限内批准的请求会使发布失败，重新运行失败的任务即可再次提交。未启用 SignPath 时，GitHub 上的 MSIX 同样不签名。

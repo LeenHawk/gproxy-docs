@@ -828,6 +828,27 @@ GPROXY 4.2.0. [Скачать JSON](/generated/channels.json).
 | `credential_strategy` | Строка | Нет | How the host picks among this provider's credentials. | — |
 | `allowed_headers` | HTTP-заголовки | Нет | Additional client headers to forward, unioned with the global allow-list and channel defaults. | — |
 
+## OpenDesign `opendesign`
+
+Способы входа: Ключ API. Типы учётных данных для ручного ввода: `api_key`.
+
+| Возможность | Заявленная поддержка |
+| --- | --- |
+| Платное использование | Нет |
+| Запрос квоты | Нет |
+| Сброс квоты | Нет |
+| Обновление учётных данных | Нет |
+| Сервисные маршруты провайдера | Нет |
+| Сообщения WebSocket | Нет |
+
+| Ключ | Тип | Обязательно | Описание | Пример / заполнитель |
+| --- | --- | --- | --- | --- |
+| `base_url` | Строка | Нет | Upstream origin, without `/v1`. Provider column, not config JSON. | `https://amr-link.open-design.ai` |
+| `headers` | HTTP-заголовки | Нет | Static headers added to every upstream request. | — |
+| `forward_thinking` | Логическое значение | Нет | Forward thinking blocks from request history. Defaults to true; disabling removes reasoning content and signatures without disabling model thinking. | — |
+| `credential_strategy` | Строка | Нет | How the host picks among this provider's credentials. | — |
+| `allowed_headers` | HTTP-заголовки | Нет | Additional client headers to forward, unioned with the global allow-list and channel defaults. | — |
+
 ## OpenRouter `openrouter`
 
 Способы входа: Ключ API. Типы учётных данных для ручного ввода: `api_key`.

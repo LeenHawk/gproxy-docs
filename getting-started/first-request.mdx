@@ -4,13 +4,17 @@ description: "Call the gateway through OpenAI, Claude, and Gemini APIs, use stre
 sidebarTitle: "First Request"
 ---
 
-After [Quick start](/getting-started/quick-start), you should have a model route named `fast` and a gateway API key. These examples use the default address; adjust it if you changed the port.
+This page shows how to call GPROXY in each supported protocol, with and without streaming, and what the common error codes mean. It assumes you finished the [Quick start](/getting-started/quick-start) and have a model route named `fast` and a gateway API key. The examples use the default address `http://127.0.0.1:8787`; change it if you changed the port.
 
 ```sh
 export GPROXY_KEY='your-gproxy-api-key'
 ```
 
-The gateway accepts `Authorization: Bearer <key>`, `x-api-key`, and `x-goog-api-key`. Use a gateway key, not an upstream credential.
+## Sending the key
+
+GPROXY reads the gateway key from `Authorization: Bearer <key>`, `x-api-key` or `x-goog-api-key`, so each protocol's usual header works. If a request carries more than one, `Authorization` is used first, then `x-api-key`, then `x-goog-api-key`. The CLI and container host also accept Gemini's `?key=` query parameter; a header always takes precedence over it.
+
+Always send a gateway key here. Upstream credentials are stored in providers and are not accepted by the gateway.
 
 ## OpenAI Chat Completions
 
@@ -43,6 +47,8 @@ curl -sS http://127.0.0.1:8787/v1/messages \
 
 ## Gemini GenerateContent
 
+Gemini puts the model name in the path rather than in the body:
+
 ```sh
 curl -sS "http://127.0.0.1:8787/v1beta/models/fast:generateContent" \
   -H "x-goog-api-key: $GPROXY_KEY" \
@@ -52,6 +58,8 @@ curl -sS "http://127.0.0.1:8787/v1beta/models/fast:generateContent" \
 
 ## Streaming
 
+For OpenAI and Claude, set `"stream":true` in the body. Pass `-N` to curl so it prints events as they arrive instead of buffering them:
+
 ```sh
 curl -sSN http://127.0.0.1:8787/v1/chat/completions \
   -H "Authorization: Bearer $GPROXY_KEY" \
@@ -60,7 +68,7 @@ curl -sSN http://127.0.0.1:8787/v1/chat/completions \
        "messages":[{"role":"user","content":"Count to three."}]}'
 ```
 
-## Gemini streaming
+Gemini uses a separate method, `streamGenerateContent`, with `alt=sse` for server-sent events:
 
 ```sh
 curl -sSN "http://127.0.0.1:8787/v1beta/models/fast:streamGenerateContent?alt=sse" \
@@ -69,20 +77,28 @@ curl -sSN "http://127.0.0.1:8787/v1beta/models/fast:streamGenerateContent?alt=ss
   -d '{"contents":[{"parts":[{"text":"Count to three."}]}]}'
 ```
 
-Responses use the protocol requested by the client. Success depends on route members, upstream capabilities, and conversion support. Changing the endpoint does not add capabilities to the upstream.
+## Which protocol to use
 
-## Model lists
+The `fast` route works with all of the examples above, whatever protocol its upstream uses. GPROXY answers in the protocol the client sent and converts to and from the upstream's format in between.
 
-Use the console's model catalog to find configured gateway names. To query the caller-visible gateway catalog through the API:
+Conversion does not add features. Whether a request succeeds still depends on the route's members, what the upstream supports, and whether that particular conversion is supported. A feature the upstream lacks stays unavailable when you call it through a different endpoint.
+
+## Listing models
+
+The console's model catalog lists the gateway model names you have configured. To get the catalog visible to the caller through the API:
 
 ```sh
 curl -sS http://127.0.0.1:8787/portal/api/models \
   -H "Authorization: Bearer $GPROXY_KEY"
 ```
 
-`permitted` indicates whether the caller can use an entry. `GET /v1/models` forwards the selected upstream's model list, which is different from the gateway catalog. Application does not expose `/portal/api` over HTTP; use its in-app catalog.
+Each entry has a `permitted` field that says whether this caller may use it. Application does not serve `/portal/api` over HTTP; use the catalog in the app instead.
 
-## Select a provider or namespace
+`GET /v1/models` is a different thing: it forwards the model list of the selected upstream, not the gateway catalog.
+
+## Selecting a provider or namespace
+
+The URL prefix and the model name together pick the target:
 
 | URL | Model in request | Target |
 | --- | --- | --- |
@@ -90,7 +106,7 @@ curl -sS http://127.0.0.1:8787/portal/api/models \
 | `/openai-main/v1/chat/completions` | Upstream model ID | The `openai-main` provider |
 | `/acme/v1/chat/completions` | `fast` | The `acme/fast` route |
 
-See [Models and routes](/guides/models) for naming rules.
+The naming rules are in [Models and routes](/guides/models).
 
 ## Common errors
 
@@ -103,4 +119,4 @@ See [Models and routes](/guides/models) for naming rules.
 | `429` | A rate or quota limit applies |
 | `5xx` | Gateway or upstream failure; inspect the logs |
 
-After a request, check usage and request records in the console. Body retention depends on logging settings; see [Usage, logs, and audit](/guides/observability).
+Each request appears in the console's usage and request records. Whether the request and response bodies are kept depends on the logging settings; see [Usage, logs and audit](/guides/observability).

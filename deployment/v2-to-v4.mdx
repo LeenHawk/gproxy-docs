@@ -1,17 +1,37 @@
 ---
-title: "Migrating v2 to v4"
-description: "Migrate v2 to v4 with one script, using SQLite, PostgreSQL or MySQL at either end."
+title: "Upgrading from v2 to v4"
+description: "Migrate a v2 database to v4 offline with one script, on SQLite, PostgreSQL or MySQL at either end."
+sidebarTitle: "v2 to v4"
 ---
 
-Use [migrate-v2-to-v4.py](https://github.com/LeenHawk/gproxy/blob/main/scripts/migrate-v2-to-v4.py). Both source and destination support SQLite, PostgreSQL and MySQL, including cross-database migrations.
+These notes are for administrators moving a v2 deployment straight to v4. Unlike the [v3 to v4 upgrade](/deployment/v3-to-v4), this one runs offline: the script [migrate-v2-to-v4.py](https://github.com/LeenHawk/gproxy/blob/main/scripts/migrate-v2-to-v4.py) reads the v2 database and writes a new v4 database, and the original is not modified.
 
-One invocation runs **v2 source → SQLite snapshot → v3 SQLite → v4 SQLite → destination**. The source is read-only. Existing native importers upgrade accounts, credentials, API keys and usage before the complete v4 data is copied to the destination.
+## What changes
 
-## Prepare
+The script runs four stages in one invocation:
 
-Stop the old instance and retain a database backup. The destination must be a **new SQLite file or an empty PostgreSQL/MySQL database**, never the original database. Keep the original `GPROXY_MASTER_KEY` for encrypted instances.
+1. Snapshot the v2 source into a SQLite file.
+2. Upgrade that file to v3 with the v3.0.22 executable.
+3. Import the v3 file into a v4 SQLite database with the v4 executable.
+4. Copy the v4 database to the destination.
 
-Prepare Python 3.10+, a [v3.0.22 executable](https://github.com/LeenHawk/gproxy/releases/tag/v3.0.22) and a [v4 executable](https://github.com/LeenHawk/gproxy/releases/latest). The v4 build must include the destination database driver. SQLite needs no additional Python packages; install the relevant driver for PostgreSQL or MySQL:
+The conversions in stages 2 and 3 are the ones the v3 and v4 executables use themselves, so their boundaries apply here too (see [v2 to v3](/deployment/v2-to-v3) and [v3 to v4](/deployment/v3-to-v4)):
+
+- Accounts, credentials, API keys and usage history are converted.
+- Some v2 permissions and rules cannot be mapped and have to be configured again.
+- Usage details that v2 still holds are migrated. Details that v2 retention had already deleted cannot be rebuilt from aggregates.
+- Old request logs, sessions, audit records and caches do not become v4 records.
+- v4 stores costs to 9 decimal places. The exact historical value is kept in `metrics.v3.cost`.
+
+Source and destination can each be SQLite, PostgreSQL or MySQL, and they need not be the same kind.
+
+## Before you start
+
+1. Stop the v2 instance and back up its database. The script reads the source read-only, but take the backup anyway.
+2. Prepare a destination: a SQLite file path that does not exist yet, or an empty PostgreSQL or MySQL database. It must not be the v2 database; the script refuses a destination that already has tables. A PostgreSQL destination must use the `public` schema.
+3. If the v2 database is encrypted, have its `GPROXY_MASTER_KEY` ready. The script expects the v2 format, base64 for 32 bytes, and stops on anything else. v4 accepts the same value.
+4. Install Python 3.10 or later and download two executables: [v3.0.22](https://github.com/LeenHawk/gproxy/releases/tag/v3.0.22) and [v4](https://github.com/LeenHawk/gproxy/releases/latest). The script checks their versions. The v4 build must include the driver for the destination database.
+5. Install the Python driver for PostgreSQL or MySQL if either end uses one (SQLite needs nothing extra), and download the script:
 
 ```sh
 python3 -m pip install 'psycopg[binary]>=3,<4'  # PostgreSQL
@@ -19,9 +39,11 @@ python3 -m pip install 'PyMySQL[rsa]>=1,<2'     # MySQL
 curl -fL https://raw.githubusercontent.com/LeenHawk/gproxy/main/scripts/migrate-v2-to-v4.py -o migrate-v2-to-v4.py
 ```
 
-## Run the migration
+A MySQL source must use InnoDB tables, which the script needs for a consistent snapshot. For a PostgreSQL source outside the `public` schema, pass `--source-schema`.
 
-SQLite example:
+## Running the migration
+
+For SQLite at both ends:
 
 ```sh
 python3 migrate-v2-to-v4.py \
@@ -31,7 +53,9 @@ python3 migrate-v2-to-v4.py \
   --v4-bin ./v4/gproxy
 ```
 
-Replace either database argument with `postgresql://user:password@host/database` or `mysql://user:password@host/database` for a remote database. To keep credentials out of command arguments, set `GPROXY_SOURCE_DSN` and `GPROXY_TARGET_DSN` and omit the corresponding flags. Supply the original encryption key through the environment when needed:
+For a database server, use a connection string such as `postgresql://user:password@host/database` or `mysql://user:password@host/database` in place of either path. MySQL connection strings accept `ssl-mode`, `ssl-ca`, `ssl-cert` and `ssl-key` for TLS.
+
+To keep passwords out of the process list and shell history, put the connection strings in `GPROXY_SOURCE_DSN` and `GPROXY_TARGET_DSN` and leave out `--source` and `--target`. The master key is read from `GPROXY_MASTER_KEY`:
 
 ```sh
 read -rsp 'Source database DSN: ' GPROXY_SOURCE_DSN; echo; export GPROXY_SOURCE_DSN
@@ -40,12 +64,44 @@ read -rsp 'Original master key (empty for plaintext): ' GPROXY_MASTER_KEY; echo;
 python3 migrate-v2-to-v4.py --v3-bin ./v3/gproxy --v4-bin ./v4/gproxy
 ```
 
-The script creates and prints a private working directory; `--work-dir` can name a new directory explicitly. It looks for `gproxy-v3` and `gproxy` on PATH by default. Use `--source-schema` for a PostgreSQL source outside `public`; the PostgreSQL destination uses `public`. MySQL source tables must use InnoDB. MySQL DSNs accept `ssl-mode`, `ssl-ca`, `ssl-cert` and `ssl-key` for TLS.
+Without `--v3-bin` and `--v4-bin`, the script looks for `gproxy-v3` and `gproxy` on `PATH`. It creates a private working directory named `gproxy-v2-to-v4-*` in the current directory; `--work-dir` names one instead, which must not exist yet. The script prints each stage as it starts:
 
-## After completion
+```text
+1/4 Snapshot v2 -> SQLite. Work directory: /srv/gproxy-v2-to-v4-k3j2x1
+2/4 Upgrade SQLite -> v3
+3/4 Upgrade SQLite -> v4
+4/4 Copy v4 SQLite -> sqlite
+Migration complete. Review reports in /srv/gproxy-v2-to-v4-k3j2x1; start v4 against the target with the same master key.
+```
 
-Intermediate databases and stage reports remain in the working directory. Verification checks account identities, API-key digests and historical costs; the final PostgreSQL/MySQL copy also compares every data table's row count and row-content checksums. Review `v3-import.log`, `v4-import.log` and `*-verification.json`, then start v4 against the destination with the same master key.
+## Verifying the result
 
-Existing conversion boundaries still apply: some old permissions and rules need reconfiguration; retained usage details migrate, but deleted details cannot be rebuilt from aggregates. Old request logs, sessions, audit records and caches do not become corresponding v4 records. v4 stores costs to 9 decimal places and retains exact historical values in `metrics.v3.cost`. See [v2 → v3](/deployment/v2-to-v3) and [v3 → v4](/deployment/v3-to-v4).
+Every intermediate database (`v2.db`, `v3/gproxy.db`, `v4/gproxy.db`) and every report stays in the working directory:
 
-Failures stop the script and preserve its files without deleting the source or automatically clearing the destination. Diagnose the failure, then retry with a new working directory and empty destination. Keep the working directory private. v3.0.22 briefly receives the source key through process arguments; do not use shell tracing.
+| File | Contents |
+| --- | --- |
+| `snapshot-report.json` | Source type, row counts per table and adjustments made to the stage 1 snapshot |
+| `v3-preflight.log`, `v3-import.log` | Output of the v3.0.22 check and import |
+| `v3-verification.json` | v3 row counts, password hashes and settled usage cost compared with v2 |
+| `v4-import.log` | Output of the v4 import, including its conversion report |
+| `v4-verification.json` | Checks on the v4 database |
+| `target-schema.log` | Schema creation on a PostgreSQL or MySQL destination |
+| `target-verification.json` | Checks on the destination |
+
+The checks compare account identities, API key digests and historical costs between stages. For a PostgreSQL or MySQL destination, the final copy also compares the row count and a checksum of the row contents for every table.
+
+1. Read `v3-import.log`, `v4-import.log` and the `*-verification.json` files, in particular the lists of skipped rows and changed permissions.
+2. Start v4 against the destination with the same master key, for example `gproxy --data-dir ./new-data` for the SQLite example above, or with `GPROXY_DSN` set to the destination's connection string.
+3. Sign in, check providers, users and usage history, and send a test request before you move clients over.
+
+The working directory contains databases and secrets. Keep it private, and delete it when you no longer need it.
+
+## If the migration fails
+
+The script stops at the first error and prints `Migration failed:` with the reason, with passwords and the master key redacted. It does not touch the source and does not clean up the destination. Diagnose the error from the logs in the working directory, then run again with a new working directory and an empty destination.
+
+v3.0.22 receives the master key as a command-line argument for the duration of stage 2, so it is briefly visible in the process list. Do not run the script with shell tracing (`set -x`) enabled.
+
+## Rolling back
+
+The v2 database is never written to. To go back, discard the destination database and start v2 again on the original database with its original settings.

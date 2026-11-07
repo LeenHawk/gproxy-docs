@@ -1,17 +1,32 @@
 ---
-title: "Prompt Caching"
+title: "Prompt caching"
 description: "Configure prompt caching with breakpoint rules or magic strings, and inspect usage and pricing."
 ---
 
-Prompt caching is provided by the upstream. Hits depend on the model, prompt prefix, and TTL. GPROXY can add markers through cache breakpoint rules or magic strings in prompts. Markers do not guarantee a hit or add caching support to an upstream that lacks it.
+This page describes how GPROXY places prompt-cache markers for Claude and
+OpenAI upstreams, either through cache breakpoint rules or through magic
+strings embedded in the prompt, and how cached tokens are recorded and priced.
 
-## Add a cache breakpoint in the console
+Caching itself is done by the upstream. Whether a request hits depends on the
+model, the prompt prefix and the TTL. A marker does not guarantee a hit, and it
+cannot add caching to an upstream that does not support it.
 
-Add a cache breakpoint rule on the provider's rewrite page. Select the upstream protocol and a global, system, or message target. Claude also supports tools. For a local target, positive indices start at 1, negative indices count from the end, and a blank index selects the last available position.
+## Cache breakpoint rules
 
-Claude offers default, 5-minute, and 1-hour TTLs. OpenAI local breakpoints offer default, 30-minute, and 12-hour TTLs; global rules offer default and 30-minute TTLs. Actual behavior depends on the upstream. Select the protocol used after conversion; Gemini is not supported by this rule type.
+On the provider's **Rewrite rules** page, add a **Cache breakpoint** rule.
+Choose the upstream protocol and a target: global, system or message, and for
+Claude also tools. For a local target you can give an index: positive indexes
+start at 1, negative indexes count from the end, and an empty index selects the
+last available position.
 
-For API configuration, use `action: "cache_breakpoint"` and a JSON-encoded configuration string in `replacement`, for example:
+Claude offers default, 5-minute and 1-hour TTLs. OpenAI local breakpoints offer
+default, 30-minute and 12-hour TTLs; OpenAI global rules offer default and
+30-minute. What the upstream does with the TTL is up to the upstream. The
+protocol in the rule is the one used after conversion. Gemini is not supported
+by this rule type.
+
+Through the API, use `action: "cache_breakpoint"` with a JSON-encoded
+configuration string in `replacement`, for example:
 
 ```json
 {"dialect":"claude","target":"message","index":-1,"ttl":"5m"}
@@ -21,13 +36,17 @@ For API configuration, use `action: "cache_breakpoint"` and a JSON-encoded confi
 {"dialect":"openai","target":"message","index":-1,"ttl":"12h"}
 ```
 
-This rule runs on the request body in the configured rewrite order. Clients that can set native cache fields may also use the upstream's supported fields directly.
+The rule runs on the request body, in the same order as the other
+[rewrite rules](/guides/rules). It adds nothing when the body already carries
+four markers, the same limit that applies to magic strings below. Clients that
+can set native cache fields themselves can also send the upstream's own fields
+directly.
 
-## Use magic strings
+## Magic strings
 
-Clients without cache controls can include the following strings in prompt text and enable the provider's matching magic-cache option.
-
-### The three strings
+A client that has no cache controls can put one of the following strings in
+its prompt text. When the provider's magic cache option for the target
+protocol is on, GPROXY removes the string and places a breakpoint where it was.
 
 ```text
 GPROXY_MAGIC_STRING_TRIGGER_CACHING_CREATE_7D9ASD7A98SD7A9S8D79ASC98A7FNKJBVV80SCMSHDSIUCH
@@ -41,32 +60,17 @@ GPROXY_MAGIC_STRING_TRIGGER_CACHING_CREATE_1FAS5GV9R5H29T5Y2J9584K6O95M2NBVW52C9
 | …`49VA1S…` | `cache_control` with `"ttl": "5m"` | `prompt_cache_breakpoint` (`"ttl": "30m"`) |
 | …`1FAS5G…` | `cache_control` with `"ttl": "1h"` | `prompt_cache_breakpoint` (`"ttl": "12h"`) |
 
-The same strings select short and long retention by target dialect: Claude `5m` / `1h` maps to OpenAI `30m` / `12h`. The default string leaves TTL unset. Local rules write TTL on the selected breakpoint, without changing the request-wide cache options.
+The same string selects short or long retention according to the target
+protocol: Claude `5m` and `1h` correspond to OpenAI `30m` and `12h`. The
+default string leaves the TTL unset. The TTL is written on the breakpoint
+itself; the request-wide cache options are not changed.
 
-Native cache fields use the same bidirectional mapping in Claude ↔ OpenAI Chat/Responses conversions. Marked system, message, image/document and tool-result blocks retain their boundaries. A Claude automatic cache policy becomes an explicit breakpoint at the corresponding final block when that block has a target representation. Per-tool definition markers without an OpenAI equivalent remain listed in the conversion report.
-
-When converting OpenAI to Claude, only an explicitly supplied `prompt_cache_options.mode: "implicit"` creates top-level `cache_control`. Omitting the options object or its `mode`, including an empty object or TTL alone, does not enable Claude automatic caching. Explicit block markers still convert independently.
-
-They are **frozen**: they are part of the client-to-proxy protocol and do not
+The strings are part of the protocol between clients and GPROXY and do not
 change between releases.
 
-## The Rule That Matters Most
+### Enabling magic cache
 
-**A token is always stripped, whether or not caching is enabled.** A leaked
-marker sitting in somebody's prompt is never wanted.
-
-What the switch decides is only whether a *breakpoint* is placed where the
-token was. With magic cache off, the tokens come out and nothing else is
-touched: the client's own `cache_control` or `prompt_cache_breakpoint` survives
-untouched, and a body with no token is forwarded byte for byte, never parsed
-and re-serialized.
-
-The bare strip pass is also what `claudeweb` applies, since a browser session
-has no cache control at all.
-
-## Enabling It
-
-Two provider `config` switches, one per family:
+There are two provider `config` switches, one for each protocol family:
 
 ```json
 { "config": { "enable_claude_magic_cache": true,
@@ -75,26 +79,48 @@ Two provider `config` switches, one per family:
 
 | Switch | Channels that offer it |
 | --- | --- |
-| `enable_claude_magic_cache` | `aws_bedrock`, `azure`, `claudeapi`, `claudecode`, `custom`, `opencodego`, `opencodezen`, `openrouter` |
-| `enable_openai_magic_cache` | `aws_bedrock`, `azure`, `openai`, `codex`, `custom`, `opencodego`, `opencodezen`, `openrouter` |
+| `enable_claude_magic_cache` | `aws_bedrock`, `azure`, `claudeapi`, `claudecode`, `custom`, `opencodego`, `opencodezen`, `openrouter`, `vercel` |
+| `enable_openai_magic_cache` | `aws_bedrock`, `azure`, `openai`, `codex`, `custom`, `opencodego`, `opencodezen`, `openrouter`, `vercel` |
 
-The switch is read against the **target dialect**, not the client's. A request
-from an OpenAI-shaped client routed to a Claude provider is converted to Claude
-Messages first, so the Claude switch is the one that applies and the marker
-written is `cache_control`. The client keeps receiving its own format.
+In the console they appear as **Enable claude magic cache** and
+**Enable openai magic cache**.
 
-## Where a Marker Lands
+The switch that applies is the one for the target protocol, not the client's.
+A request from an OpenAI-style client routed to a Claude provider is first
+converted to Claude Messages, so the Claude switch decides, and the marker
+written is `cache_control`. The client still receives responses in its own
+format.
+
+### Stripping
+
+The channels in the table above always remove the strings, whether or not
+magic cache is enabled, because a leftover marker in a prompt is never useful
+to the upstream.
+
+The switch only decides whether a breakpoint is placed where the string was.
+With magic cache off, the strings are removed and nothing else changes: the
+client's own `cache_control` or `prompt_cache_breakpoint` stays as it is, and
+a body that contains no string is forwarded byte for byte without being parsed
+and re-serialized.
+
+The `claudeweb` channel applies the same strip without placing anything,
+because a browser session has no cache control.
+
+## Where markers are placed
+
+With magic cache enabled, markers for magic strings are placed as follows for
+each target protocol.
 
 ### Claude Messages
 
-The body is canonicalized first: string content becomes block arrays, empty
-text blocks are dropped, and a `cache_control` sitting on a dropped block moves
-to the nearest cacheable block — which is what makes a lone token on its own
-line work. Thinking blocks are kept only on assistant turns.
+The body is normalized first: string content becomes block arrays, empty text
+blocks are dropped, and a `cache_control` on a dropped block moves to the
+nearest cacheable block. This is what makes a string on a line by itself work.
+Thinking blocks are kept only on assistant turns.
 
-Then `system` is walked **before** `messages`, so the budget is spent in prompt
-order rather than in JSON key order. Every text block carrying a token is
-marked:
+`system` is then processed before `messages`, so the breakpoint budget is spent
+in prompt order rather than in JSON key order. Every text block that contains a
+string is marked:
 
 ```json
 { "cache_control": { "type": "ephemeral", "ttl": "1h" } }
@@ -104,9 +130,9 @@ A block that already has `cache_control` is left alone.
 
 ### OpenAI Chat Completions
 
-Every message except the `function` role can be marked. A plain-string
-`content` is split into a marked `text` part, because a marker needs somewhere
-to sit; an array content has its parts marked in place.
+Every message except those with the `function` role can be marked. A
+plain-string `content` is split into a marked `text` part, since the marker
+needs a part to sit on; array content has its parts marked in place.
 
 ```json
 { "type": "text", "text": "…", "prompt_cache_breakpoint": { "mode": "explicit" } }
@@ -114,59 +140,86 @@ to sit; an array content has its parts marked in place.
 
 ### OpenAI Responses
 
-Three places, in order:
+Markers are placed in three places, in this order:
 
-1. **`instructions`.** A token there is stripped and a marked developer message
-   is prepended in front of `input` — `instructions` is a string and cannot
-   carry a marker itself.
-2. **`prompt.variables`**, marked like Chat parts.
-3. **`input`**, whether it is a bare string (which becomes one marked user
-   message) or an array of items, whose `content` and `output` are marked with
-   the `input_text` / `output_text` kinds.
+1. `instructions`. A string found there is removed and a marked developer
+   message is inserted at the start of `input`, because `instructions` is a
+   plain string and cannot carry a marker.
+2. `prompt.variables`, marked the same way as Chat parts.
+3. `input`. A bare string becomes one marked user message; in an array of
+   items, `content` and `output` are marked using the `input_text` and
+   `output_text` kinds.
 
 ### Gemini
 
-No breakpoints. Tokens are stripped and nothing else happens.
+Gemini has no breakpoints. The strings are removed and nothing else happens.
 
-## The Cap of Four
+## Four-breakpoint limit
 
-**At most four breakpoints leave the proxy, the client's own included.** The
-budget is computed by counting the markers already in the body, so a client
-that placed three of its own leaves room for one.
+At most four breakpoints leave the proxy, counting the ones the client set
+itself. The budget is the number of markers already in the body subtracted
+from four, so a client that placed three of its own leaves room for one more.
 
-Tokens beyond the cap are still stripped — they just do not become markers.
-That is the same rule as everywhere else: the string never reaches an upstream.
+Strings beyond the limit are still removed; they just do not become markers.
 
-## Usage and Pricing
+## Native cache fields in protocol conversion
 
-Cached tokens are their own metric, and settlement prices them from your rate
-rows:
+When a request is converted between Claude and OpenAI Chat or Responses, native
+cache fields are mapped in both directions using the same TTL correspondence.
+Marked system, message, image or document, and tool-result blocks keep their
+boundaries. A Claude automatic cache policy becomes an explicit breakpoint on
+the corresponding final block, as long as that block has a representation in
+the target protocol. Per-tool definition markers that have no OpenAI equivalent
+are listed in the conversion report.
 
-| What an upstream reports | The metric |
+When converting from OpenAI to Claude, only an explicitly supplied
+`prompt_cache_options.mode: "implicit"` produces a top-level `cache_control`.
+Omitting the options object or its `mode` (including an empty object, or a TTL
+on its own) does not turn on Claude automatic caching. Explicit block markers
+are converted independently of this.
+
+OpenAI Responses and Chat explicit breakpoints accept
+`prompt_cache_breakpoint: {"mode":"explicit","ttl":"12h"}` (or `"30m"`), and
+the TTL is kept across Chat and Responses conversion. The current
+[OpenAPI schema](https://github.com/openai/openai-openapi/blob/master/openapi.json)
+still limits the request-wide `prompt_cache_options.ttl` to `"30m"`.
+`prompt_cache_retention` is a separate, older policy.
+
+## Usage and pricing
+
+Cached tokens are recorded as their own metrics and priced from your rate rows:
+
+| What the upstream reports | Metric |
 | --- | --- |
 | cache read | `cached_input_tokens` |
 | cache write, by retention | `cache_creation_tokens` + `ttl_seconds` |
 | cache write, unknown retention | `cache_creation_tokens` |
 
-Cache writes use `cache_creation_tokens`. A rate condition such as `{"ttl_seconds":43200}` selects a 12-hour write price; omit this condition for the fallback price. Each reported write bucket is priced separately. Cache reads remain a single `cached_input_tokens` count, with no TTL. Tier overrides use `cacheCreationPerMillion: [{"ttlSeconds":43200,"price":"5"}]`; an entry with `ttlSeconds: null` is the fallback. Prices are per million tokens, not per token-second.
+All cache writes use `cache_creation_tokens`. A rate condition such as
+`{"ttl_seconds":43200}` selects the 12-hour write price; a rate without the
+condition is the fallback price. Each reported write bucket is priced
+separately. Cache reads are a single `cached_input_tokens` count with no TTL.
+Tier overrides use `cacheCreationPerMillion: [{"ttlSeconds":43200,"price":"5"}]`,
+where an entry with `ttlSeconds: null` is the fallback. Prices are per million
+tokens; the TTL does not multiply them.
 
-OpenAI Responses and Chat explicit breakpoints accept `prompt_cache_breakpoint: {"mode":"explicit","ttl":"12h"}` (or `"30m"`). The TTL survives Chat ↔ Responses conversion. The current [OpenAPI schema](https://github.com/openai/openai-openapi/blob/master/openapi.json) still limits request-wide `prompt_cache_options.ttl` to `"30m"`; `prompt_cache_retention` is a separate legacy policy. The per-call usage schema reports only a total `cache_write_tokens`, so GPROXY records its TTL as unknown rather than guessing a split for mixed breakpoints.
+OpenAI's per-call usage reports only a total `cache_write_tokens`, so GPROXY
+records the TTL of those writes as unknown instead of guessing how they split
+across breakpoints with different TTLs.
 
-`cached_input_tokens` is capped at `input_tokens`: the uncached remainder is
-priced at the input rate and the cached part at the cache-read rate, which
-**falls back to the input rate** when no cache-read rate exists. Cache writes
-with no rate row of their own settle at zero. See
-[Pricing & Tiers](/reference/pricing).
+`cached_input_tokens` is capped at `input_tokens`. The uncached remainder is
+priced at the input rate and the cached part at the cache-read rate; if no
+cache-read rate exists, the input rate is used instead. Cache writes with no
+rate of their own are charged nothing. See [Pricing](/reference/pricing).
 
-A token count is optional on a record — an upstream that did not report a field
-did not measure zero — while every total is a plain number, because a sum of
-"nothing reported" really is zero.
+Token counts on a usage record are optional, because an upstream that did not
+report a field did not measure zero. Totals are plain numbers, since a sum over
+fields that were not reported is zero.
 
-## Keeping a Hit
+## Avoiding cache misses
 
-Rewrite rules run **after** conversion and before the channel, so a rule that
-edits prompt text can turn an expected hit into a miss. Put the stable content
-first, the marker after it, and everything per-request after the boundary — and
-check that no rewrite rule with a broad `paths` selector is editing the prefix.
-
-See [Rewrite Rules & Operation Overrides](/guides/rules).
+Rewrite rules run after protocol conversion and before the channel sends the
+request, so a rule that edits prompt text can turn an expected hit into a
+miss. Put stable content first, the marker after it, and anything that changes
+per request after that boundary. Check that no rewrite rule with a broad
+`paths` selector edits the cached prefix.

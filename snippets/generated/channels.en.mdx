@@ -828,6 +828,27 @@ Login flows: API key / Device code. Manual credential kinds: `api_key, oauth`.
 | `credential_strategy` | String | No | How the host picks among this provider's credentials. | — |
 | `allowed_headers` | HTTP headers | No | Additional client headers to forward, unioned with the global allow-list and channel defaults. | — |
 
+## OpenDesign `opendesign`
+
+Login flows: API key. Manual credential kinds: `api_key`.
+
+| Capability | Declared support |
+| --- | --- |
+| Paid usage | No |
+| Quota query | No |
+| Quota reset | No |
+| Credential refresh | No |
+| Vendor service routes | No |
+| WebSocket messages | No |
+
+| Key | Kind | Required | Description | Example / placeholder |
+| --- | --- | --- | --- | --- |
+| `base_url` | String | No | Upstream origin, without `/v1`. Provider column, not config JSON. | `https://amr-link.open-design.ai` |
+| `headers` | HTTP headers | No | Static headers added to every upstream request. | — |
+| `forward_thinking` | Boolean | No | Forward thinking blocks from request history. Defaults to true; disabling removes reasoning content and signatures without disabling model thinking. | — |
+| `credential_strategy` | String | No | How the host picks among this provider's credentials. | — |
+| `allowed_headers` | HTTP headers | No | Additional client headers to forward, unioned with the global allow-list and channel defaults. | — |
+
 ## OpenRouter `openrouter`
 
 Login flows: API key. Manual credential kinds: `api_key`.

@@ -1,0 +1,222 @@
+---
+title: "架構"
+description: "GPROXY v4 原始碼的組織方式：sdk、app、host 三層，workspace 中的各個 crate，請求的處理流程，失敗轉移，配置同步，結算，以及 WebAssembly 建置。"
+---
+
+本文說明 GPROXY v4 原始碼樹的組織方式，以及一個請求在其中的處理流程。修改宿主以下的任何程式碼之前，或者想確認某項行為應該放在哪個 crate 時，請先閱讀本文。
+
+v4 是對 v3 的重寫。閘道的功能沒有變，程式碼的劃分方式不同。本文末尾的大部分規則，都是為了讓這種劃分不被逐漸破壞。
+
+## 分層
+
+程式碼分為三層，每一層都是下一層再加上一類決策：
+
+```text
+sdk  =  引擎 + 配置寫入 + 登入 + 解析 + 查詢 + 同步
+app  =  sdk + 身份與准入 + 管理面／使用者面／issuer 的型別化操作
+host =  app + 一個傳輸層
+```
+
+### sdk
+
+`gproxy-sdk` 是可嵌入的控制代碼。它用預設實作裝配出引擎（`gproxy-core`），執行推進 `settings.config_revision` 的配置寫入，把完成的登入轉換為一行憑證，把模型名解析為執行計劃，並讓同一部署中的所有實例保持在同一個 revision 上。sdk 不含 HTTP server，也沒有使用者的概念。詳見[嵌入 SDK](/zh-tw/development/embedding)。
+
+### app
+
+`gproxy-app` 是產品層，負責判斷呼叫方是誰、能訪問什麼。使用者、閘道 API key、組織、團隊、權限、限流、OAuth issuer 和審計都屬於這一層，寫入這些資料的操作也在這裡。app 不含 router、runtime 和 CLI，因此同一份程式碼既能執行在原生 axum server 後面，也能執行在 Cloudflare Worker 裡。
+
+### host
+
+宿主把某種傳輸方式轉換為對 app 的型別化呼叫，再把結果轉換回位元組。目前有三個宿主：axum HTTP server、Cloudflare Workers 宿主，以及 Tauri 桌面與 Android 應用。
+
+每一層把收窄後的結果交給下一層，下層不再重新判斷。引擎拿到的是已解析的目標和允許使用的憑證集合，看不到呼叫方本身，也無法自行推斷呼叫方的身份。
+
+## workspace 中的 crate
+
+所有 crate 都位於 `crates/` 下，版本號和 edition 由 workspace 統一指定（`edition = "2024"`）。標為 MIT 的 crate 可以單獨使用，其餘為 AGPL-3.0-or-later。
+
+| Crate | 許可證 | 內容 | 不負責 |
+| --- | --- | --- | --- |
+| `gproxy-protocol` | MIT | 連線建模（`WireRequest`、`WireResponse`、body、分幀、套接字）、操作登錄檔、OpenAI／Claude／Gemini 協議型別、成對轉換，以及協議適配所需的宿主能力介面 | 感知渠道；匹配 URL 路徑 |
+| `gproxy-protocol-macros` | MIT | 協議型別使用的 `WireBuilder` 與 `DeclaredFields` derive | |
+| `gproxy-channel` | AGPL | `BaseChannel`、可選能力 trait，以及上游介面卡，每個渠道對應一個 Cargo feature | 依賴引擎或 store；選擇傳輸後端 |
+| `gproxy-client` | MIT | 出站傳輸契約（`OutboundClient`）及其 `reqwest` / `wreq` 實作，以及 wasm 的 `fetch` 與 Workers 後端 | 讀資料庫、選憑證、做協議轉換 |
+| `gproxy-core` | AGPL | 引擎：供應商執行快照，在允許集合內選擇、重新整理憑證並跟蹤其健康狀態，轉換、改寫、預算、計價、結算與觀測 | 解析路由、檢查權限、執行 server |
+| `gproxy-store` | AGPL | SeaORM 實體、批次倉儲、結構遷移；資料庫後端按 feature 選擇 | |
+| `gproxy-cache` | MIT | TTL 狀態、原子計數、許可與租約、跨實例失效通知；提供 Memory 與 Redis 後端 | 儲存業務實體；後端故障時退回本地狀態 |
+| `gproxy-seaorm` | MIT | SeaORM 批次讀寫、D1 binding、型別對映、結構同步 | 儲存業務實體 |
+| `gproxy-tokenizer` | MIT | 基於本地共享詞表把字串換算為 token 數 | 解析請求、下載、後臺任務 |
+| `gproxy-file` | MIT | 可選的本地或 S3/R2 內容儲存，基於 OpenDAL | 檔案後設資料與歸屬 |
+| `gproxy-sdk` | AGPL | 控制代碼：裝配、`manage()`、`login()`、解析、會話、`call()`、`query()`、同步 | HTTP server 程式碼；身份 |
+| `gproxy-client-sdk` | MIT | 供呼叫 GPROXY 實例的程式使用的客戶端，帶有版本化的語言模型 IR | |
+| `gproxy-app` | AGPL | 身份、准入、管理面與使用者面的操作家族、OAuth issuer | 傳輸層 |
+| `gproxy-host-axum` | AGPL | 路由表：HTTP 路徑到操作的對映 | 自行做產品決策 |
+| `gproxy-host-edge` | AGPL | Workers 的 `fetch` 處理函式，掛載 `gproxy-host-axum` 的 router | 維護第二張路由表 |
+| `gproxy-host-tauri` | AGPL | 桌面與 Android 應用：管理面與使用者面走 Tauri IPC，另在 loopback 上執行程序內的 `gproxy-host-axum` 資料面，供命令列客戶端使用 | 自己實作資料面 |
+| `gproxy` | AGPL | 命令列（`gproxy`；啟用 `postgres` feature 時另有 `gproxy-serverless`）：環境變數、配置檔案、socket、終端 | 任何庫能完成的事 |
+
+`gproxy-host-tauri` 是 workspace 成員，但不在預設成員中，因此不帶 `--workspace` 的 `cargo check` 和 `cargo test` 會跳過它。建置它需要 webkit2gtk、gtk 和 libsoup 的開發標頭檔案，見[從原始碼建置](/zh-tw/development/building)。
+
+### 依賴方向
+
+依賴只能向下：
+
+```text
+gproxy, gproxy-host-edge, gproxy-host-tauri
+        └─ gproxy-host-axum
+              └─ gproxy-app
+                    └─ gproxy-sdk
+                          └─ gproxy-core
+                                ├─ gproxy-channel ─ gproxy-client ─ gproxy-protocol
+                                ├─ gproxy-store ─ gproxy-cache, gproxy-seaorm
+                                └─ gproxy-tokenizer, gproxy-file
+```
+
+`gproxy-client-sdk` 與宿主處於同一層：它依賴 `gproxy-sdk` 和 `gproxy-client`，供呼叫 GPROXY 實例的程式使用。
+
+引擎不會擁有監聽器、router 或 UI。如果某項修改需要 `gproxy-core` 知道 HTTP 路徑、使用者或權限，這項修改應當放到更高的層。
+
+### 各類問題由誰回答
+
+| 問題 | 由誰回答 |
+| --- | --- |
+| 呼叫方是誰 | `gproxy-app` 的認證器 |
+| 能訪問什麼、由誰的預算付費 | `gproxy-app` 的准入 |
+| 哪個供應商承接這個模型名 | sdk 的解析器 |
+| 用哪把憑證、失敗後怎麼辦 | 引擎 |
+| 一個操作具體做什麼 | `gproxy-app` 的操作家族與 sdk 的 `manage()` |
+| 失敗對應哪個 HTTP 狀態碼和錯誤碼 | `AppError::status_code` / `code` |
+| 哪個 URL 對應哪個操作 | axum 宿主 |
+
+宿主不能自行回答前五個問題。否則同一個判斷只會在 HTTP 上生效而不會在 IPC 上生效（或者反過來），兩個入口的行為就會不一致。
+
+## 請求的處理流程
+
+經由原生 server 的資料面請求按以下步驟處理：
+
+1. `gproxy-host-axum` 把路徑匹配到某個操作和方言，把請求解碼為 `DataPlaneRequest`。對於模型名寫在路徑裡的方言（Gemini），宿主在這裡解析出模型名。
+2. `gproxy-app` 對請求做認證，得到一個 `Caller`。
+3. `App::call` 執行准入，得到 `Admitted`，其中包含 scope、用量歸屬、預算所有者鏈、允許的供應商集合、允許的憑證集合和會話身份。限流計數也在這一步扣除。
+4. app 用上述結果和它解析出的模型名驅動 sdk 的呼叫 builder。引擎看不到 `Caller`。
+5. sdk 把模型名解析為一個 `Plan`（見下文），並依次嘗試其中的目標。
+6. 對每個目標，引擎在允許集合內選出一把憑證，透過渠道準備請求；上游使用不同方言時先做轉換，再對實際要送出的請求套用供應商的改寫規則（因此規則看到的一律是上游格式），然後經 `gproxy-client` 發出。
+7. 引擎對應答分類：換同一供應商的另一把憑證重試；把失敗交回 sdk（sdk 可能換下一個供應商）；或者經結算漏斗返回響應。
+8. 宿主寫出響應。對於流式響應，宿主會讓 `Admitted` 一直存活到最後一個位元組寫出為止。併發許可統計的是在途請求，而 `call()` 返回之後流仍在傳輸。
+
+edge 宿主執行的是同一個 router，所以第 1 到第 8 步完全相同，只是在第 1 步之前多呼叫一次 `tick()`（見[配置寫入與重新載入](#配置寫入與重新載入)）。
+
+## 模型解析與執行計劃
+
+解析發生在 sdk 中、進入引擎之前，因此引擎只會看到已解析的目標。模型名按第一條匹配的規則解析：
+
+| 模型名 | 解析為 | 嘗試預算 |
+| --- | --- | --- |
+| 未提供 | 全部啟用的供應商，無上游模型 | `settings.max_attempts` |
+| 公開模型名 | 對應路由中啟用的成員 | 路由自己的設定 |
+| `供應商名/模型` | 該供應商 | `settings.max_attempts` |
+| 其他 | unknown model 錯誤 | — |
+
+公開模型名按精確匹配，並且優先於字首形式，因此運維者可以把字面量 `openai/gpt-5` 作為一條路由公開出來。字首始終是供應商名，而不是渠道 id：`codex` 渠道上名為 `openai` 的供應商，用 `openai/…` 訪問。
+
+隨後按渠道（呼叫方指定了渠道時）、允許的供應商 id 和允許的憑證 id 收窄候選。產品層透過憑證 id 過濾，防止一個組織的憑證被另一個組織的請求使用。允許集合為空表示什麼都不允許，解析結果為 no target 錯誤。
+
+在每個候選內部，已禁用、已退役和已失效（dead）的憑證會被移除。被臨時封禁的憑證只有在該供應商還有未封禁的憑證時才會移除；如果某個供應商的憑證全部處於臨時封禁狀態，它仍保留在計劃中，但健康度排名較低，排在所有健康的供應商之後。也就是說，被限流的供應商會放到最後嘗試，而不是直接視為不可用。
+
+候選按 `(tier, 健康度, 權重倒序, 穩定 id)` 排序。tier 是硬性優先順序，後面的 tier 不會與前面的 tier 一起做均衡。只有排在最前的一段（與第一個候選 tier 和健康度相同的候選）按路由的策略做均衡。輪轉計數器儲存在程序內，丟失時只會讓輪轉從第一個候選重新開始。
+
+解析結果是一個 `Plan`：解析後的模型名、整個計劃共享的 `max_attempts`，以及一個非空的 `Target` 列表。每個 `Target` 對應一個供應商、一個上游模型，以及呼叫方可以使用的該供應商的憑證。
+
+## 失敗轉移
+
+失敗轉移分兩級。
+
+在單個供應商內部，由引擎在該供應商允許使用的憑證之間切換：選一把憑證發出請求，對應答分類；如果換一把憑證可能成功，就選下一把。
+
+在供應商之間，由 sdk 切換到計劃中的下一個目標，但只針對另一個供應商有可能處理成功的失敗：
+
+| 結果 | 換下一個供應商 |
+| --- | --- |
+| 沒有可用憑證、憑證已失效、重新整理衝突 | 是 |
+| 續接固定在另一個實例上 | 是 |
+| 任何渠道或傳輸錯誤 | 是 |
+| 上游返回 401、403、429 或 5xx（引擎已經試過該供應商的憑證） | 是 |
+| 預算耗盡、已取消、超過截止時間、被禁止 | 否 |
+| 轉換、路由、改寫、操作不匹配錯誤，目標無效，未實作 | 否 |
+| store、cache、金鑰、限流、裝配或檔案錯誤 | 否 |
+
+第二組是呼叫方自己的限制，第三組說明請求或配置本身有問題、換到哪裡都會失敗，第四組說明當前實例出了故障。這些情況換供應商重試只會多花錢。
+
+嘗試預算由整個計劃共享。每個目標最多分到與其憑證數相同的嘗試次數，且不超過剩餘預算；無論是否用完，分到的次數都會被扣除。因此一個計劃發出的上游呼叫次數不會超過它的 `max_attempts`。沒有目標可換時，最後一個應答原樣返回：最後一個供應商返回 429，呼叫方收到的就是 429。
+
+## 配置寫入與重新載入
+
+所有配置寫入都經過 sdk 中的同一個原語：
+
+```text
+commit_revision([語句…, config_revision += 1, 讀回])   一個事務
+      ↓
+reload   本實例的快照
+      ↓
+publish  ConfigurationChanged { revision, scopes }
+```
+
+資料行和 revision 自增在同一個事務中寫入。如果行寫入了而 revision 沒有自增，其他實例永遠不會重新載入，這項修改在它們那裡就看不到；如果 revision 自增了而行沒有寫入，所有實例都會白白重新載入一次。
+
+寫入方先重新載入自己的快照，再發布通知，這樣它就不會宣告一個自己還無法提供的 revision。發布是盡力而為的：cache 拒絕訊息時，其他實例會在下一次輪詢時得知變更，寫入方只記錄一條警告。
+
+寫入時宣告的 scope 決定隨後執行哪種重新載入。只修改憑證金鑰、過期時間和生命週期狀態的寫入，可以使用憑證狀態 scope，走開銷更小的 `reload_credentials` 路徑。憑證的其他屬性在裝配時已固定到執行快照中，修改後需要完整重新載入。
+
+### 多實例同步
+
+實例透過兩種方式得知其他實例的寫入：
+
+| 機制 | 延遲 | 失效方式 |
+| --- | --- | --- |
+| 共享 cache 上的失效通知 | 毫秒級 | 可能丟訊息 |
+| 輪詢 `settings.config_revision` | 預設 30 秒 | 慢 |
+
+通知不攜帶狀態，只是提示實例重新檢查。輪詢結果才是權威，不會漏掉任何寫入，因此丟失一條通知最多讓變更晚一個輪詢週期生效。重新載入是序列且單調的：舊的 revision 不會覆蓋新的，重新載入失敗時繼續使用上一份快照。
+
+使用 `SyncMode::Background`（原生預設）時，控制代碼自己執行訂閱迴圈和輪詢迴圈。wasm 上兩次請求之間沒有常駐程序，同步只能手動進行：edge 宿主在每個請求開始時呼叫 `tick()`，先應用待處理的通知，再輪詢一次 revision。
+
+多實例部署需要實例之間共享的 cache：原生環境用 Redis，edge 上用基於 D1 或 libSQL 的 `StoreCache`。預設的 `MemoryCache` 只在程序內有效。
+
+## 結算與計量
+
+所有到達上游的路徑，最後都經過引擎中的同一個結算漏斗：為本次交換計價，扣減所有適用的預算視窗，再把用量報告交給觀察者（observer）。每個請求只結算一次。不存在繞過結算的快速路徑，因為那樣的路徑就是未計量的流量。
+
+細節如下：
+
+- 預算在第一次嘗試之前檢查，在上游應答之後按計價結果結算。由於費用只有事後才知道，在途請求和併發請求可能使預算超出上限。
+- 結算按請求 id 冪等。結算失敗只會丟失記賬，不影響已經交付給呼叫方的響應。
+- 沒有匹配價格規則的模型按 0 結算，其用量帶有 `unpriced = true` 維度，方便運維者找出來。
+- 用量按每次實際的上游呼叫記錄。
+- 請求捕獲等可選工作，在請求執行之前就決定是否進行。捕獲關閉時不會複製 body，也不會為它分配記憶體。（v3 的做法是先完成這些工作，再由 sink 決定是否丟棄。）
+
+計價與結算由引擎負責，持久化與脫敏由觀察者負責。預設的觀察者 `StoreObserver` 寫入資料庫，宿主可以替換它。
+
+## 建置 WebAssembly 版本
+
+`gproxy-app` 和 axum router 都能為 `wasm32-unknown-unknown` 建置，所以 `gproxy-host-edge` 直接掛載同一個 `Router`，不維護自己的路由表。axum 的 server 部分（`http1`、`http2`、`tokio`）是 Cargo feature，`Router` 本身與目標平臺無關，因此 wasm 建置去掉的只是套接字處理，而不是路由。
+
+難點在於 `Send`。wasm 上的引擎有意設計為 `!Send`：JS 傳輸控制代碼屬於建立它的 isolate，`gproxy-client` 的 `ClientBounds` 在原生環境下是 `Send + Sync`，在 wasm 上為空。而 axum 要求 router 的 state 滿足 `Send + Sync`、handler 的 future 滿足 `Send`。這裡用兩處橋接解決，二者都依賴 Worker isolate 是單執行緒這一前提：
+
+- `gproxy_app::App` 把 sdk 控制代碼放在 `send_wrapper::SendWrapper` 中。
+- `gproxy_host_axum::send` 包裝每個 handler 的函式體（以及每個流式響應的 body）。在原生環境下它是恆等函式；在 wasm 上它是 `SendWrapper`，如果在其他執行緒上被 poll 會 panic。
+
+漏掉 `send` 的 handler 在 wasm 目標上會編譯失敗，錯誤資訊中會指出是哪個 handler。包裝之所以放在每個 handler 上，而不是在 router 上加 `cfg`，就是為了讓無法為 edge 編譯的路由不會在 edge 上悄悄缺失。
+
+wasm 上預設的 cache 是 `StoreCache`，同步始終是手動的（見上文）。僅限原生的功能（PostgreSQL、MySQL、本地檔案儲存、代理、TLS 模擬）在 wasm 上不可用，edge 上的資料庫選項是 `libsql` 和 D1 binding。Worker 的建置與部署見[從原始碼建置](/zh-tw/development/building)。
+
+## 設計規則
+
+修改程式碼時，請保持以下性質：
+
+- 引擎不依賴 server 框架、router 或 UI。
+- 所有到達上游的請求都經過結算漏斗。
+- 轉換在廠商方言之間成對進行，沒有中間表示。轉換器只讀取來源型別中宣告過的欄位，從不讀寫未知欄位袋。
+- 一次配置寫入與其 revision 自增在同一個事務中完成。
+- 快照發布是單調的，重新載入不會回退。
+- 裝配不會因為某一行資料有問題而失敗，這一行會被跳過、計數並記錄日誌。
+- edge 宿主沒有自己的路由表。
+- 前端型別由 Rust 生成（見 [TypeScript 型別匯出](/zh-tw/development/embedding#typescript-型別匯出)），不手寫。

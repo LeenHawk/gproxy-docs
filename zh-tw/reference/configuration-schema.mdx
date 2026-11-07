@@ -6,8 +6,10 @@ mode: "wide"
 
 import ConfigurationReference from "/snippets/generated/configuration.zh-tw.mdx";
 
-本頁透過 `schemars` 從 `AppConfig` 及其巢狀 Rust 型別產生。欄位名稱遵循 Serde，預設值來自 Rust 的預設實作；原生和邊緣宿主共用這套結構。命令列參數、環境變數及優先順序見[設定](/zh-tw/reference/configuration)。
+本頁列出設定檔的全部欄位及其型別、變體和預設值。內容透過 `schemars` 從 Rust 的 `AppConfig` 及其巢狀型別產生：欄位名稱即 Serde 名稱，預設值即 Rust 中的預設實作。原生二進位檔、Workers 宿主和桌面應用程式讀取的都是這一套結構。
 
-Schema 描述序列化結構；主金鑰是否解碼為 32 位元組、後端是否已編譯等執行階段驗證仍然適用。
+命令列參數、環境變數以及各來源的優先順序見[設定](/zh-tw/reference/configuration)。
+
+Schema 只描述結構。有些檢查在啟動時進行，這裡無法呈現，例如主金鑰解碼後是否恰好為 32 位元組、所選資料庫後端是否已編譯進二進位檔。
 
 <ConfigurationReference />

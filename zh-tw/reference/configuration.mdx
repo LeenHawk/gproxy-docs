@@ -1,98 +1,112 @@
 ---
-title: "配置"
-description: "CLI 配置來源、環境變數、主金鑰、首次初始化與執行時設定。"
+title: "設定"
+description: "CLI 設定來源、環境變數、主金鑰、首次初始化與執行階段設定。"
 ---
 
-GPROXY **只在啟動時讀一次**程序配置。入口點之下沒有任何模組讀環境變數。
+本頁說明 `gproxy` 二進位檔的設定方式：命令列、環境變數、`.env` 與 TOML 檔案的優先順序，可用的命令，主金鑰，首次初始化，以及儲存在資料庫中的執行階段設定。
 
-一切在程序執行期間會變的東西——供應商、憑證、路由、改寫規則、價格、身份，以及本頁末尾的 settings 行——都在資料庫裡。
+設定分為兩類。處理程序設定（監聽位址、資料庫、cache、主金鑰等）只在啟動時讀取一次，修改後需要重啟。其餘內容，包括供應商、憑證、路由、改寫規則、價格、身份資料以及[執行階段設定](#執行階段設定)，都儲存在資料庫中，處理程序執行期間可以隨時修改。環境變數只由入口點讀取，下層模組不直接讀取。
 
-## 五個來源
+## 設定來源
 
-從強到弱：
+同一個值在多處設定時，以優先順序高的來源為準。從高到低依次為：
 
-1. **命令列**——`--port 9000`
-2. **真實環境**——`GPROXY_PORT=9000`
-3. **`.env`**，載入時不覆蓋環境已經設過的任何東西
-4. **`--config` 點名的 TOML 檔案**
-5. **內建預設值**
+1. 命令列，例如 `--port 9000`。
+2. 處理程序環境變數，例如 `GPROXY_PORT=9000`。
+3. `.env`。載入時不會覆蓋環境中已有的變數。
+4. `--config` 指定的 TOML 檔案。
+5. 內建預設值。
 
-環境變數可以覆蓋配置檔案，便於不同主機或容器複用同一份配置。
+設定檔案的優先順序低於環境變數，這是有意的安排。設定檔案通常是納入版本管理的部署設定，而環境變數用來讓某台主機或某個容器在此基礎上做局部調整。如果檔案優先，寫在 compose 檔案裡的 `GPROXY_PORT` 就不會生效。
 
-每個配置 flag 都是全域性的，因此 `gproxy --port 9000 serve` 和 `gproxy serve --port 9000`
-是同一次呼叫。
+所有設定參數都是全域參數，`gproxy --port 9000 serve` 與 `gproxy serve --port 9000` 等價。
+
+設為空字串的變數視同未設定，不會覆蓋更低優先順序的來源。`.env` 在解析命令列之前載入，檔案中的所有鍵都會載入，而不僅是 `GPROXY_*`（例如 `RUST_LOG`）。預設的 `./.env` 不存在時直接忽略；但如果 `GPROXY_ENV_FILE` 指定的檔案不存在，則啟動報錯。
 
 ## 環境變數
 
-下面列出常用環境變數。`gproxy --help` 顯示當前二進位制支援的引數及對應變數。
+下表列出常用變數。`gproxy --help` 會列出目前二進位檔支援的全部參數及其對應的環境變數。
 
-| 變數 | Flag | 預設 | 是什麼 |
+| 變數 | 參數 | 預設值 | 說明 |
 | --- | --- | --- | --- |
-| `GPROXY_CONFIG` | `--config`、`-c` | — | 裝任意配置欄位的 TOML 檔案 |
-| `GPROXY_HOST` | `--host` | `127.0.0.1` | 監聽地址（一個 IP，不是主機名） |
+| `GPROXY_CONFIG` | `--config`、`-c` | — | TOML 設定檔案，可包含任意設定欄位 |
+| `GPROXY_HOST` | `--host` | `127.0.0.1` | 監聽位址（IP，不能是主機名稱） |
 | `GPROXY_PORT` | `--port`、`-p` | `8787` | 監聽連接埠 |
-| `GPROXY_DATA_DIR` | `--data-dir` | `data`¹ | 相對路徑相對它解析的根 |
+| `GPROXY_DATA_DIR` | `--data-dir` | `data`¹ | 相對路徑的基準目錄：SQLite 檔案、本機檔案儲存、下載的詞表 |
 | `GPROXY_PERSISTENCE` | `--persistence` | `sqlite` | `sqlite`、`postgres` 或 `mysql` |
-| `GPROXY_DSN` | `--dsn` | — | 連線串；沒有 `--persistence` 時由它自己點明後端 |
-| `GPROXY_REDIS_URL` | `--redis-url` | — | 共享 cache；**多實例必需** |
-| `GPROXY_MASTER_KEY` | `--master-key` | — | 32 位元組，64 個十六進位制字元或 base64。不設則明文存放 |
-| `GPROXY_MASTER_KEY_NEXT` | `--master-key-next` | — | 要重新密封到的那把鑰匙 |
+| `GPROXY_DSN` | `--dsn` | — | 連線字串；未指定 `--persistence` 時按其 scheme 選擇後端 |
+| `GPROXY_REDIS_URL` | `--redis-url` | — | 共享 cache；多實例部署必須設定 |
+| `GPROXY_MASTER_KEY` | `--master-key` | — | 32 位元組金鑰，64 位十六進位或 base64。不設定則明文存放金鑰 |
+| `GPROXY_MASTER_KEY_NEXT` | `--master-key-next` | — | 輪換的目標金鑰 |
 | `GPROXY_MASTER_KEY_ROTATE` | `--master-key-rotate` | `false` | 啟動時執行輪換 |
-| `GPROXY_PUBLIC_BASE_URL` | `--public-base-url` | — | 對外源，用於釋出連結和 OAuth issuer 標識 |
-| `GPROXY_CORS_ORIGINS` | `--cors-origin` | — | 逗號分隔的瀏覽器 origin；空表示僅同源 |
-| `GPROXY_TRUSTED_PROXIES` | `--trusted-proxy` | — | 逗號分隔、其 `x-forwarded-*` 可被相信的對端；空表示誰都不信 |
-| `GPROXY_FILE_STORAGE_DIR` | `--file-storage-dir` | — | 釋出 body 與詞表的本地目錄 |
-| `GPROXY_AUDIT_ENABLED` | `--audit-enabled` | `true` | 記錄管理及 OAuth 審計；設為 `false` 關閉新增記錄 |
-| `GPROXY_CONSOLE` | `--console` | `true` | 提供 console |
-| `GPROXY_CONSOLE_PATH` | `--console-path` | — | 從這個目錄而不是內嵌 bundle 提供 console |
-| `GPROXY_INSTANCE_ID` | `--instance-id` | 隨機 | 本程序的穩定名字 |
+| `GPROXY_PUBLIC_BASE_URL` | `--public-base-url` | — | 對外存取的 origin，用於產生發布連結和 OAuth issuer 識別碼 |
+| `GPROXY_CORS_ORIGINS` | `--cors-origin` | — | 允許的瀏覽器 origin，逗號分隔；為空表示僅允許同源 |
+| `GPROXY_TRUSTED_PROXIES` | `--trusted-proxy` | — | 可信代理位址，逗號分隔，只採信這些對端的 `x-forwarded-*`；為空表示不信任任何代理 |
+| `GPROXY_FILE_STORAGE_DIR` | `--file-storage-dir` | — | 發布內容與詞表的本機目錄；不設定則兩者都不可用 |
+| `GPROXY_AUDIT_ENABLED` | `--audit-enabled` | `true` | 記錄管理及 OAuth 稽核事件；設為 `false` 不再新增記錄 |
+| `GPROXY_CONSOLE` | `--console` | `true` | 提供控制台 |
+| `GPROXY_CONSOLE_PATH` | `--console-path` | — | 從該目錄提供控制台，而不使用內嵌的建置產物 |
+| `GPROXY_INSTANCE_ID` | `--instance-id` | 隨機 | 本處理程序的固定名稱 |
 | `GPROXY_LOG_FORMAT` | `--log-format` | `text` | `text` 或 `json` |
-| `GPROXY_LOG_FILTER` | `--log-filter` | `RUST_LOG`，再 `info` | tracing 過濾器 |
-| `GPROXY_ADMIN_USER` | `--admin-user` / `--user` | `admin` | 第一個管理員的名字 |
-| `GPROXY_ADMIN_PASSWORD` | `--admin-password` / `--password` | 生成 | 他的密碼 |
-| `GPROXY_BOOTSTRAP_ADMIN_API_KEY` | `--admin-api-key` / `--api-key` | 生成 | 要為他簽發的那把確切 API key |
-| `GPROXY_IMPORT_SOURCE_MASTER_KEY` | `--source-master-key` | — | 僅 `import`：源實例的鑰匙 |
-| `GPROXY_ENV_FILE` | — | `.env` | 載入哪個 `.env` |
-| `GPROXY_UPDATE_CHANNEL` | `--update-channel` | 構建渠道 | `dev`、`beta` 或 `release` |
-| `GPROXY_UPDATE_SOURCE` | `--update-source` | 構建來源 | `github`、`gitlab` 或 `cnb` |
-| `GPROXY_UPDATE_MANIFEST_URL` | `--update-manifest-url` | 來源與渠道對應 URL | 自定義簽名更新清單 |
-| `GPROXY_UPDATE_RESTART` | `--update-restart` | `re-exec` | 更新後 `none`、`supervisor`（退出碼 42）或 `re-exec` |
-| `GPROXY_UPDATE_CHECK_INTERVAL` | `--update-check-interval` | `21600` | 檢查間隔秒數，`0` 關閉定時檢查 |
-| `GPROXY_UPDATE_AUTOMATIC` | `--update-automatic` | `false` | 自動安裝檢查到的更新 |
-| `GPROXY_UPDATE_VERIFY_SIGNATURE` | `--update-verify-signature` | `true` | 校驗更新清單簽名；設為 `false` 跳過簽名校驗，仍校驗安裝包大小和 SHA-256 |
+| `GPROXY_LOG_FILTER` | `--log-filter` | `RUST_LOG`，否則 `info` | tracing 過濾器 |
+| `GPROXY_ADMIN_USER` | `--admin-user` / `--user` | `admin` | 首個管理員的使用者名稱 |
+| `GPROXY_ADMIN_PASSWORD` | `--admin-password` / `--password` | 自動產生 | 管理員密碼 |
+| `GPROXY_BOOTSTRAP_ADMIN_API_KEY` | `--admin-api-key` / `--api-key` | 自動產生 | 為管理員建立的 API key（指定確切值） |
+| `GPROXY_IMPORT_SOURCE_MASTER_KEY` | `--source-master-key` | — | 僅用於 `import`：來源實例的主金鑰 |
+| `GPROXY_ENV_FILE` | — | `.env` | 要載入的 `.env` 檔案 |
+| `GPROXY_UPDATE_CHANNEL` | `--update-channel` | 建置時的通道 | `dev`、`beta` 或 `release` |
+| `GPROXY_UPDATE_SOURCE` | `--update-source` | 建置時的來源 | `github`、`gitlab` 或 `cnb` |
+| `GPROXY_UPDATE_MANIFEST_URL` | `--update-manifest-url` | 來源與通道對應的 URL | 自訂的簽章更新清單 |
+| `GPROXY_UPDATE_RESTART` | `--update-restart` | `re-exec` | 更新後的動作：`none`、`supervisor`（退出碼 42）或 `re-exec` |
+| `GPROXY_UPDATE_CHECK_INTERVAL` | `--update-check-interval` | `21600` | 檢查間隔（秒），`0` 關閉定時檢查 |
+| `GPROXY_UPDATE_AUTOMATIC` | `--update-automatic` | `false` | 自動安裝定時檢查發現的更新 |
+| `GPROXY_UPDATE_VERIFY_SIGNATURE` | `--update-verify-signature` | `true` | 驗證更新清單簽章；設為 `false` 跳過簽章驗證，但仍驗證安裝包大小和 SHA-256 |
 | `GPROXY_AUTOSTART` | `service install --autostart` | 見命令幫助 | 安裝服務時的啟動選項 |
 
-¹ 相對於工作目錄。Windows 上透過 Microsoft Store（MSIX）、WinGet 或 Scoop 安裝時，預設改用 `%LOCALAPPDATA%\GPROXY`，與 `install.ps1` 提供的預設目錄相同。安裝指令碼和 `gproxy service install` 會記錄所選目錄，因此已設定的執行個體不受啟動位置影響。
+¹ 相對於工作目錄。Windows 上透過 Microsoft Store（MSIX）、WinGet 或 Scoop 安裝時，預設改用 `%LOCALAPPDATA%\GPROXY`，與 `install.ps1` 提供的預設目錄相同。安裝指令碼和 `gproxy service install` 會記錄所選目錄，因此已設定的實例不受啟動位置影響。
 
-Console → 系統更新 → 校驗更新簽名會立即儲存實例設定，重啟後保留。透過設定 API 將 `instance.updateVerifySignature` 設為 `null`，可恢復跟隨命令列/環境變數預設值。
+布林值接受 `1`、`true`、`yes`、`on`、`0`、`false`、`no`、`off`。其他取值在啟動時報錯，不會當作 `false` 處理：主金鑰輪換和控制台這兩個開關一旦被誤關，往往要到出問題時才會發現。
 
-`GPROXY_ENV_FILE` 刻意沒有 flag：flag 得由它所餵養的那一步來解析，因此它影響不了解析器自己讀到的值。
+`GPROXY_ENV_FILE` 沒有對應的命令列參數。`.env` 在解析命令列之前載入，命令列參數無法影響解析器自身讀到的值。
 
-布林值接受 `1`、`true`、`yes`、`on`、`0`、`false`、`no`、`off`。**拼錯是錯誤而不是
-`false`**。
+`GPROXY_LOG_FILTER` 使用 `RUST_LOG` 語法。只有在未設定 `GPROXY_LOG_FILTER` 時才讀取 `RUST_LOG`，因此 shell 中匯出的 `RUST_LOG` 不會覆蓋顯式設定的值。
 
-關閉審計：設定 `GPROXY_AUDIT_ENABLED=false`、傳入 `--audit-enabled false`，或在 TOML 頂層設定 `audit_enabled = false`，然後重啟。歷史審計仍可查詢；請求日誌、用量統計不受影響。防止重複匯入的遷移完成標記仍會儲存。
+### 更新簽章驗證
+
+在控制台「系統 → 系統更新 → 驗證更新簽章」中修改後，會立即儲存為實例設定，重啟後仍然有效。如需恢復為跟隨命令列或環境變數的預設值，透過設定 API 將 `instance.updateVerifySignature` 設為 `null`。
+
+### 關閉稽核
+
+設定 `GPROXY_AUDIT_ENABLED=false`、傳入 `--audit-enabled false`，或在 TOML 頂層寫 `audit_enabled = false`，然後重啟。已有的稽核記錄仍可查詢，請求日誌和用量統計不受影響。遷移完成標記照常儲存，避免重複匯入。
 
 ## 命令
 
-| 命令 | 做什麼 |
+| 命令 | 說明 |
 | --- | --- |
-| `gproxy serve` | 按需輪換主金鑰、實例是新的就 bootstrap、繫結、服務。**預設命令**——不帶子命令的 `gproxy` 就是 `gproxy serve`。 |
-| `gproxy migrate` | 建立或增量同步表結構，然後退出。 |
-| `gproxy bootstrap admin` | 建立第一個管理員。冪等。 |
-| `gproxy export --out <PATH>` | 把本實例的配置寫成一份 JSON 文件。 |
-| `gproxy import --in <PATH>` | 把這樣一份文件回放進本實例。 |
-| `gproxy update --check` | 僅檢查更新，不安裝。 |
-| `gproxy update` | 安裝可用更新。 |
-| `gproxy service --help` | 檢視當前平台的服務安裝與管理選項。 |
+| `gproxy serve` | 按需輪換主金鑰，新實例執行初始化，然後監聽並提供服務。這是預設命令：不帶子命令的 `gproxy` 即 `gproxy serve`。 |
+| `gproxy migrate` | 建立表結構或應用尚未執行的遷移，然後退出。 |
+| `gproxy migrate --status` | 列出本版本包含的遷移及資料庫是否已執行，唯讀。 |
+| `gproxy bootstrap admin` | 建立首個管理員。已有任何使用者時不做任何操作。 |
+| `gproxy export --out <PATH>` | 將本實例的設定匯出為一份 JSON 文件（簡寫 `-o`）。 |
+| `gproxy import --in <PATH>` | 將這樣的文件匯入本實例（簡寫 `-i`）。 |
+| `gproxy import --from-v3 <PATH>` | 從 v3 的 SQLite 資料庫或匯出檔案遷移，見[從 v3 遷移](/zh-tw/deployment/v3-to-v4)。 |
+| `gproxy update --check` | 只檢查更新，不安裝。 |
+| `gproxy update` | 安裝可用的更新。`--channel` 僅對本次呼叫改用其他通道。 |
+| `gproxy service install` | 按本次呼叫的設定安裝、啟用並啟動背景服務。 |
+| `gproxy service uninstall` | 停止、停用並刪除服務。 |
+| `gproxy service status` | 顯示系統服務管理器報告的服務狀態。 |
+| `gproxy completions <SHELL>` | 輸出 shell 補全指令碼。 |
+| `gproxy man` | 輸出 man 手冊；`--out-dir` 將全部頁面寫入指定目錄。 |
 
-`serve` 在 `SIGINT` 或 `SIGTERM` 上停止，先把在途請求排空。**沒有關停超時**：一次串流補全跑上幾分鐘是合法的，而想要截止時間的 supervisor 自己有。
+如果資料庫中已有表、但沒有遷移記錄（即不是由本程式建立的資料庫），`gproxy migrate` 會拒絕執行且不做任何改動，因此 `--dsn` 寫錯不會造成損害。
 
-繫結發生在表結構工作**之後**，因此一個還在遷移的程序直接拒絕連線，而不是把它們收進一個沒人應答的積壓佇列。
+`serve` 收到 `SIGINT` 或 `SIGTERM` 後停止，停止前先處理完進行中的請求。停止過程沒有超時：串流補全持續幾分鐘是正常的。如果需要截止時間，請在處理程序管理工具中設定。
 
-## 配置檔案
+`serve` 在表結構處理完成之後才開始監聽。遷移進行期間，新連線會被直接拒絕，而不是在無人處理的佇列中等待。
 
-檔案講的是配置型別自己的欄位名，`snake_case`。**未知鍵是錯誤**，因此拼寫錯誤在啟動時就被報出來，而不是被靜默忽略。
+## 設定檔案
+
+TOML 檔案使用設定型別自身的欄位名，採用 `snake_case`。未知鍵會導致啟動報錯，拼寫錯誤不會被靜默忽略。
 
 ```toml
 host = "0.0.0.0"
@@ -142,18 +156,17 @@ device_ttl_secs = 900
 cli_client_ids = []
 ```
 
-有幾個欄位沒有 flag，因為它們不是容器會去覆蓋的東西：`session_ttl_secs`、整個 `[oauth]`
-塊，以及 S3 細節。
+部分欄位沒有對應的參數或環境變數，因為容器部署一般不會覆蓋它們：`session_ttl_secs`、整個 `[oauth]` 塊，以及 S3 的具體參數。
 
-這就是 Workers 宿主在 `GPROXY_CONFIG` 裡讀作 JSON、桌面宿主在資料目錄裡讀作 `gproxy.toml`
-的**同一份文件**，所以沒有第二套 schema 要維持同步。
+其他宿主讀取的也是同一份文件：Workers 宿主從 `GPROXY_CONFIG` 中以 JSON 形式讀取，桌面應用讀取資料目錄下的 `gproxy.toml`。各宿主共用一套結構，全部欄位、變體和預設值見[設定結構](/zh-tw/reference/configuration-schema)。
 
-## 靜態金鑰
+## 靜態加密
 
-憑證金鑰、被保留的 API key 和 tokenizer 源令牌，都用主金鑰以 AES-256-GCM 密封。
-**密封繫結到該行自己的 id**，所以一份密文被拷到另一行上打不開。
+憑證金鑰、保留的 API key 和 tokenizer 源令牌使用 `GPROXY_MASTER_KEY` 以 AES-256-GCM 加密。每個密文都繫結到所在行的 id，複製到其他行上無法解密。
 
-沒有主金鑰時金鑰以明文存放。這是一種受支援的部署形態，不是意外，而且二進位制在啟動時會大聲說一次，並點名那個能修好它的變數：
+可以用 `openssl rand -hex 32` 產生金鑰，結果恰好是 64 個十六進位字元。32 位元組金鑰的 base64 編碼為 43 或 44 個字元，兩種編碼不會混淆，因此格式由程式自動識別，無需另外設定。解碼後不是 32 位元組的金鑰會在啟動時被拒絕。
+
+未設定主金鑰時，金鑰以明文存放。這是受支援的設定，程式會在啟動時警告一次：
 
 ```text
 WARN gproxy::serve: upstream credential secrets are stored UNENCRYPTED: no
@@ -163,62 +176,93 @@ WARN gproxy::serve: upstream credential secrets are stored UNENCRYPTED: no
      already there.
 ```
 
-用 `openssl rand -hex 32` 生成一把，正好 64 個十六進位制字元。32 位元組的 base64 是 43 或 44
-個字元，所以兩種編碼不會混淆，格式是嗅探出來的而不是配置出來的。
+### 輪換主金鑰
 
-### 主金鑰輪換
+更換主金鑰不能只改設定。每個密文都要先用舊金鑰解密，再用新金鑰重新加密，否則下次重新載入時遇到第一個無法解密的憑證就會失敗。因此輪換由 `gproxy serve` 在啟動時執行：
 
-換鑰匙不是改一行配置。每一份密文都必須用舊鑰匙開啟、再用新鑰匙封上，否則下一次過載會在它打不開的第一把憑證上失敗。所以輪換是一次真正的操作，在啟動時執行：
+1. 停止使用該資料庫的所有實例。
 
-```sh
-# 1. 停掉每一个实例。
-# 2. 带着轮换开关启动一个。
-GPROXY_MASTER_KEY=<old> \
-GPROXY_MASTER_KEY_NEXT=<new> \
-GPROXY_MASTER_KEY_ROTATE=true \
-  gproxy serve
+2. 用舊金鑰、新金鑰和輪換開關啟動一個實例：
 
-# 3. 它会在 WARN 级别记录：
-#    master key rotated; copy GPROXY_MASTER_KEY_NEXT to GPROXY_MASTER_KEY,
-#    then clear GPROXY_MASTER_KEY_NEXT and GPROXY_MASTER_KEY_ROTATE
+   ```sh
+   GPROXY_MASTER_KEY=<old> \
+   GPROXY_MASTER_KEY_NEXT=<new> \
+   GPROXY_MASTER_KEY_ROTATE=true \
+     gproxy serve
+   ```
 
-# 4. 把新钥匙提升上来，清掉另外两个。
-GPROXY_MASTER_KEY=<new> gproxy serve
-```
+3. 檢查日誌。輪換成功後，實例會輸出一條 WARN 日誌：
 
-三條性質讓它敢跑：
+   ```text
+   master key rotated; copy GPROXY_MASTER_KEY_NEXT to GPROXY_MASTER_KEY,
+   then clear GPROXY_MASTER_KEY_NEXT and GPROXY_MASTER_KEY_ROTATE before the next start
+   ```
 
-- **一個事務。** 每一次更新和 revision 自增一起提交，所以失敗只會讓資料庫整體停在舊鑰匙上，重試即可。絕不會出現一個半輪換的資料庫要先搞清楚它是什麼形狀。
-- **寫之前先全部開啟。** 一把能解開大多數行的鑰匙，會在第一次寫入之前就中止。
-- **什麼都不跳過。** 打不開的密文是錯誤，絕不是一行被留下——被跳過的行在運維者提升新鑰匙之後，就是**兩把**鑰匙都打不開了。
+   該處理程序之後繼續使用新金鑰服務，因為資料庫中已經是新金鑰加密的資料。
 
-由此得出兩條規則：
+4. 將新金鑰設為目前金鑰，刪除另外兩個變數，然後重啟：
 
-- **輪換時只跑一個實例。** 資料庫現在在哪把鑰匙上沒有持久記錄，所以一個還拿著舊鑰匙的同伴會看到 revision 自增、過載，然後什麼都打不開。
-- **執行輪換的程序此後一直用新鑰匙服務**，因為資料庫現在就裝著那個。忘了第 4 步意味著下次啟動什麼都打不開——大聲地、在裝配時，而不是靜默地。
+   ```sh
+   GPROXY_MASTER_KEY=<new> gproxy serve
+   ```
 
-`GPROXY_MASTER_KEY_NEXT` 配上沒設的 `GPROXY_MASTER_KEY` 是**採納路徑**：它給一個本來在跑明文的資料庫加封。
+   如果漏掉這一步，下次啟動會用舊金鑰，任何金鑰都無法解密。程式會在啟動時報錯退出，而不是帶著失效的憑證繼續服務。
 
-設了 `GPROXY_MASTER_KEY_NEXT` 卻*沒有* `GPROXY_MASTER_KEY_ROTATE` 時什麼也不做，並且會這麼說——這樣一把在部署裡躺了一個月的"下一把鑰匙"，不會被誤當成一次已經發生過的輪換。
+5. 用新金鑰啟動其餘實例。
+
+輪換在一個交易中完成：所有重新加密的行與 revision 自增一起提交。中途任何失敗，資料庫都完整保留在舊金鑰上，可以直接重試。程式會先解密全部密文再開始寫入，所以一個只能解開部分行的金鑰會在第一次寫入前中止。輪換不會跳過任何行，無法解密即報錯：被跳過的行在新金鑰啟用後，用新舊兩個金鑰都打不開。
+
+輪換時只能執行一個實例。資料庫沒有記錄目前使用的是哪個金鑰，仍持有舊金鑰的其他實例看到 revision 變化後會重新載入，然後無法解密任何資料。
+
+其他組合：
+
+- 設定 `GPROXY_MASTER_KEY_NEXT` 而不設定 `GPROXY_MASTER_KEY`，用於給一直以明文執行的資料庫加密。
+- 設定 `GPROXY_MASTER_KEY_NEXT` 但未設定 `GPROXY_MASTER_KEY_ROTATE` 時不執行輪換，並輸出一條警告，避免把部署裡遺留的新金鑰誤認為已經完成輪換。
+- 設定了 `GPROXY_MASTER_KEY_ROTATE` 卻沒有新金鑰，或新金鑰與目前金鑰相同，啟動時報錯。
 
 ## 首次初始化
 
-在終端機中首次執行 `gproxy` 會進入設定精靈，與 Application 的精靈一致：語言、監聽位址、資料目錄和資料庫、管理員帳戶、要建立供應商的渠道（或匯入一份設定匯出檔案），以及為每個新供應商新增憑據。精靈只在以下條件同時滿足時出現：沒有子命令；標準輸入和輸出都是終端機；工作目錄下沒有 `.env`；未設定 `--config`、`--dsn`、`--persistence`、`--data-dir` 和 `--admin-password`；資料庫尚不存在。答案連同新產生的 `GPROXY_MASTER_KEY` 寫入 `./.env`（權限 `0600`），密碼只以雜湊形式儲存。結束時精靈會顯示 Base URL 和閘道器 API Key，並詢問是否安裝為背景服務。按 Esc 略過目前供應商的憑據，按 Ctrl+C 取消且不寫入任何內容。
+### 設定精靈
 
-沒有終端機時（容器、服務管理器、重新導向輸入）仍按以下規則處理。CLI 在 users 表為空時建立 0 號管理員和閘道器 API Key。已有實例啟動時，`GPROXY_ADMIN_PASSWORD`（或 `--admin-password`）按以下規則覆蓋：優先查詢 `GPROXY_ADMIN_USER` 指定的同名使用者，只更新其密碼；若不存在同名使用者，則啟用 0 號管理員並更新使用者名稱和密碼，0 號使用者不存在時建立它。未發生變更時保留會話，密碼變化或恢復 0 號使用者時登出目標使用者的會話。未顯式設定密碼時不修改帳戶，重啟不會生成新的 API Key。
+在終端中首次執行 `gproxy` 會進入設定精靈，與應用程式中的精靈一致。精靈依次詢問語言、監聽位址、資料目錄和資料庫、管理員帳戶、要建立供應商的渠道（或匯入一份設定匯出檔案），以及每個新供應商的憑證。
 
-空庫初始化時，`GPROXY_ADMIN_PASSWORD` 和 `GPROXY_BOOTSTRAP_ADMIN_API_KEY` 可指定初始值；省略時自動生成。程式只顯示生成的憑據，輸出到標準輸出。服務管理器和容器可能收集標準輸出，因此首次啟動日誌同樣需要保管。
+只有同時滿足以下條件時才會進入精靈：
 
-Application 在[首次設定精靈](/zh-tw/download#setup)中詢問同樣的問題。兩者都不使用瀏覽器初始化頁。
+- 沒有子命令；
+- 標準輸入和標準輸出都是終端；
+- 工作目錄下沒有 `.env`；
+- 未設定 `--config`、`--dsn`、`--persistence`、`--data-dir` 和 `--admin-password`；
+- 資料庫尚不存在。
 
-## 搬運一份配置
+答案連同新產生的 `GPROXY_MASTER_KEY` 寫入 `./.env`（權限 `0600`），密碼只以雜湊形式儲存在資料庫中。結束時精靈會顯示 Base URL 和閘道 API Key，並詢問是否安裝為背景服務。按 Esc 跳過目前供應商的憑證，按 Ctrl+C 取消且不寫入任何內容。
+
+應用程式在其[首次設定精靈](/zh-tw/download#setup)中詢問同樣的問題。兩者都不提供瀏覽器初始化頁面。
+
+### 無終端環境
+
+在容器、服務管理器或重新導向輸入等沒有終端的環境中不會進入精靈。users 表為空時，CLI 建立 0 號管理員和一個閘道 API Key。`GPROXY_ADMIN_PASSWORD` 和 `GPROXY_BOOTSTRAP_ADMIN_API_KEY` 用於指定初始值，未指定的自動產生。程式只把自動產生的憑證輸出到標準輸出。服務管理器和容器執行環境通常會收集標準輸出，因此首次啟動的日誌需要妥善保管。
+
+### 重置管理員密碼
+
+已有實例啟動時，如果設定了 `GPROXY_ADMIN_PASSWORD`（或 `--admin-password`），按以下規則處理：
+
+1. 存在與 `GPROXY_ADMIN_USER` 同名的使用者時，只更新該使用者的密碼。
+2. 否則啟用 0 號使用者為管理員，並改用設定的使用者名稱和密碼；0 號使用者不存在時會新建。
+
+憑證沒有變化時保留現有工作階段；密碼變更或恢復 0 號使用者時，該使用者的工作階段全部失效。未顯式設定密碼時不修改任何帳戶，重啟也不會產生新的 API Key。
+
+## 匯出與匯入設定
+
+從一個實例匯出設定，再匯入另一個實例：
 
 ```sh
 gproxy export --out config.json --include-secrets
 gproxy import --in  config.json --mode merge --source-master-key '…'
 ```
 
-`-` 表示標準輸出或標準輸入。文件就是管理 DTO 本身，所以匯出說的正是一次列表會說的：
+`--out` 的 `-` 表示標準輸出，`--in` 的 `-` 表示標準輸入。
+
+匯出文件直接由管理介面的 DTO 組成，內容與對應列表介面傳回的一致：
 
 ```json
 {"formatVersion":6,"exportedAtMs":1789981723118,"secretsOmitted":true,
@@ -229,37 +273,27 @@ gproxy import --in  config.json --mode merge --source-master-key '…'
  "quotas":[],"priceRules":[],"priceRates":[],"priceTiers":[],"settings":null}}
 ```
 
-`data` 按回放順序排列：沒有任何一行出現在它所指向的那一行之前。
+`data` 中各類資料按匯入順序排列，被引用的行總是排在引用它的行之前。
 
-**身份不走**——使用者、key、組織、團隊、權限、訂閱和 OAuth 用戶端屬於產品層——所以被匯入的實例仍然需要它自己的 bootstrap。用量和 capture 也不走：複製它們等於偽造目的端從未有過的歷史。
+身份資料不會匯出。使用者、key、組織、團隊、權限和 OAuth 客戶端屬於產品層，匯入後的實例仍需自行初始化管理員。用量和封包擷取記錄同樣不匯出，複製它們等於給目標實例憑空製造歷史。
 
-`--mode merge` 寫文件點名的東西，其餘不動。`--mode replace` 還會刪掉文件沒提到的、屬於已匯出種類的行，先子後父，並且絕不碰身份、用量或 capture 表。一次匯入是**整份文件一個
-revision 提交**，因此任何一處被拒絕的文件什麼也不會留下。
+`--mode merge`（預設）只寫入文件中包含的行，其他資料保持不變。`--mode replace` 還會刪除已匯出類別中文件未包含的行，先刪子表再刪父表，但不會觸及身份、用量和封包擷取表。整次匯入是一個 revision 提交，文件中任何一處被拒絕，都不會留下部分寫入的資料。
 
-帶 `--include-secrets` 時密文以 base64 隨行，從不被開啟、也從不是明文——這份文件因此與資料庫檔案同等敏感。回來的時候：
+### 匯出檔案中的金鑰
 
-| 匯入方有什麼 | 會發生什麼 |
-| --- | --- |
-| `--source-master-key` | 每個金鑰被開啟並用本實例的鑰匙重新密封 |
-| 與源相同的鑰匙 | 密文原樣存放，本來就能開啟 |
-| 都沒有 | 這把憑證被跳過、計數並告警 |
+使用 `--include-secrets` 時，密文以 base64 形式寫入文件，既不解密也不會以明文出現。此時這份文件與資料庫檔案同樣敏感。匯入時，每個金鑰按以下方式處理：
 
-這條規則存在，是因為引擎在裝配快照時會開啟每一把憑證的金鑰：一把匯入後打不開的憑證不會只是壞掉它自己的呼叫，它會壞掉**整個實例此後每一次過載**。
+- 提供了 `--source-master-key`：解密後用本實例的主金鑰重新加密。
+- 本實例與來源實例使用相同的主金鑰：原樣儲存，可以正常解密。
+- 以上都不滿足：跳過該憑證，計入統計並輸出警告。
 
-## settings 行
+無法解密的憑證之所以跳過而不是照樣匯入，是因為引擎在組裝快照時會解密每個憑證的金鑰。一個無法解密的憑證不只影響它自己的請求，還會讓整個實例此後的每次重新載入都失敗。
 
-控制台的「系統 → 全域性設定」直接修改該行；只提交已修改欄位，不覆蓋其他設定。實例名稱顯示在側欄及網頁標題，版本和完整 Git hash 可從 `/info` 讀取。
+## 執行階段設定
 
-- `corsOrigins`、`trustedProxies` 按當前快照讀取；啟動值只在新建 settings 行時初始化。
-- 原生 `gproxy serve` 跟隨資料庫更新程序日誌級別／格式、更新通道和自動檢查開關。
-- `enableTokenizerVocabs=false` 停用自定義詞表並回退內建計數；不刪除詞表檔案。
-- `enableTokenizerDownload=false` 拒絕新下載；已有詞表是否使用由前一個開關控制。
-- `retentionDays` 清理超過保留期的已結束請求歷史、抓包及其事件；未設定時不按時間清理。用量記錄不屬於請求歷史，不會被清理。
-- `usageRetentionDays` 清理超過保留期的用量記錄。用量統計和總金額都由用量記錄計算，預設不設定，即永久保留。
-- `maxDatabaseSizeMb` 以 MiB 限制 SQLite 歷史資料佔用，從最舊的已完成請求記錄開始清理並回收空頁；不會為控制大小刪除用量記錄。未設定或 0 不啟用此限制。配置和進行中的請求不刪除，因此該值不是整個資料庫的硬配額。自動清理由原生服務每分鐘執行；已結算賬目、配額計數、配置及審計記錄保持不變。
-- `defaultFileStorageName`、`maxInFlight`、`fileUploadMaxInFlight` 已移除，不是可設定項。
+執行階段設定是資料庫中的一行，修改後無需重啟即可生效。控制台的「系統 → 全域設定」直接編輯這一行，只提交改動過的欄位。實例名稱顯示在控制台側欄和網頁標題中；`/info` 傳回實例名稱、程式版本和完整的 Git commit hash。
 
-執行期設定在資料庫裡，改了不用重啟。
+也可以透過管理 API 讀取和修改：
 
 ```sh
 curl -s http://127.0.0.1:8787/admin/api/settings  -H "Authorization: Bearer $GPROXY_KEY"
@@ -268,46 +302,67 @@ curl -s -X PATCH http://127.0.0.1:8787/admin/api/settings \
   -d '{"instance":{"maxAttempts":4}}'
 ```
 
-一行，兩組。instance 組：
+PATCH 只需包含要修改的欄位。設定分為 `instance` 和 `logging` 兩組。
 
-| 鍵 | 預設 | 含義 |
+### instance 組
+
+| 鍵 | 預設值 | 說明 |
 | --- | --- | --- |
-| `instanceName` | `default` | 控制台名稱 |
-| `maxAttempts` | `6` | 一個計劃上游嘗試次數的硬上限；路由自己的預算被它鉗住 |
-| `requestTimeoutMs` | `1200000` | 等上游開始應答（拿到回應頭，或讀完一個轉換過的非串流應答）；持續有輸出的流不受它限制 |
-| `streamIdleTimeoutMs` | `300000` | 流單元之間的間隔 |
-| `maxRequestBodyBytes` | `134217728` | 除檔案上傳外的所有請求體，在鑑權之前檢查；壓縮請求體解壓後也不能超過它 |
-| `maxUploadBodyBytes` | `536870912` | 檔案上傳的請求體 |
-| `maxResponseBodyBytes` | `268435456` | 緩衝回應上限 |
-| `maxStreamEventBytes` | `33554432` | 一個 SSE 事件或陣列元素 |
-| `maxWsFrameBytes` | `33554432` | 更大的幀以 `1009` 關閉雙方 |
-| `maxMultipartParts` | `64` | |
-| `enableSettlement`、`enableUsage` | `true` | 定價與用量行 |
-| `enableTokenizerVocabs` | `true` | 用真實詞表計數 |
-| `enableTokenizerDownload` | `false` | 抓取未快取的詞表 |
-| `retentionDays`、`usageRetentionDays`、`maxDatabaseSizeMb` | 未設 | |
-| `portalRecentRequestsEnabled` | `true` | 使用者面是否展示近期請求 |
-| `corsOrigins`、`trustedProxies`、`connectionProfileId`、`oauthClientAllowlist` | | 同一批策略在資料庫裡的那一份 |
-| `configRevision` | | 只讀：每個實例據以同步的 revision |
+| `instanceName` | `default` | 控制台中顯示的實例名稱 |
+| `maxAttempts` | `6` | 一次請求計劃的上游嘗試次數上限；路由自身的預算不能超過它 |
+| `requestTimeoutMs` | `1200000` | 等待上游開始應答的時間（收到回應標頭，或讀完一個經過轉換的非串流應答）；持續有輸出的流不受此限制 |
+| `streamIdleTimeoutMs` | `300000` | 流中相鄰兩個單元之間的最長間隔 |
+| `maxRequestBodyBytes` | `134217728` | 除檔案上傳外所有請求體的上限，在驗證之前檢查；壓縮請求體解壓後也不能超過它 |
+| `maxUploadBodyBytes` | `536870912` | 檔案上傳請求體的上限 |
+| `maxResponseBodyBytes` | `268435456` | 緩衝回應的上限 |
+| `maxStreamEventBytes` | `33554432` | 單個 SSE 事件或陣列元素的上限 |
+| `maxWsFrameBytes` | `33554432` | WebSocket 訊框上限，超過時以 `1009` 關閉兩端連線 |
+| `maxMultipartParts` | `64` | 單個 multipart 請求體的分段數上限 |
+| `enableSettlement`、`enableUsage` | `true` | 計費結算，以及寫入用量記錄 |
+| `enableTokenizerVocabs` | `true` | 使用真實詞表計數 |
+| `enableTokenizerDownload` | `false` | 下載尚未快取的詞表 |
+| `retentionDays` | 未設定 | 已完成請求歷史的保留天數 |
+| `usageRetentionDays` | 未設定 | 用量記錄的保留天數 |
+| `capturePayloadRetentionDays` | `7` | 完整封包擷取內容的保留天數，與請求歷史分開計算 |
+| `capturePayloadMaxMb` | `2048` | 編碼後封包擷取內容的容量上限（MiB） |
+| `quotaObservationRetentionDays` | `90` | 上游配額觀測記錄的保留天數 |
+| `maxDatabaseSizeMb` | 未設定 | SQLite 歷史資料的容量上限（MiB） |
+| `alwaysSecureCookie` | `false` | 工作階段 cookie 始終帶 `Secure` 標記 |
+| `allowedHeaders` | `[]` | 對所有供應商放行的客戶端請求標頭，與各供應商自己的列表及渠道內建請求標頭合併 |
+| `proxy` | 未設定（直連） | 出站代理：`direct`、`system` 或指定 URL |
+| `updateChannel`、`updateSource`、`updateVerifySignature` | 未設定 | 更新設定的實例級覆蓋；未設定時跟隨命令列和環境變數 |
+| `enableAutoUpdateCheck` | `true` | 是否執行定時更新檢查 |
+| `portalRecentRequestsEnabled` | `true` | 使用者入口是否顯示最近請求 |
+| `corsOrigins`、`trustedProxies`、`connectionProfileId`、`oauthClientAllowlist` | | 這些策略在資料庫中的副本 |
+| `configRevision` | | 唯讀：各實例據以同步的 revision |
 
-logging 組是 `enableDownstreamLog`、`enableDownstreamLogBody`、`enableUpstreamLog`、
-`enableUpstreamLogBody`、`disableLogRedaction`、`enableTracing`、`logLevel`、`logFormat`
-和三個黑名單。兩個 body 開關預設關閉，見
-[用量、日誌與審計](/zh-tw/guides/observability#請求日誌)。
+部分設定的具體行為：
 
-## 跑多個實例
+- `corsOrigins` 和 `trustedProxies` 從已發布的快照讀取。啟動時的取值（`GPROXY_CORS_ORIGINS`、`GPROXY_TRUSTED_PROXIES`）只在新建設定行時用於初始化。
+- 原生 `gproxy serve` 會跟隨資料庫中的修改，更新處理程序日誌級別和格式、更新通道以及定時檢查開關。
+- `enableTokenizerVocabs=false` 時，估算不再使用自訂詞表，改用內建計數，詞表檔案不會刪除。
+- `enableTokenizerDownload=false` 時拒絕新的下載；已有詞表是否使用由 `enableTokenizerVocabs` 決定。
+- `retentionDays` 刪除超過保留期的已完成請求歷史、封包擷取及其事件。未設定時不按時間清理。用量記錄不屬於請求歷史，不受影響。
+- `usageRetentionDays` 刪除超過保留期的用量記錄。用量統計和總金額都由用量記錄計算，因此預設不設定，即永久保留。
+- `maxDatabaseSizeMb` 限制 SQLite 歷史資料佔用的空間，從最舊的已完成請求記錄開始刪除並回收空閒頁，不會為控制容量而刪除用量記錄。未設定或為 `0` 時不啟用。設定和進行中的請求不會刪除，因此它不是整個資料庫的硬性配額。
+- `alwaysSecureCookie=false` 時，只有確認請求經由 HTTPS 才給 cookie 加 `Secure`。在終止 TLS 的反向代理後面，需要把該代理加入 `trustedProxies` 才能確認。
+- 原生服務每分鐘執行一次清理。已結算的餘額、配額計數、設定和稽核記錄不會被清理。
+- `defaultFileStorageName`、`maxInFlight`、`fileUploadMaxInFlight` 已移除，不再是可設定項。
 
-三件事會變：
+### logging 組
 
-1. **`GPROXY_REDIS_URL`。** 預設 cache 是程序本地的，兩個實例不會看到彼此的失效通知，也會各自獨立地計限流。回答不了的 cache 會**拒絕**一個受限流的請求而不是放行它——靜默地退回本地，會把一次故障變成"這個實例上所有限額都關了"。
-2. **`gproxy migrate` 作為獨立一步**，由單一寫入者在任何實例啟動前執行。
-3. **輪換時只跑一個實例**，如上。
+logging 組包括 `enableDownstreamLog`、`enableDownstreamLogBody`、`enableUpstreamLog`、`enableUpstreamLogBody`、`disableLogRedaction`、`enableTracing`、`logLevel`、`logFormat`，以及三個黑名單（`requestHeaderBlacklist`、`responseHeaderBlacklist`、`queryParameterBlacklist`）。兩個 body 開關預設關閉，詳見[用量、日誌與稽核](/zh-tw/guides/observability#請求日誌)。
 
-## 可信代理規則
+## 多實例部署
 
-`x-forwarded-for` 和 `x-forwarded-proto` 是 header，而 header 是對端寫什麼就是什麼。
-**只有當 socket 的對端是迴環或列在 `trustedProxies` 裡時**它們才被相信。來自任何其他對端時直接忽略——不合並、不偏好、也不當兜底——而預設誰都不信。
+多個實例可以共用一個資料庫，此時需要注意三點：
 
-兩者都要緊，理由不同。偽造的 `x-forwarded-for` 決定運維者日誌裡某個請求旁邊的那個地址。偽造的 `x-forwarded-proto` 決定 **OAuth issuer 標識的 scheme**，而那是一份告訴用戶端把授權碼發往哪裡的發現文件。
+1. 設定 `GPROXY_REDIS_URL`。預設 cache 只在處理程序內有效，兩個實例既看不到對方的失效通知，也會各自獨立計算限流。cache 無法應答時，受限流約束的請求會被拒絕而不是放行；如果悄悄退回本機 cache，等於關閉了實例上的所有限額。詳見[儲存與 Cache 後端](/zh-tw/reference/database#cache)。
+2. 把 `gproxy migrate` 作為單獨的步驟，在任何實例啟動之前由一個處理程序執行。
+3. 輪換主金鑰時只執行一個實例，見[輪換主金鑰](#輪換主金鑰)。
 
-對端未知時按不可信處理。
+## 可信代理
+
+`x-forwarded-for` 和 `x-forwarded-proto` 只是普通請求標頭，客戶端可以隨意填寫。只有當 TCP 連線的對端是迴環位址或列在 `trustedProxies` 中時，GPROXY 才採信這兩個請求標頭。來自其他對端時一律忽略：既不與對端位址合併，也不優先採用，也不作為後備。對端位址未知時按不可信處理。預設不信任任何代理。
+
+兩個請求標頭都很重要。偽造的 `x-forwarded-for` 會改變日誌中記錄的客戶端位址，以及按 IP 計算的限流。偽造的 `x-forwarded-proto` 會改變 OAuth issuer 識別碼的 scheme，而發現文件正是根據它告訴客戶端把授權碼發往哪裡。

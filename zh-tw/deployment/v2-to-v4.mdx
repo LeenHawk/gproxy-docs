@@ -1,17 +1,37 @@
 ---
-title: "從 v2 遷移到 v4"
-description: "使用一個指令碼將 v2 資料遷移到 v4，支援 SQLite、PostgreSQL 與 MySQL。"
+title: "從 v2 升級到 v4"
+description: "以一個指令碼離線遷移 v2 資料到 v4，來源資料庫和目標資料庫均可為 SQLite、PostgreSQL 或 MySQL。"
+sidebarTitle: "v2 升級到 v4"
 ---
 
-使用統一的 [migrate-v2-to-v4.py](https://github.com/LeenHawk/gproxy/blob/main/scripts/migrate-v2-to-v4.py)。來源與目標都支援 SQLite、PostgreSQL、MySQL，可跨資料庫遷移。
+本文供管理員將 v2 部署直接升級到 v4 時參考。與 [v3 升級到 v4](/zh-tw/deployment/v3-to-v4) 不同，這次升級是離線進行的：指令碼 [migrate-v2-to-v4.py](https://github.com/LeenHawk/gproxy/blob/main/scripts/migrate-v2-to-v4.py) 讀取 v2 資料庫，寫出一個新的 v4 資料庫，原資料庫不做任何修改。
 
-指令碼一次完成：**v2 來源 → SQLite 快照 → v3 SQLite → v4 SQLite → 目標資料庫**。來源唯讀，帳號、憑證、API key 和用量先由既有升級器轉換，再將完整的 v4 資料搬到目標。
+## 變更內容
 
-## 準備
+指令碼一次執行四個階段：
 
-停止舊執行個體並保留資料庫備份。目標必須是**新的 SQLite 檔案或空的 PostgreSQL/MySQL 資料庫**，不可填入原資料庫位址。加密執行個體繼續使用原來的 `GPROXY_MASTER_KEY`。
+1. 將 v2 來源資料庫做成 SQLite 快照。
+2. 以 v3.0.22 程式將快照升級到 v3。
+3. 以 v4 程式將 v3 檔案匯入 v4 SQLite 資料庫。
+4. 將 v4 資料庫複製到目標資料庫。
 
-準備 Python 3.10+、[v3.0.22](https://github.com/LeenHawk/gproxy/releases/tag/v3.0.22) 和 [v4](https://github.com/LeenHawk/gproxy/releases/latest) 執行檔。v4 必須包含目標資料庫驅動程式。純 SQLite 不需額外 Python 套件；使用 PostgreSQL 或 MySQL 時安裝對應驅動程式：
+第 2、3 階段使用的就是 v3 和 v4 程式本身的轉換邏輯，因此兩者的限制在這裡同樣適用（參見 [v2 升級到 v3](/zh-tw/deployment/v2-to-v3) 和 [v3 升級到 v4](/zh-tw/deployment/v3-to-v4)）：
+
+- 帳號、憑證、API key 和歷史用量會被轉換。
+- 部分 v2 權限和規則無法對應，需要重新設定。
+- v2 中仍保留的用量明細會遷移；已被 v2 保留策略刪除的明細無法從彙總資料重建。
+- 舊的請求日誌、工作階段、稽核記錄和快取不會變成 v4 的記錄。
+- v4 金額保留 9 位小數，精確的歷史費用保存在 `metrics.v3.cost` 中。
+
+來源資料庫和目標資料庫各自可以是 SQLite、PostgreSQL 或 MySQL，兩端類型可以不同。
+
+## 準備工作
+
+1. 停止 v2 執行個體並備份資料庫。指令碼以唯讀方式讀取來源資料庫，但仍請先做備份。
+2. 準備目標資料庫：一個尚不存在的 SQLite 檔案路徑，或一個空的 PostgreSQL 或 MySQL 資料庫。目標不能是 v2 原資料庫，指令碼會拒絕已經有資料表的目標。PostgreSQL 目標必須使用 `public` schema。
+3. 如果 v2 資料庫已加密，請準備好它的 `GPROXY_MASTER_KEY`。指令碼要求 v2 的格式，即 32 位元組的 base64，其他格式會直接報錯。v4 也接受同一個值。
+4. 安裝 Python 3.10 或更新版本，並下載兩個程式：[v3.0.22](https://github.com/LeenHawk/gproxy/releases/tag/v3.0.22) 和 [v4](https://github.com/LeenHawk/gproxy/releases/latest)。指令碼會檢查它們的版本。v4 建置必須包含目標資料庫的驅動程式。
+5. 任一端使用 PostgreSQL 或 MySQL 時，安裝對應的 Python 驅動程式（只用 SQLite 則無需額外安裝），然後下載指令碼：
 
 ```sh
 python3 -m pip install 'psycopg[binary]>=3,<4'  # PostgreSQL
@@ -19,9 +39,11 @@ python3 -m pip install 'PyMySQL[rsa]>=1,<2'     # MySQL
 curl -fL https://raw.githubusercontent.com/LeenHawk/gproxy/main/scripts/migrate-v2-to-v4.py -o migrate-v2-to-v4.py
 ```
 
-## 執行一次遷移
+MySQL 來源資料庫的資料表必須使用 InnoDB，指令碼依靠它取得一致的快照。PostgreSQL 來源資料表不在 `public` schema 中時，請使用 `--source-schema` 指定。
 
-SQLite 範例：
+## 執行遷移
+
+兩端都是 SQLite 時：
 
 ```sh
 python3 migrate-v2-to-v4.py \
@@ -31,21 +53,55 @@ python3 migrate-v2-to-v4.py \
   --v4-bin ./v4/gproxy
 ```
 
-將 `--source`、`--target` 換成 `postgresql://user:password@host/database` 或 `mysql://user:password@host/database` 即可使用遠端資料庫，兩端可不同。含密碼的連線字串可透過 `GPROXY_SOURCE_DSN`、`GPROXY_TARGET_DSN` 環境變數提供，並省略對應參數。原主金鑰也透過環境變數設定：
+使用資料庫伺服器時，將任一端的路徑換成 `postgresql://user:password@host/database` 或 `mysql://user:password@host/database` 這樣的連線字串。MySQL 連線字串可用 `ssl-mode`、`ssl-ca`、`ssl-cert`、`ssl-key` 設定 TLS。
+
+為了不讓密碼出現在處理程序清單和 shell 歷史記錄中，可以將連線字串放進 `GPROXY_SOURCE_DSN` 和 `GPROXY_TARGET_DSN`，並省略 `--source` 和 `--target`。主金鑰從 `GPROXY_MASTER_KEY` 讀取：
 
 ```sh
 read -rsp '來源資料庫連線字串：' GPROXY_SOURCE_DSN; echo; export GPROXY_SOURCE_DSN
 read -rsp '空目標資料庫連線字串：' GPROXY_TARGET_DSN; echo; export GPROXY_TARGET_DSN
-read -rsp '原主金鑰（明文來源留空）：' GPROXY_MASTER_KEY; echo; export GPROXY_MASTER_KEY
+read -rsp '原主金鑰（明文來源資料庫留空）：' GPROXY_MASTER_KEY; echo; export GPROXY_MASTER_KEY
 python3 migrate-v2-to-v4.py --v3-bin ./v3/gproxy --v4-bin ./v4/gproxy
 ```
 
-指令碼會建立工作目錄並顯示位置；可用 `--work-dir` 指定尚不存在的目錄。預設從 PATH 尋找 `gproxy-v3` 和 `gproxy`，找到時可省略執行檔路徑。PostgreSQL 來源不在 `public` 時使用 `--source-schema`；目標 PostgreSQL 使用 `public`。MySQL 來源資料表必須使用 InnoDB；DSN 可用 `ssl-mode`、`ssl-ca`、`ssl-cert`、`ssl-key` 設定 TLS。
+不指定 `--v3-bin` 和 `--v4-bin` 時，指令碼在 `PATH` 中尋找 `gproxy-v3` 和 `gproxy`。指令碼會在目前目錄下建立名為 `gproxy-v2-to-v4-*` 的私有工作目錄；也可以用 `--work-dir` 指定一個尚不存在的目錄。每個階段開始時，指令碼都會輸出一行：
 
-## 完成後
+```text
+1/4 Snapshot v2 -> SQLite. Work directory: /srv/gproxy-v2-to-v4-k3j2x1
+2/4 Upgrade SQLite -> v3
+3/4 Upgrade SQLite -> v4
+4/4 Copy v4 SQLite -> sqlite
+Migration complete. Review reports in /srv/gproxy-v2-to-v4-k3j2x1; start v4 against the target with the same master key.
+```
 
-中間資料庫與每階段報告均保留在工作目錄。指令碼檢查帳號、API key 摘要和歷史費用，並對最終 PostgreSQL/MySQL 搬運逐表比對筆數及資料列內容校驗和。檢查 `v3-import.log`、`v4-import.log` 和 `*-verification.json` 後，讓 v4 使用目標資料庫與原主金鑰，再恢復流量。
+## 檢查遷移結果
 
-轉換範圍沿用既有升級器：部分舊權限與規則需要重設；保留的用量明細會遷移，但已刪除的明細無法從彙總重建。舊請求記錄、工作階段、稽核與快取不會變成 v4 對應記錄。v4 金額保留 9 位小數，精確歷史費用仍保存在 `metrics.v3.cost`。請參閱 [v2 → v3](/zh-tw/deployment/v2-to-v3)和 [v3 → v4](/zh-tw/deployment/v3-to-v4)。
+所有中間資料庫（`v2.db`、`v3/gproxy.db`、`v4/gproxy.db`）和報告都保留在工作目錄中：
 
-失敗時停止並保留現場，不刪除來源或自動清空目標。排查後使用新的工作目錄與空目標重試。工作目錄含資料庫與秘密，應保持私有；v3.0.22 的金鑰會短暫出現在程序參數中，不要使用 shell 追蹤。
+| 檔案 | 內容 |
+| --- | --- |
+| `snapshot-report.json` | 第 1 階段快照的來源資料庫類型、各資料表列數和所做的調整 |
+| `v3-preflight.log`、`v3-import.log` | v3.0.22 預檢和匯入的輸出 |
+| `v3-verification.json` | v3 與 v2 之間列數、密碼雜湊和已結算用量費用的比對 |
+| `v4-import.log` | v4 匯入的輸出，含其遷移報告 |
+| `v4-verification.json` | 對 v4 資料庫的檢查 |
+| `target-schema.log` | 在 PostgreSQL 或 MySQL 目標上建立 schema 的輸出 |
+| `target-verification.json` | 對目標資料庫的檢查 |
+
+這些檢查在各階段之間比對帳號身分、API key 摘要和歷史費用。目標為 PostgreSQL 或 MySQL 時，最後的複製還會逐表核對列數和列內容總和檢查碼。
+
+1. 閱讀 `v3-import.log`、`v4-import.log` 和各個 `*-verification.json`，重點查看略過的資料列和權限變化。
+2. 以同一把主金鑰讓 v4 連線目標資料庫啟動。以上面的 SQLite 範例為例是 `gproxy --data-dir ./new-data`；資料庫伺服器則將 `GPROXY_DSN` 設為目標資料庫的連線字串。
+3. 登入控制台，檢查供應商、使用者和歷史用量，傳送一個測試請求，再將用戶端切換過來。
+
+工作目錄中有資料庫和金鑰，請保持其私有，不再需要時刪除。
+
+## 遷移失敗時
+
+指令碼遇到第一個錯誤就停止，輸出 `Migration failed:` 及原因，其中的密碼和主金鑰會被遮蔽。指令碼不會變更來源資料庫，也不會清理目標資料庫。根據工作目錄中的日誌排查後，換一個新的工作目錄和空目標資料庫重新執行。
+
+第 2 階段執行期間，v3.0.22 透過命令列參數接收主金鑰，因此金鑰會短暫出現在處理程序清單中。不要在開啟 shell 追蹤（`set -x`）的情況下執行指令碼。
+
+## 回復
+
+v2 資料庫始終沒有被寫入。回復時捨棄目標資料庫，以原來的參數讓 v2 在原資料庫上重新啟動即可。

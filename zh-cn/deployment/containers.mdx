@@ -1,23 +1,14 @@
 ---
-title: "Docker、Render 和 Heroku"
-description: "使用原生 GPROXY 容器与托管 PostgreSQL 部署网关。"
+title: "Docker、Render 与 Heroku"
+description: "运行 GPROXY 容器镜像，或使用 PostgreSQL 部署到 Render、Heroku。"
 sidebarTitle: "Docker 与容器平台"
 ---
 
-这些模板将 **latest 稳定版** PostgreSQL 预编译程序打包进轻量 Node.js 容器，运行一个应用实例并连接 PostgreSQL 数据库。它们复用现有 HTTP/SSE/WebSocket 转发入口，并校验发布包的 SHA-256，无需编译 Rust。普通 CLI 容器只包含 SQLite 驱动，不能直接替代此镜像。应用和数据库可能产生费用，部署前请核对所选套餐。
-
-<Columns cols={2}>
-  <Card title="Render" icon="rocket" href="https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev" cta="部署到 Render" arrow={true}>
-  免费 Web 服务，连接自备的外置 PostgreSQL，自动生成密码与主密钥。
-</Card>
-  <Card title="Heroku" icon="rocket" href="https://heroku.com/deploy?template=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev" cta="部署到 Heroku" arrow={true}>
-  Basic dyno + Essential PostgreSQL，填写主密钥后自动创建应用和数据库。
-</Card>
-</Columns>
+本页涉及两种不同的容器。Docker 镜像运行普通的 `gproxy` CLI，SQLite 数据库放在卷中，适合部署在自己管理的主机上。Render 和 Heroku 模板构建的是另一个镜像：由一个小的 Node.js 入口运行原生 PostgreSQL 版本，适合本地磁盘在重启后不保留的平台。Cloudflare Workers、Netlify 和 Vercel 见 [Cloudflare Workers、Netlify 与 Vercel](/zh-cn/deployment/edge)。
 
 ## Docker
 
-同一份镜像发布到四个镜像仓库，支持 amd64、arm64、riscv64，选离你最近的即可：
+同一份镜像发布到四个镜像仓库，支持 amd64、arm64 和 riscv64，选离你最近的即可：
 
 | 仓库 | 镜像 |
 | --- | --- |
@@ -26,7 +17,9 @@ sidebarTitle: "Docker 与容器平台"
 | GitLab | `registry.gitlab.com/leenhawk1/gproxy` |
 | CNB | `docker.cnb.cool/leenhawk/gproxy` |
 
-稳定版使用 `vX.Y.Z` 标签，beta 为 `staging`，开发快照为 `nightly`；musl 镜像在标签后加 `-musl`。旧的 v3 标签无法运行 v4。
+稳定版的标签为 `vX.Y.Z`，beta 渠道为 `staging`，开发快照为 `nightly`。任一标签后加 `-musl` 即为 musl 版本。v3 标签的镜像运行的是 v3，不是 v4。
+
+启动容器时，用一个命名卷保存数据目录，并通过环境变量传入主密钥：
 
 ```sh
 export GPROXY_IMAGE='gproxy2/gproxy:<tag>'
@@ -39,31 +32,65 @@ docker run -d --name gproxy --restart unless-stopped \
 docker logs gproxy
 ```
 
-从首次启动日志中保存管理员凭据，然后打开 `/console/`。镜像以 `65532:65532` 运行，绑定挂载的目录需要对该用户可写。替换容器时保留 `/app/data` 卷。
+首次启动时，GPROXY 创建管理员和 API key，并把自动生成的凭据打印到日志中。请保存下来，然后打开 `http://127.0.0.1:8787/console/`。这些凭据只出现在日志里，日志本身也要妥善保管。
+
+镜像监听 8787 端口，SQLite 数据库位于 `/app/data`，以 `65532:65532` 用户运行。如果用绑定挂载的宿主机目录代替命名卷，该用户必须对目录有写权限。
+
+升级到新版本时，停止并删除旧容器，再用新标签、同一个卷和同一个 `GPROXY_MASTER_KEY` 启动新容器。数据库在卷中，删除容器不会影响它。
 
 ## Render
 
-1. 点击上方 Render 卡片中的部署按钮，检查仓库根目录 `render.yaml` Blueprint：免费 Web 服务，使用外置 PostgreSQL 数据库。
-2. 将 `GPROXY_DATABASE_URL` 填为自备的外置 PostgreSQL 连接地址，然后部署服务。数据库需允许 Render 连接，连接地址应保留数据库供应商要求的 SSL 参数。管理员密码和加密主密钥由 Render 生成。
-3. 在服务的 **Environment** 设置中查看并保存 `GPROXY_ADMIN_PASSWORD` 和 `GPROXY_MASTER_KEY`。打开服务地址的 `/console/`，使用 `admin` 登录。
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)][render-deploy]
 
-模板不创建数据库。Render Web 服务默认使用免费套餐，外置数据库的费用与限制取决于所选供应商。免费 Web 服务空闲时会休眠，再次请求可能需要等待唤醒。健康检查使用 `8787` 端口的 `/healthz`。
+Render 模板是仓库根目录的 `render.yaml` Blueprint。它创建一个免费套餐的 Web 服务，不创建数据库，PostgreSQL 数据库需要自备。
+
+1. 点击上方按钮，检查 Blueprint 内容。
+2. 把 `GPROXY_DATABASE_URL` 设为自备 PostgreSQL 的连接地址，然后部署。数据库必须允许 Render 连接；数据库服务商要求的 SSL 参数要保留在地址中。
+3. Render 会生成 `GPROXY_ADMIN_PASSWORD` 和 `GPROXY_MASTER_KEY`。在服务的 **Environment** 设置中查看并另行保存这两项。
+4. 打开服务地址加 `/console/`，用 `admin` 登录。
+
+服务的健康检查为 `8787` 端口上的 `/healthz`。免费 Web 服务空闲时会休眠，空闲之后的第一个请求要等服务唤醒，因而较慢。外置数据库的费用和限制以所选服务商为准。
 
 ## Heroku
 
-1. 用 `openssl rand -hex 32` 生成并保存主密钥。
-2. 点击上方 Heroku 卡片中的部署按钮，选择应用名和区域，将主密钥填入 `GPROXY_MASTER_KEY`。
-3. 核对 Basic Web dyno 和 `heroku-postgresql:essential-0` 数据库插件，然后部署。
-4. 在 **Settings → Reveal Config Vars** 中查看 `GPROXY_ADMIN_PASSWORD`，打开 `/console/` 并使用 `admin` 登录。
+[![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)][heroku-deploy]
 
-仓库根目录的 `app.json` 和 `heroku.yml` 使用 `deploy/serverless/Dockerfile`。Node.js 入口监听 Heroku 动态分配的 `PORT`，共享网关读取 `DATABASE_URL`，并支持 Heroku 分配的运行用户。本地文件是临时的；配置、凭证、用量和缓存状态保存在 PostgreSQL 中。
+Heroku 模板是仓库根目录的 `app.json` 和 `heroku.yml`，会创建一个 Basic Web dyno 和一个 `heroku-postgresql:essential-0` 插件。两者都要付费，部署前请核对套餐。
 
-## 运行与更新
+1. 用 `openssl rand -hex 32` 生成主密钥并保存。
+2. 点击上方按钮，选择应用名和区域，把主密钥填入 `GPROXY_MASTER_KEY`。
+3. 核对 dyno 和插件后部署。`GPROXY_ADMIN_PASSWORD` 由 Heroku 生成。
+4. 在 **Settings → Reveal Config Vars** 中查看密码，然后打开 `/console/`，用 `admin` 登录。
 
-- 更新时保留数据库和 `GPROXY_MASTER_KEY`，并备份两者。这些模板读取 `GPROXY_DATABASE_URL` 或平台提供的 `DATABASE_URL`。
-- 构建时默认下载最新稳定版（`GPROXY_RELEASE_VERSION=latest`），并校验 SHA-256。升级时清除平台构建缓存后重新部署，无需修改版本号。需要固定版本时，将这个 Docker 构建参数设为发布标签；所选版本需包含两种架构的 serverless Linux 压缩包和 `SHA256SUMS`。
-- 模板默认运行一个应用实例，复用现有 serverless host，将共享缓存保存在 PostgreSQL 中。
-- 使用 OAuth 或公开文件链接时，将 `GPROXY_PUBLIC_BASE_URL` 设为服务的公开 HTTPS 地址。这些模板不启用文件存储，需要文件系统或对象存储时请选择自定义原生 CLI 构建。客户端 IP 取自连接对端，可能是平台路由器地址；不信任转发头中的客户端 IP。
-- 原生服务支持 HTTP、SSE 和 WebSocket，但仍受平台路由超时、空闲连接限制和实例重启影响。
+镜像由 `deploy/serverless/Dockerfile` 构建。Node.js 入口监听 Heroku 分配的 `PORT`，也能在 Heroku 指定的运行用户下工作；网关读取插件提供的 `DATABASE_URL`。dyno 的本地文件是临时的，配置、凭证、用量和缓存状态等需要保留的数据都存放在 PostgreSQL 中。
 
-Workers 和函数部署见 [Cloudflare、Netlify 与 Vercel 部署指南](/zh-cn/deployment/edge)。
+## 运行 Render 与 Heroku 模板
+
+两个模板构建的是同一个镜像。构建时下载发布中 x86_64 和 aarch64 两种架构的 `gproxy-serverless` 程序，按发布的 `SHA256SUMS` 校验后，与 Node.js 入口一起打包，整个过程不编译任何代码。上文的普通 Docker 镜像只包含 SQLite 驱动，不能代替这个镜像。
+
+### 数据库
+
+网关读取 `GPROXY_DATABASE_URL`；未设置时读取平台提供的 `DATABASE_URL`。更新时保留数据库和 `GPROXY_MASTER_KEY`，并备份这两者。
+
+### 更新
+
+构建时默认下载最新稳定版（`GPROXY_RELEASE_VERSION=latest`）。升级时清除平台构建缓存并重新部署。需要固定版本时，把 Docker 构建参数 `GPROXY_RELEASE_VERSION` 设为发布标签；该版本必须包含两种架构的 serverless Linux 压缩包和 `SHA256SUMS`。
+
+### 实例数
+
+模板只启动一个应用实例，共享缓存保存在 PostgreSQL 中。
+
+### 公开地址
+
+使用 OAuth 或文件发布链接时，把 `GPROXY_PUBLIC_BASE_URL` 设为服务的公开 HTTPS 地址。模板不配置文件存储；需要文件系统或对象存储时，请改用原生 CLI 构建。
+
+### 客户端地址
+
+客户端 IP 取自 TCP 连接的对端，可能是平台路由器的地址。转发头中的客户端 IP 不被信任。
+
+### 连接
+
+入口支持 HTTP、SSE 和 WebSocket，但平台路由的超时、空闲连接限制和实例重启依然存在。关闭时，入口先停止接受新连接，再给未结束的 SSE 和 WebSocket 连接最多 25 秒，然后退出。
+
+[render-deploy]: https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev
+[heroku-deploy]: https://heroku.com/deploy?template=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev

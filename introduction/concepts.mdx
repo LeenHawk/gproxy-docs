@@ -1,0 +1,74 @@
+---
+title: "Concepts"
+description: "What happens to a request inside GPROXY, the objects you configure, and how model names and request URLs select an upstream."
+---
+
+This chapter describes the path a request takes through GPROXY and defines the objects you configure along the way. Read it before the administration guides; they use these terms without explaining them again.
+
+## The path of a request
+
+A client talks to GPROXY with a gateway URL, a gateway API key and a model name. GPROXY does not run models. Every request ends at an upstream service that performs the inference, and GPROXY decides which one, with which account, in which format.
+
+1. The client sends a request. It uses one of the protocols GPROXY speaks: OpenAI Chat Completions, OpenAI Responses, Claude Messages or Gemini GenerateContent, streaming or not. Embeddings, reranking, images, audio, video, files and Realtime have their own endpoints; [Routing and endpoints](/reference/routing-table) lists them.
+2. GPROXY authenticates the key. The key is read from `Authorization: Bearer`, `x-api-key` or `x-goog-api-key`. It is either a gateway API key or an OAuth access token that GPROXY issued, and it identifies a user and, optionally, the organization or team the key is bound to.
+3. The request is admitted. Permission rules decide which providers the caller may reach for this model and operation. Credential ownership and the key's binding decide which credentials it may use. The applicable budgets are collected, and rate limits are counted last, so a request that is refused for another reason does not use up anybody's allowance. [Permissions, rate limits and budgets](/guides/permissions) covers each check.
+4. The model name is resolved. A route name expands to its members; a `provider/model` name points at one provider. The candidates are narrowed to the providers and credentials admitted in step 3 and ordered by tier, health and weight. See [Models and routes](/guides/models).
+5. A provider and credential are chosen. Budgets are checked once, before any credential is touched. GPROXY then picks a credential from the first candidate and makes an attempt. If the attempt fails in a way that allows a retry, the next eligible credential or route member is tried.
+6. The request is converted and sent. When the client protocol differs from the upstream's, the request is translated directly into the upstream format. Rewrite rules run on the translated request, and the channel sends it with the credential's authentication. The response goes through the same steps in reverse: rewrite rules, then conversion back to the protocol the client used.
+7. Usage and cost are settled. Each physical upstream call produces one usage record with tokens and other quantities. The cost is computed from the configured pricing rules and charged against the applicable budgets after the call has finished. See [Usage, logs and audit](/guides/observability).
+
+Conversion changes the format of a request, not what the upstream can do. An operation the upstream does not support fails whichever endpoint the client used.
+
+## Terms
+
+### Channel
+
+A channel is the adapter for one family of upstream services. It defines how to authenticate, which request formats the upstream accepts and which operations it supports. Examples are `openai`, `codex` and `custom`; `custom` is for OpenAI-compatible services that need their own base URL and protocol list. The [channel catalog](/reference/channel-catalog) lists all of them.
+
+### Provider
+
+A provider is a saved upstream connection: a name, a channel, a base URL, channel settings and a pool of credentials. Several providers may use the same channel, for example two OpenAI-compatible services with different addresses. The provider name also appears in request URLs and model names, as described below.
+
+### Credential
+
+A credential is what the provider uses to sign in upstream: an API key, an OAuth token or a Cookie. One provider can hold several credentials, and GPROXY selects among them per request and moves to another when one is rate-limited or failing. Credentials can belong to a user, an organization or a team, which limits who can use them.
+
+Secrets are encrypted when a master key is configured. Without one, the CLI stores them unencrypted and prints a warning. See [Configuration](/reference/configuration).
+
+### Model route
+
+A model route is a model name that clients use, mapped to one or more members. Each member is a provider and an upstream model ID, with a weight and a fallback tier. Clients keep sending the same name while you change, add or reorder the members behind it.
+
+### Gateway API key
+
+A gateway API key is issued by GPROXY to a user. Clients send it to call models, and it carries the user's permissions, rate limits and budgets, plus its own. It is separate from the upstream API keys stored in providers, which clients never see. See [Users and API keys](/guides/users-and-keys).
+
+### Rewrite rule
+
+A rewrite rule edits a request or response on its way through a provider: it can add system text, insert cache breakpoints, set or delete JSON fields, replace text, or set headers. Rules are grouped into rule sets bound to providers. See [Rewrite rules](/guides/rules).
+
+### Users, organizations and teams
+
+A user is an account with the role `admin` or `user`. Users with a password can sign in to the console; every user can hold API keys. An instance administrator (role `admin`) manages the whole instance.
+
+Organizations and teams group users. A team belongs to an organization. Membership gives a user a role inside that group, so an organization or team administrator manages that group's resources without being an instance administrator. A key can be bound to an organization or team; the binding decides which shared credentials it can use and which group budgets it is charged against.
+
+## Model names and request URLs
+
+The model name in the request body selects the target. With a route named `fast`, send `model: "fast"` to `/v1/chat/completions`.
+
+To call a provider without a route, put the provider name in the URL and send its upstream model ID: `/openai-main/v1/chat/completions`. The same provider can be reached through `/v1/chat/completions` with a model name of the form `openai-main/<upstream model ID>`.
+
+Route names can carry a namespace. A route named `acme/fast` can be called as `model: "acme/fast"` on `/v1/chat/completions`, or through `/acme/v1/chat/completions` with `model: "fast"`.
+
+[Models and routes](/guides/models) gives the full resolution order and the naming restrictions that keep route names and provider names from colliding.
+
+## Where GPROXY runs
+
+The same gateway is packaged three ways:
+
+- Application: a desktop or mobile app with an in-app setup wizard and console.
+- CLI and container: a server process with the HTTP APIs and a browser console.
+- Cloudflare Workers: an edge deployment with remote storage and WebSocket / Realtime support.
+
+[Download and install](/download) lists the packages and platform restrictions. If you are upgrading from v3, read the [migration guide](/deployment/v3-to-v4) first. To start configuring, follow the [Quick start](/getting-started/quick-start).

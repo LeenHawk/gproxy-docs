@@ -3,19 +3,23 @@ title: "路由与端点"
 description: "v4 完整的入站表、挂载点语法、OAuth 与管理路由、WebSocket surface、解析与失败转移预算。"
 ---
 
-下面的一切就是原生宿主的路由表，而 Workers 宿主挂载的是同一张。`gproxy-protocol` 刻意不声明任何路径——哪个 URL 承接哪个操作是入口层拥有的 HTTP 约定——因此本页就是那一层的表。
+本页列出实例提供的全部 HTTP 路由，以及请求路径的解析顺序。需要确认某个 URL 对应哪个操作、供应商或命名空间前缀会带来什么变化、请求如何在供应商之间失败转移时，可以查阅本页。原生宿主和 Workers 宿主挂载的是同一张路由表。`gproxy-protocol` 本身不声明任何路径，URL 与操作的对应关系由本页所述的入站层决定。
 
-## 网关自己的路由
+各路由完整的请求与响应结构见 [HTTP API 参考](/zh-cn/reference/http-api)。
 
-四条，其余全部落到数据面。这和通常的安排正好相反，而且是刻意的：网关自己的路由是一份短而已知的清单，别的都是本实例转发的、属于别人的 API。新增一个上游 surface 不该需要在这里新增一条路由。
+## 网关自身的路由
 
-| 方法 | 路径 | 是什么 |
+网关自己只有少数几条路由，其余路径全部交给数据面处理。这与常见做法相反：网关自身的路由是一份固定的短清单，其他路径都是实例要转发的上游 API，因此支持新的上游接口时不需要在这里增加路由。
+
+| 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| `GET` | `/healthz` | 存活与已发布的配置 revision；**不需要认证** |
-| `GET` | `/publications/{id}` | 一份已发布的 body。id **就是**凭据，因此不问 key |
-| — | `/admin/api/…` | 运维面 |
-| — | `/portal/api/…` | 终端用户自己的面 |
-| — | 其余一切 | 入站兜底 |
+| `GET` | `/healthz` | 存活检查及已发布的配置 revision；无需认证 |
+| `GET` | `/info` | 实例名称、版本和构建 hash |
+| `GET` | `/robots.txt` | 禁止所有爬虫 |
+| `GET` | `/publications/{id}` | 已发布的内容。id 本身就是凭据，因此不需要 key |
+| — | `/admin/api/…` | 管理 API |
+| — | `/portal/api/…` | 终端用户自己的 API |
+| — | 其余路径 | 入站处理（OAuth issuer、厂商服务、数据面、控制台） |
 
 ```sh
 curl -s http://127.0.0.1:8787/healthz
@@ -25,23 +29,26 @@ curl -s http://127.0.0.1:8787/healthz
 {"revision":2,"status":"ok"}
 ```
 
-`/healthz` 读已发布的快照，既不碰数据库也不碰 cache，因此负载均衡器轮询它不会自己变成压垮它的那份负载。
+`/healthz` 只读取已发布的快照，不访问数据库，也不访问 cache，负载均衡器频繁轮询也不会给两者增加压力。
 
-## 入站的顺序
+所有响应都带有 `x-robots-tag: noindex, nofollow`。
 
-1. **CORS 与客户端地址。** 预检在这里应答、绝不转发——它问的是本实例接受什么，上游对此没有意见。客户端地址在任何东西能记录它之前，按
-   [可信代理规则](/zh-cn/reference/configuration#可信代理规则)解析。
-2. **挂载点**——路径里哪一段是本网关的。
-3. **OAuth issuer**，在 `{mount}/v1/oauth/…`。排在数据面之前，因为这些路径是*本实例*的而不是某个上游的，而且它们用另一套错误信封应答。
-4. **某个渠道的厂商服务路由**——Codex 的 `/backend-api/…`、Claude Code 的 `/api/…`。只在供应商或 namespace 挂载点上：匹配它需要一个渠道，而聚合挂载点没有点名渠道。
-5. **数据面**，见下。
-6. **console**，带 SPA 兜底，受配置开关控制。
+## 请求处理顺序
 
-走到尽头的一切都是 404。
+不属于网关自身路由的请求按以下顺序处理：
 
-## 数据面
+1. CORS 与客户端地址。CORS 预检请求在这一步直接应答，不会转发，因为它询问的是本实例接受什么。客户端地址按[可信代理规则](/zh-cn/reference/configuration#可信代理)解析，之后才会写入任何日志。
+2. 挂载点：路径开头哪一部分属于本网关，见[挂载点](#挂载点)。
+3. OAuth issuer，路径为 `{mount}/v1/oauth/…`。这些路径属于本实例而不是某个上游，并且使用 OAuth 的错误格式应答，所以排在数据面之前匹配。
+4. 渠道的厂商服务路由，例如 Codex 的 `/backend-api/…`、Claude Code 的 `/api/…`。只在供应商或命名空间挂载点上匹配：匹配它需要确定渠道，而聚合挂载点不指定渠道。
+5. [数据面](#数据面端点)。
+6. 控制台（启用时），带 SPA 回退。
 
-请求体在做任何事之前（包括鉴权）先受 `settings.maxRequestBodyBytes` 约束：默认 128 MiB，文件上传用 `maxUploadBodyBytes`，默认 512 MiB。
+以上都不匹配的请求返回 404。
+
+## 数据面端点
+
+在做任何处理之前（包括认证），请求体大小先受 `settings.maxRequestBodyBytes` 限制，默认 128 MiB；文件上传改用 `maxUploadBodyBytes`，默认 512 MiB。
 
 ### 内容生成
 
@@ -51,33 +58,43 @@ curl -s http://127.0.0.1:8787/healthz
 | `POST` | `/v1/chat/completions` | `generate_content` / `openai_chat` |
 | `POST` | `/v1/messages` | `generate_content` / `claude` |
 | `POST` | `/v1/messages/count_tokens` | `count_tokens` / `claude` |
+| `POST` | `/v1/responses/input_tokens` | `count_tokens` / `openai` |
 | `POST` | `/v1beta/models/{model}:generateContent` | `generate_content` / `gemini` |
 | `POST` | `/v1beta/models/{model}:streamGenerateContent` | `stream_generate_content` / `gemini` |
 | `POST` | `/v1beta/models/{model}:countTokens` | `count_tokens` / `gemini` |
 | `POST` | `/v1beta/models/{model}:embedContent` | `create_embedding` / `gemini` |
 | `POST` | `/v1beta/models/{model}:batchEmbedContents` | `batch_create_embedding` / `gemini` |
+| `POST` | `/v1beta/interactions`、`/v1/interactions` | `generate_content` / `gemini_interactions` |
+| `GET` | `/v1beta/interactions/{id}`、`/v1/interactions/{id}` | `retrieve_interaction` / `gemini_interactions` |
+| `POST` | `/v1beta/interactions/{id}/cancel`、`/v1/interactions/{id}/cancel` | `cancel_interaction` / `gemini_interactions` |
+| `DELETE` | `/v1beta/interactions/{id}`、`/v1/interactions/{id}` | `delete_interaction` / `gemini_interactions` |
 
-前三条在 body 说 `"stream": true` 时变成 `stream_generate_content`。它们是**两个不同的操作**——不同的规则、不同的结算——所以这个标志在入口就被读取，而不是留给渠道去发现。
-Gemini 把它写在路径里，这也是那个方言有两行的原因。
+`/v1/responses`、`/v1/chat/completions`、`/v1/messages` 以及 Interactions 的创建路由，在请求体包含 `"stream": true` 时变为 `stream_generate_content`。流式与非流式生成是两个不同的操作，路由规则和结算都分开，因此这个标志在入站时读取，而不是交给渠道判断。Gemini 的 GenerateContent API 把流式写在路径里，所以它有两行。
+
+路径中的 Gemini 模型名可以包含斜杠，原样或百分号编码（`acme%2Ffast`）均可。
 
 ### 模型
 
 | 方法 | 路径 | 操作 / 方言 |
 | --- | --- | --- |
-| `GET` | `/v1/models` | `list_models` / `openai`，再 `claude` |
-| `GET` | `/v1/models/{id}` | `get_model` / `openai`，再 `claude` |
+| `GET` | `/v1/models` | `list_models` / `openai`，其次 `claude` |
+| `GET` | `/v1/models/{id}` | `get_model` / `openai`，其次 `claude` |
 | `GET` | `/v1beta/models` | `list_models` / `gemini` |
 | `GET` | `/v1beta/models/{id}` | `get_model` / `gemini` |
 
-### 其余
+在供应商或命名空间挂载点上，模型列表只包含通过该挂载点可以访问的名称，并去掉挂载点前缀，可以直接在该 Base URL 下使用。
+
+### 其他操作
 
 | 方法 | 路径 | 操作 / 方言 |
 | --- | --- | --- |
 | `POST` | `/v1/responses/compact` | `compact_content` / `openai` |
 | `POST` | `/v1/embeddings` | `create_embedding` / `openai` |
 | `POST` | `/v1/moderations` | `create_moderation` / `openai` |
+| `POST` | `/v1/decisions` | `create_decision` / `openai` |
 | `POST` | `/v1/rerank` | `rerank` / `openai` |
 | `POST` | `/v1/conversations` | `create_conversation` / `openai` |
+| `POST` | `/v1/search`、`/v1/alpha/search`、`/alpha/search` | `web_search` / `openai` |
 | `POST` | `/v1/images/generations` | `create_image` / `openai` |
 | `POST` | `/v1/images/edits` | `edit_image` / `openai` |
 | `POST` | `/v1/audio/speech` | `create_speech` / `openai` |
@@ -88,10 +105,10 @@ Gemini 把它写在路径里，这也是那个方言有两行的原因。
 
 | 方法 | 路径 | 操作 / 方言 |
 | --- | --- | --- |
-| `GET` `POST` | `/v1/files` | `list_files` / `create_file`，`openai` 再 `claude` |
+| `GET` `POST` | `/v1/files` | `list_files` / `create_file`，`openai` 其次 `claude` |
 | `GET` `DELETE` | `/v1/files/{id}` | `retrieve_file` / `delete_file` |
 | `GET` | `/v1/files/{id}/content` | `retrieve_file_content` |
-| `GET` `POST` | `/v1beta/files` | Gemini 的写法 |
+| `GET` `POST` | `/v1beta/files` | Gemini 的对应写法 |
 | `POST` | `/upload/v1beta/files` | `create_file` / `gemini` |
 | `GET` `DELETE` | `/v1beta/files/{id}` | `retrieve_file` / `delete_file`，`gemini` |
 | `GET` | `/v1beta/files/{id}:download` | `retrieve_file_content` / `gemini` |
@@ -104,28 +121,9 @@ Gemini 把它写在路径里，这也是那个方言有两行的原因。
 | `GET` `DELETE` | `/v1/videos/{id}` | `retrieve_video` / `delete_video` |
 | `GET` | `/v1/videos/{id}/content` | `download_video_content` |
 
-只有 Sora 有的操作——remix、edit、extend、characters——**刻意缺席**。没有第二家厂商提供它们，等有第二家的时候它们会回来。
+只有 Sora 提供的操作（remix、edit、extend、characters）不受支持。等到有第二家厂商提供时再加入。
 
-### 谁能访问文件与视频
-
-文件和视频的 id 是上游自己的，而一个上游凭据通常由许多调用方共用，所以网关自己记录谁创建了什么。上传或创建视频成功后，网关把它记在调用方名下（同一用户的所有密钥和控制台会话算作同一调用方；每个 OAuth 授权各算一个调用方），并记下处理该请求的凭据。
-
-- 获取、下载、轮询或删除某个 id 时，除非是该调用方经网关创建的，否则一律返回 **404**——
-  属于别人的 id 和不存在的 id 得到同样的答复。请求会发往持有该资源的凭据。
-- 列表只显示调用方自己的条目。分页游标（`has_more`、`last_id`、`nextPageToken`）原样透传，因此一页的条目可能少于 `limit`，甚至在还有后续页时为空；请一直翻页，直到上游表示没有更多。
-- 在此检查出现之前创建的、或直接在上游创建的文件和视频，无法通过网关访问。
-- Gemini 的*可续传*上传（google-genai SDK 的默认方式）照常可用：start 返回的
-  `x-goog-upload-url` 是绑定到调用方的网关 URL，字节会在同一凭据上转发到上游会话，上传完成的文件归调用方所有。其他调用方使用该 URL 会得到 **404**。部署在代理之后时，请设置
-  `public_base_url`（或转发 `Host` 和受信任的 `X-Forwarded-Proto`），让该 URL 指向客户端能访问的地址。
-- 同样的规则也适用于其他请求内部引用的文件：Chat、Responses 或 Claude 消息里的 `file_id`
-  （包括 code interpreter 容器的 `file_ids`）、指向 Files API 文件的 Gemini
-  `fileData.fileUri`、视频的 `input_reference`。不是调用方上传的文件会在发出任何请求之前返回 **404**，请求会在持有这些文件的凭据上执行；分别上传到两个不同凭据的文件不能在同一请求中使用（**400**）。multipart 表单同样检查（`file_id`、`file_ids[]`、
-  `input_reference[file_id]` 等字段）。
-- 在 Responses WebSocket 上，新的 response 会在持有其引用文件的凭据上建立上游连接；续接（`previous_response_id`）留在原账号，因此引用其他凭据上的文件会收到 `error` 事件——请开始新的
-  response 来使用它们。
-- 在 Realtime 或 Gemini Live 套接字上，引用了调用方在该套接字凭据上并不拥有的文件的客户端消息不会被转发：Realtime 返回 `error` 事件（`file_not_found`），Gemini Live 以代码 `1008` 关闭。
-
-### Realtime 与套接字
+### Realtime 与 WebSocket
 
 | 方法 | 路径 | 操作 / 方言 |
 | --- | --- | --- |
@@ -133,82 +131,82 @@ Gemini 把它写在路径里，这也是那个方言有两行的原因。
 | `POST` | `/v1/realtime/calls/{call_id}/hangup` | `hangup_realtime_call` / `openai` |
 | `POST` | `/v1/audio/voices` | `create_voice` / `openai` |
 | `POST` | `/v1/live/sessions` | `create_live_session` / `openai` |
-| `GET` | `/v1/live/sessions` | `connect_live` / `openai`，模型来自 `session.start` |
+| `GET` | `/v1/live/sessions` | `connect_live` / `openai`，升级连接，模型来自 `session.start` |
 | `GET` | `/v1/live/sessions/{session_id}/attach` | `connect_live` / `openai`，绑定会话的控制连接 |
 | `POST` | `/v1/live/sessions/{session_id}/hangup` | `hangup_live_session` / `openai` |
 | `POST` | `/v1/realtime/calls` | `create_realtime_call` / `openai` |
 | `POST` | `/v1/live` | `create_realtime_call` / `openai` |
-| `GET` | `/v1/realtime` | `connect_realtime` / `openai`——升级 |
-| `GET` | `/v1/live` | 旧 GPT-Live/AVAS WebSocket |
-| `GET` | `/v1/live/{call_id}` | 把 call 放在路径里的续接 |
+| `GET` | `/v1/realtime` | `connect_realtime` / `openai`，升级连接 |
+| `GET` | `/v1/live` | `connect_realtime` / `openai`，旧版 GPT-Live/AVAS WebSocket |
+| `GET` | `/v1/live/{call_id}` | `connect_realtime` / `openai`，旧版 Live 控制连接续接 |
 | `GET` | `/v1/responses` | `generate_content` / `openai_responses_websocket` |
-| `GET` | `/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent` | `connect_realtime` / `gemini`——Gemini Live |
+| `GET` | `/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent` | `connect_realtime` / `gemini`，Gemini Live |
 
-标准 Realtime 与 GPT-Live 的协议和账号权限不同。旧 `/v1/live` 保留兼容；新 Live 和自定义音色创建由 OpenAI API Key 渠道支持，Codex 渠道支持标准 Realtime、临时凭据与显式挂断。
-201 只表示接受创建请求，不代表会话可运行。临时凭据是可直连上游的 bearer token，接口正文不会被捕获；直连上游的后续请求不经过网关准入和计量。挂断及控制连接绑定原调用方与创建凭据，并恢复原模型重新检查当前权限。
+这些连接的具体行为见下文 [Realtime 与 WebSocket 会话](#realtime-与-websocket-会话)。
 
-Responses 的 HTTP POST 与 WebSocket GET 共用 `/v1/responses`。握手先认证调用者，再由每条 `response.create` 中的模型完成权限、选路和生成限流。不同 `stream_id` 可以并发；新的响应链可以重新选择目标，携带 `previous_response_id` 的续接保持原目标绑定。空闲 Responses 连接不占用生成并发名额。
+### 共用路径的方言判断
 
-原生 Responses WS 转发上游控制事件。对 Responses HTTP、Chat、Claude、Gemini 的桥接支持本地上下文预热、中断、steering 后继，以及在 HTTP 生成段之间吸收 injection 输入。本地预热不代表上游缓存预填充。`store:false` 历史仅在客户端连接内保留；持久化续接保存隔离后的历史和目标绑定。已经开始或发送结果不确定的生成不会换目标重放。
+`/v1/models`、`/v1/models/{id}` 和 `/v1/files` 在 OpenAI、Claude 和 Gemini 的 v1 API 中写法完全相同。方言决定转换时使用哪一套协议类型，判断错误会让客户端收到无法解析的响应。
 
-`POST /v1/realtime/calls` 是一个携带 SDP offer 的 HTTP multipart 请求，而续接它的握手
-**完全不带 body**。活过升级的是 call id——在路径里，或在 `?call_id=` 里——引擎用它把套接字钉到应答那个 offer 的凭证上。query 被原样转发，正是为了这个。
+网关根据客户端自己的认证请求头判断：有 `x-goog-api-key` 时按 Gemini 处理，有 `anthropic-version` 或 `x-api-key` 时按 Claude 处理。这些请求头由厂商 SDK 每次都会发送。两者都没有时，按表中的第一行即 OpenAI 处理。
 
-realtime 会话**绝不被转换**：只有同方言直通，因为一个能在响应中途继续说话的客户端，在半双工方言里没有对应物。
+### 文件与视频的归属
 
-**Realtime 在准入之后升级。** 先认证、再看握手形状、再准入、再是上游握手；
-`101` 最后才写。因此每一次拒绝都是客户端读得到的 HTTP 应答——一个被接受又立刻关闭的套接字不带状态、不带 body、也不带 code。
+文件和视频的 id 由上游分配，而一个上游凭证通常由许多调用方共用，所以网关自己记录每个资源由谁创建。上传或创建视频成功后，网关把它记在调用方名下，同时记下处理该请求的凭证。同一用户的所有密钥和控制台会话算作同一个调用方，每个 OAuth 授权各算一个调用方。
 
-**被拒绝的上游握手原样转达。** 厂商的
-`429 {"error":{"code":"insufficient_quota"}}` 比这个网关能编出来的任何 502 都值钱。
+- 获取、下载、轮询或删除某个 id 时，除非该调用方是经网关创建的，否则一律返回 404。属于他人的 id 与不存在的 id 得到相同的答复。请求会发往持有该资源的凭证。
+- 列表只显示调用方自己的条目。分页游标（`has_more`、`last_id`、`nextPageToken`）原样透传，因此一页的条目可能少于 `limit`，甚至在还有后续页时为空。请持续翻页，直到上游表示没有更多。
+- 在这项检查出现之前创建的文件和视频，以及直接在上游创建的，都无法通过网关访问。
+- Gemini 的可续传上传（google-genai SDK 的默认方式）照常可用。start 请求返回的 `x-goog-upload-url` 是绑定到调用方的网关 URL，数据在同一凭证上转发到上游会话，上传完成的文件归该调用方所有。其他调用方使用这个 URL 会得到 404。部署在代理之后时，请设置 `public_base_url`（或转发 `Host` 和受信任的 `X-Forwarded-Proto`），让该 URL 指向客户端能访问的地址。
+- 其他请求中引用的文件同样适用这条规则：Chat、Responses 或 Claude 消息中的 `file_id`（包括 code interpreter 容器的 `file_ids`）、指向 Files API 文件的 Gemini `fileData.fileUri`、视频的 `input_reference`。引用的文件不是该调用方上传的，会在发出任何请求之前返回 404；请求在持有这些文件的凭证上执行。分别上传到两个不同凭证的文件不能在同一个请求中使用（400）。multipart 表单也按同样方式检查（`file_id`、`file_ids[]`、`input_reference[file_id]` 字段）。
+- 在 Responses WebSocket 上，新的 response 会在持有其引用文件的凭证上建立上游连接。续接（`previous_response_id`）留在原账号上，引用其他凭证上的文件会收到 `error` 事件；需要使用这些文件时，请开始一个新的 response。
+- 在 Realtime 或 Gemini Live 连接上，如果客户端消息引用了调用方在该连接凭证上并不拥有的文件，消息不会转发：Realtime 返回 `error` 事件（`file_not_found`），Gemini Live 以代码 `1008` 关闭连接。
 
-Realtime 套接字持有它的并发租约直到它**关闭**，而不是到 `101` 被写出为止。跑一小时的会话就占一小时的名额。
+### Realtime 与 WebSocket 会话
 
-### Codex 专有接口
+标准 Realtime 与 GPT-Live 的协议和账号权限不同。旧版 `/v1/live` 路由为兼容而保留。新的 Live 路由和自定义音色创建需要 OpenAI API Key；Codex 渠道支持标准 Realtime、临时凭据（client secret）和显式挂断。会话创建返回 201 只表示请求已被接受，不代表会话一定能运行。
 
-Codex 专有方法仅在使用 Codex 渠道的供应商挂载点下提供。假设供应商名为
-`codex`，可调用 `POST /codex/v1/memories/trace_summarize`。它们使用正常的操作准入、模型路由和结算流程；公共 `/v1` 不提供该专有路径。标准 `/v1/moderations` 使用独立的 `create_moderation` JSON 契约。
+临时凭据是可直连上游的 bearer 凭据。相关接口的正文不会被抓包，客户端之后直接发往上游的请求也不经过网关的准入和计量。显式挂断和控制连接沿用创建者的权限范围和原凭证，并在准入之前恢复原来绑定的模型，重新检查当前的模型权限。
 
-账号服务也可在 `/codex/v1` 下调用，包括 `usage/thread_usage/query_v2`（POST）、
-`usage/plan_limit_history`，以及每日 Token、积分、工作区、插件和技能统计（GET）。原有 `/codex/api/codex/**`、`/codex/backend-api/**`、`/codex/ps/**` 写法保留。管理员设置 `x-gproxy-view: credential:<id>` 可读取指定凭据的上游报表；默认 Caller
-和 Pool 视图中，无法从本地记录重建的历史额度和厂商积分会明确标为不可用，金额为
-`null`，不会借用其他账号的数据或伪造零用量。
+`POST /v1/realtime/calls` 是携带 SDP offer 的 HTTP multipart 请求，后续的 WebSocket 握手不带请求体。两者靠 call id 关联，call id 位于路径中或 `?call_id=` 参数中。引擎据此把连接固定到应答该 offer 的凭证上，因此查询字符串会原样转发。
 
-### 有歧义的那几条路径
+Realtime 会话不做方言转换，只支持同方言直通。客户端可以在响应进行中继续发送内容，这种交互在半双工方言中没有对应的形式。
 
-`/v1/models`、`/v1/models/{id}` 和 `/v1/files` 被 OpenAI、Claude 和 Gemini 的 v1 surface
-拼成了同一个样子。方言决定向转换器要哪一套协议类型，猜错就是客户端解析不了的 body。
+Realtime 请求在升级连接之前完成准入。顺序是：认证、校验握手、准入、上游握手，最后才返回 `101`。因此每一种拒绝都是客户端能读取的普通 HTTP 响应；如果先接受连接再立即关闭，客户端既拿不到状态码，也拿不到响应体或错误码。上游拒绝握手时，其响应原样转发：厂商返回的 `429 {"error":{"code":"insufficient_quota"}}` 比网关自己生成的 502 更有参考价值。
 
-判别依据是**客户端自己的认证 header**——`x-goog-api-key` 是 Gemini 的、`anthropic-version`
-是 Claude 的——因为那是客户端主动提供的关于它自己的证据，而不是本网关发明的默认值。没有证据时第一行胜出，而表的顺序让那一行是 OpenAI。
+Realtime 连接会一直占用并发名额直到关闭，而不是在发出 `101` 后就释放。运行一小时的会话会占用名额一小时。
 
-## 挂载点语法
+Responses 的 HTTP POST 与 WebSocket GET 共用 `/v1/responses` 路径。握手时认证调用方；之后每条 `response.create` 提供的模型用于权限检查、选路和生成限流。不同的 `stream_id` 可以并发。新的响应链可以重新选择目标，带 `previous_response_id` 的续接保持原来的目标。空闲的 Responses 连接不占用生成并发名额。
 
-| 路径 | 挂载点 | 收窄到 |
+原生 Responses WebSocket 会转发上游的控制事件。桥接到 HTTP Responses、Chat、Claude 和 Gemini 时，支持本地上下文预热、中断、steering 后继，以及在 HTTP 生成段之间注入输入。本地预热不会预填充上游缓存。`store:false` 的历史只在客户端连接期间保留；持久化的续接会保存隔离后的历史和目标绑定。已经开始或结果不确定的生成不会换目标重放。
+
+### Codex 专用路由
+
+Codex 专有操作只在使用 Codex 渠道的供应商挂载点下提供。假设供应商名为 `codex`，调用路径为 `POST /codex/v1/memories/trace_summarize`。这些路由同样经过正常的操作准入、模型路由和结算；聚合的 `/v1` 不提供这些路径。标准的 `/v1/moderations` 仍使用自己的 `create_moderation` JSON 契约。
+
+账号服务也可以在 `/codex/v1` 下调用，包括 `usage/thread_usage/query_v2`（POST）、`usage/plan_limit_history`，以及每日 token、积分、工作区、插件和技能统计（GET）。原生写法 `/codex/api/codex/**`、`/codex/backend-api/**`、`/codex/ps/**` 同样可用。管理员可以通过 `x-gproxy-view: credential:<id>` 读取指定凭证的上游报表。在默认的调用方视图和池视图中，无法从本地记录重建的历史额度和厂商积分会标记为不可用，金额为 `null`，不会借用其他账号的数据，也不会显示为零。
+
+## 挂载点
+
+同一个实例在三种挂载点上提供相同的上游 API：
+
+| 路径 | 挂载点 | 解析范围 |
 | --- | --- | --- |
-| `/v1/messages` | 聚合 | 不收窄 |
-| `/acme/v1/messages` | namespace `acme` | `acme/` 下的公开名称 |
-| `/openai-prod/v1/messages` | 供应商 `openai-prod` | 那一个供应商 |
+| `/v1/messages` | 聚合 | 不限制 |
+| `/acme/v1/messages` | 命名空间 `acme` | `acme/` 下的公开名称 |
+| `/openai-prod/v1/messages` | 供应商 `openai-prod` | 该供应商 |
 
-**namespace** 是带斜杠的公开模型名的第一段。**供应商** 挂载点用的是供应商的 `name`
-——运维者取的标签，而不是行 id，因为没有人会把机器生成的 id 敲进客户端的 base URL。同名时
-namespace 胜过供应商。
+命名空间是带斜杠的公开模型名的第一段：公开 `acme/fast` 即产生命名空间 `acme`。供应商挂载点使用供应商的 `name`，即你自己起的名称，而不是行 id，因为没有人会把自动生成的 id 写进客户端的 Base URL。命名空间与供应商同名时，命名空间优先。
 
-**只有在剥掉前缀后剩下的部分也是一个被声明的 surface 时，前缀才会被剥掉。** 这条规则的每一种简化都是错的：一个叫 `backend-api` 的供应商否则会吃掉
-`/backend-api/codex/responses`——那是一条真实的 Codex 路径——把一次数据面调用变成一个并不存在的挂载点。
+只有去掉前缀后剩余的路径也是网关提供的路由时，前缀才会被去掉。如果不做这项检查，名为 `backend-api` 的供应商就会吞掉 `/backend-api/codex/responses` 这条真实存在的 Codex 路径，把一次数据面调用变成一个并不存在的挂载点。当第一段与某个命名空间或供应商同名、但剩余部分不是已知路由时，路径保持原样，按聚合挂载点处理。漏认一个挂载点会得到一个看得见的 404；错认则会把请求发给错误的上游。
 
-**因此有歧义的路径一律倒向聚合挂载点。** 当第一段确实点名了什么、但剩下的部分不是本网关提供的 surface 时，路径原样保留。丢掉一个挂载点是运维者看得见的 404；错认一个挂载点则是把请求发给了错误的上游。
+挂载点通过给模型名加前缀来限制解析范围，这正是解析器表示供应商或路由的语法：`/acme/v1/messages` 加上 `{"model":"fast"}` 会解析 `acme/fast`。已经带有该前缀的名称保持不变，所以客户端两种写法都可以。供应商挂载点也会把不带模型的操作（例如文件操作）限制在该供应商上。
 
-挂载点通过**给模型名加前缀**来收窄，这是解析器自己的语法而不是第二条规则。已经带了前缀的名字原样保留。
+在命名空间挂载点上调用厂商服务路由时，由该命名空间中渠道提供此路由的那一个供应商处理。如果有多个供应商都提供，请求返回 409，请改用对应供应商自己的挂载点。
 
-<Note>
-**一个已知的缺口**
-
-**不带模型**的操作在供应商挂载点上被收窄到那个供应商的*渠道*，而不是那个供应商。`GET /p1/v1/models` 会列出 `p1` 所在渠道上、调用方能触达的每个供应商的模型。补上它需要请求形状里还没有的一个字段。
-</Note>
 ## OAuth issuer
 
-相对某个挂载点前缀（`""`、`/acme`、`/openai-prod`）：
+issuer 端点相对于挂载点前缀（`""`、`/acme`、`/openai-prod`）：
 
 ```text
 GET  {prefix}/v1/oauth/authorize    同意页交接（浏览器则 302 到 `/console/authorize`）
@@ -220,15 +218,15 @@ GET  {prefix}/v1/.well-known/oauth-authorization-server
 GET  /.well-known/oauth-authorization-server{prefix}/v1   （RFC 8414 §3.1）
 ```
 
-issuer 标识是 `{origin}{prefix}/v1`，这也是聚合挂载点是 `https://host/v1` 而不是
-`https://host` 的原因：这样一条规则就产出全部三个挂载点。RFC 8414 要求这个标识恰好是客户端取到文档的那一个，而只有宿主知道请求是从哪个挂载点进来的，所以它是被传进去的而不是算出来的。
+issuer 标识为 `{origin}{prefix}/v1`，所以聚合挂载点的 issuer 是 `https://host/v1` 而不是 `https://host`。这样一条规则就能覆盖三种挂载点。RFC 8414 要求该标识与客户端获取元数据的地址一致，而只有宿主知道请求来自哪个挂载点，因此由宿主传入。
 
-v3 把它们放在根路径。移到 `/v1` 之下让前缀规则与 `/v1/messages` 同构，而这次搬迁很便宜
-——v3 根本没实现发现端点，客户端本来就在硬编码地址。
+这些端点使用 OAuth 规定的错误格式（RFC 6749 §5.2，`error` 为字符串），而不是网关通常的错误结构。设备授权的批准页面本身属于用户门户操作，即 `/portal/api/oauth/device`，由控制台的 `/console/device` 页面调用。
 
-## 管理路由
+v3 把这些端点放在根路径下。移到 `/v1` 之下后，它们与 `/v1/messages` 遵循同一条前缀规则。v3 从未实现发现端点，客户端原本就是硬编码地址，所以这次调整几乎没有迁移成本。
 
-每个家族都有同样的六条路由，由一份声明生成，因此一个家族不可能不小心只有五条：
+## 管理 API
+
+每个管理资源族都有相同的六条路由：
 
 ```text
 GET    /admin/api/{family}           列表（分页与过滤在 query 里）
@@ -240,34 +238,33 @@ POST   /admin/api/{family}/batch     批量
        [{"create": …}, {"update": {"id": …, "patch": …}}, {"delete": "id"}]
 ```
 
-一次批量无论点名多少行都是一个 revision 提交：要么每一项都落盘，要么一项都不落。
+这些路由由同一份声明生成，因此不会有哪个资源族缺少其中一条。一次批量操作无论包含多少行，都是一个 revision 提交：要么全部写入，要么全部不写入。
 
-**身份**家族：`users`、`api-keys`、`organizations`、`teams`、`permissions`、
-`rate-limits`。组织和团队成员通过各自的成员接口管理。
-`oauth-clients` 用 `POST …/{id}/retire` 取代删除——一个客户端签发过的授权还指着它。它的批量里 delete 项表示 retire；含 retire 的批量只能全是 delete，因为 retire 是单独的事务，不能和创建、修改放进同一个提交。已 retire 的 `client_id` 可以重新注册：新注册沿用原来那一行，retire 时撤销的授权仍然是撤销状态。`api-keys` 的批量拒绝创建，因为铸造会返回明文，而批量没有地方返回它。会让实例不再有启用中管理员的 `users` 批量整体被拒绝。
+身份类资源族：`users`、`api-keys`、`organizations`、`teams`、`permissions`、`rate-limits` 和 `oauth-clients`。组织和团队成员通过各自的成员接口管理（`organizations/{id}/members`、`teams/{id}/members`）。以下资源族与六条路由有所不同：
 
-**配置**家族：
+- `oauth-clients` 用 `POST …/{id}/retire` 代替删除，因为客户端签发过的授权仍然引用它。在它的批量操作中，delete 项表示停用；含停用的批量只能全部是 delete，因为停用在单独的事务中执行，不能与创建、修改放进同一个提交。已停用的 `client_id` 可以重新注册，新注册沿用原来的行，停用时撤销的授权仍保持撤销状态。
+- `api-keys` 的批量操作不接受创建：创建 key 时会返回明文，而批量操作没有地方返回它。
+- 会导致实例不再有任何启用中管理员的 `users` 批量操作整体被拒绝。
 
-`providers`、`credentials`、`models`、`provider-models`、`routes`、`route-members`、
-`connection-profiles`、`rule-sets`、`rules`、`provider-rule-sets`、
-`operation-rules`、`operation-endpoints`、`quotas`、`price-rules`、`price-rates`、
-`price-tiers`。
+配置类资源族：`providers`、`credentials`、`models`、`provider-models`、`routes`、`route-members`、`connection-profiles`、`rule-sets`、`rules`、`provider-rule-sets`、`operation-rules`、`operation-endpoints`、`quotas`、`price-rules`、`price-rates`、`price-tiers`。
 
-六条之外还有：`settings`、凭证操作（`reveal`、`status`、`refresh`、`quota`、
-`quota-probe`、`quota-reset`、`health-reset`、`limits`）、
-`models/{discover,discover/apply,test}`、`rule-sets/{id}/rules`、
-`rule-sets/{id}/rule-presets/{preset}`、`providers/{id}/routing-defaults/reset`、
-`quotas/status`、`quotas/{id}/{reset,limit-reset}`、`export`、`import`、
-`connectivity/test`、`channels`、`tls-presets`、`rule-presets`、
-`default-model-catalog`、`tokenizer-vocabs`、`tokenizer-auth`、`session`、`sessions`
-和 `audit`。
+其他管理端点：
 
-v4 的管理请求与数据结构已有变化，旧脚本应按本页接口重新核对。实例级用量和日志接口见[用量、日志与审计](/zh-cn/guides/observability)。
+- 实例：`settings`、`export`、`import`、`connectivity/test`、`audit`、`session`、`sessions`、`context`，以及 `update`（宿主支持自更新时）。
+- 凭证：`credentials/{id}/…` 下的 `reveal`、`status`、`refresh`、`quota`、`quota-probe`、`quota-reset`、`quota-reset-credits`、`quota-diagnostics`、`quota-observations`、`health-reset`、`limits`、`models/discover` 和 `models/test`；`credentials/owners`、`credentials/providers`；以及 `credential-login/…` 下的授权码和设备码登录流程。
+- 模型与路由：`models/discover`、`models/discover/apply`、`models/test`、`model-names`、`operation-keys`、`providers/{id}/routing`、`providers/{id}/routing-defaults/reset`、`providers/{id}/default-rule-set`。
+- 规则：`rule-sets/{id}/rules`、`rule-sets/{id}/rule-presets/{preset}`、`rule-presets`。
+- 配额：`quotas/status`、`quotas/{id}/reset`、`quotas/{id}/limit-reset`。
+- 目录：`channels`、`tls-presets`、`default-model-catalog`、`default-model-catalog/apply-prices`。
+- 词表：`tokenizer-vocabs`、`tokenizer-auth`。
+- 用户：`users/{id}/password`、`users/{id}/sessions`、`users/{id}/allowlist`；API key：`api-keys/{id}/rotate`、`api-keys/{id}/secret`。
+- 历史记录：`usage`、`usage/records`、`logs/downstream`、`logs/upstream`、`logs/captures/{id}`，见[用量、日志与审计](/zh-cn/guides/observability)。
 
-中间件依次是：认证 → **检查管理范围与操作权限** → 对不安全的 cookie 请求做同源校验 → 操作 →
-为每个不是读的方法写一行审计。它是一个 route layer，因此未知的 `/admin/api/*` 路径是一个根本不碰数据库的 404。
+完整列表及参数见 [HTTP API 参考](/zh-cn/reference/http-api)。v4 的管理请求与数据结构已有变化，旧脚本请对照该参考重新核对。
 
-## 用户面路由
+每个管理请求都经过同一个中间件：认证（以 cookie 认证的非安全方法还要做同源校验）→ 确定调用方的管理范围 → 执行操作 → 写入审计记录。每个请求都会记录审计，被拒绝的请求也不例外。该中间件是 route layer，因此未知的 `/admin/api/…` 路径直接返回 404，不会访问数据库。管理请求体上限为 50 MiB，足够容纳一次配置导入。
+
+## 用户门户 API
 
 ```text
 POST   /portal/api/login             用户名 + 密码 → 会话 cookie 与令牌
@@ -285,18 +282,18 @@ GET    /portal/api/oauth/device      查询待批准的设备码（?userCode=）
 POST   /portal/api/oauth/device      批准或拒绝；需要登录会话或带管理权限的 key
 ```
 
-这里的守卫要求一个已认证的调用方，**仅此而已**。没有角色检查，因为没有东西可检查：用户面上的每个操作按构造就限定在构造它的那个调用方上，而且没有一个接收用户 id。检查可能被忘掉，不存在的参数不会。
+用户门户路由只要求调用方已认证，不做其他检查。不需要角色检查，因为每个门户操作都只作用于发起请求的调用方本人，而且没有任何一个接收用户 id。漏写的权限检查可能成为漏洞，而根本不存在的参数无从滥用。
 
-`login` 和 `logout` 在守卫之外——前者跑在有调用方之前，后者必须对一个已经过期的会话也有效，否则浏览器会攥着一个永远丢不掉的 cookie。
+`login` 和 `logout` 不经过这项检查。`login` 在调用方确定之前执行；`logout` 必须对已经过期的会话也能生效，否则浏览器会留下一个永远无法清除的 cookie。
 
-## 解析与失败转移预算
+## 解析与失败转移
 
-四种名字形式与排序见[模型与路由](/zh-cn/guides/models)。预算：
+模型名的四种形式及其尝试顺序见[模型与路由](/zh-cn/guides/models)。失败转移预算的规则如下：
 
-- 它是路由自己的 `maxAttempts`，被 `settings.maxAttempts` 钳住；
-- 它**跨目标共享**：每个目标最多拿到自己凭证数那么多次、且不超过剩余额度，因此一个计划的上游调用次数不会超过它的预算；
-- 只有"另一个供应商可能救得回来"的失败才换目标——没有可用凭证、凭证已死、续接钉在别的实例上、任何渠道或传输错误，或 401／403／429／5xx 应答；
-- 预算耗尽、被禁止、被取消、转换错误，以及 store 或 cache 故障，都就地停止；
-- 没有目标可换时，**最后一个应答原样返回**。最后一个供应商的 429 就是调用方的 429，不会被换成别的错误。
+- 预算是路由自己的 `maxAttempts`，上限为 `settings.maxAttempts`。
+- 预算在各目标之间共享。每个目标最多获得与其凭证数量相同的尝试次数，且不超过剩余预算，因此一次请求计划的上游调用次数不会超过预算。
+- 只有换一个供应商可能成功的失败才会转移到下一个供应商：没有可用凭证、凭证失效、续接固定在其他位置、任何渠道或传输错误，或者上游返回 401、403、429、5xx。
+- 预算耗尽、请求被禁止、请求被取消、转换失败，以及 store 或 cache 故障，都会就地停止。
+- 没有可转移的目标时，最后一个应答原样返回。最后一个供应商返回的 429 就是调用方收到的 429，不会被替换成网关生成的错误。
 
-请求体缓冲一次以便重放。超过 `maxRequestBodyBytes` 的流式体保持流式，计划随之裁剪为单个目标：大文件上传不值得为了失败转移而全部读进内存。
+请求体只缓冲一次，以便在其他目标上重放。超过 `maxRequestBodyBytes` 的流式请求体保持流式传输，请求计划随之缩减为单个目标：为了失败转移而把大文件全部读入内存并不划算。

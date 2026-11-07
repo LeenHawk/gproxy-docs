@@ -1,9 +1,11 @@
 ---
 title: "CLI 用戶端"
-description: "把 Codex CLI 和 Claude Code 指向 GPROXY：渠道宣告的廠商服務路由、三種檢視，以及本實例執行的 OAuth issuer。"
+description: "把 Codex CLI 和 Claude Code 指向 GPROXY：廠商服務路由、x-gproxy-view 請求頭、本實例執行的 OAuth 授權伺服器，以及工作階段親和性。"
 ---
 
 import { VideoTutorial } from "/snippets/video-tutorial.jsx";
+
+本頁說明 GPROXY 除了轉發模型呼叫之外，還為 Codex CLI、Claude Code 等廠商 CLI 做了哪些事：處理它們的帳號和控制面請求、讓 CLI 透過 OAuth 登入到 GPROXY 本身，以及讓同一個對話固定使用同一把憑證。用戶端的具體設定請看下面的影片。
 
 Claude Code 連線影片教學。
 
@@ -17,86 +19,82 @@ Cherry Studio 連線影片教學。
 
 <VideoTutorial topic="cherry" locale="zh-TW" title="Cherry Studio 連線影片教學" />
 
-有些廠商 CLI 要說的不只是推理端點。它們還要從廠商的控制面取帳號資料、用量視窗、外掛、任務和檔案，而且拿不到就不幹活。
+## 廠商服務路由
 
-因此渠道可以宣告一張**服務路由表**：它認識的控制面路徑，以及每條路徑返回什麼。宿主會在嘗試資料面之前，把進來的路徑拿去和那張表匹配。
+有些廠商 CLI 需要的不只是推論端點。它們還會從廠商控制面取得帳號資料、用量視窗、外掛、任務和檔案，這些請求失敗時 CLI 就無法正常運作。
 
-## 怎麼到達它們
+因此渠道可以宣告一張服務路由表，列出它認識的控制面路徑以及每條路徑回傳的內容。宿主在轉發到資料面之前，先用這張表比對進來的路徑。
 
-控制面路徑是廠商特有的，所以只在 **供應商或 namespace 掛載點**上匹配。匹配一條服務路由需要一個渠道，而聚合掛載點沒有點名任何渠道。
+控制面路徑因廠商而異，所以只在供應商或 namespace 掛載點上比對。聚合掛載點不指定渠道，沒有渠道也就沒有路由表可查：
 
 ```text
 https://gproxy.example/codex/backend-api/wham/profiles/me
-                       ^^^^^ 名为 "codex" 的供應商（或 namespace）
+                       ^^^^^ 名為 "codex" 的供應商（或 namespace）
 ```
 
-## 三種檢視
+表中沒有的路徑回傳 `404`，檢視為 `credential:{id}` 時除外（見下文）。
 
-`x-gproxy-view` 說明呼叫方想要什麼。不帶表示 `caller`，而那也是普通成員唯一能要的檢視。
+### 選擇檢視
 
-| Header | 回答什麼 |
+請求頭 `x-gproxy-view` 指定呼叫方想要的結果。不帶此請求頭時檢視為 `caller`，一般成員也只能使用 `caller`。
+
+| 請求頭 | 回傳內容 |
 | --- | --- |
-| `x-gproxy-view: caller` | **這個呼叫方**的事實——他們的用量視窗、預算鏈、他們自己的呼叫建立的資源。身份、用量和設定類請求絕不觸達廠商。 |
-| `x-gproxy-view: pool` | 同上，但在目標裡的每把憑證上聚合。 |
-| `x-gproxy-view: credential:{id}` | 原始轉發。點名憑證自己的鑑權發往上游，廠商的應答原樣回來。 |
+| `x-gproxy-view: caller` | 呼叫方自己的資料：其用量視窗、預算鏈，以及其自身呼叫建立的資源。身分、用量和設定類請求不會存取廠商。 |
+| `x-gproxy-view: pool` | 同上，但在目標中的所有憑證上彙總。 |
+| `x-gproxy-view: credential:{id}` | 原樣轉發。用指定憑證自己的鑑權存取上游，廠商的回應不做修改直接回傳。 |
 
-誰能要哪一種由歸屬決定，不是由某個開關決定。目標是呼叫方在該供應商上**可見的**憑證集合——和同一把 key 的模型呼叫能花的是同一批——而只有當呼叫方是實例管理員，或者是擁有該集合中**每一把**憑證的那個組織或團隊的 `Admin` 成員時，他們才是這個目標的管理員。其餘都是成員，成員只能要 `caller`；`pool` 和 `credential:{id}` 返回 `403`。
+能使用哪種檢視取決於憑證歸屬。目標是呼叫方在該供應商上可見的憑證集合，與同一把 key 發起模型呼叫時可用的憑證相同。只有實例管理員，或者擁有該集合中全部憑證的組織或團隊的 `Admin` 成員，才是這個目標的管理員。其他人都是成員，只能使用 `caller`；請求 `pool` 或 `credential:{id}` 會回傳 `403`。
 
-"每一把"不是形式主義：管理一個組織，不應該渲染出一個同時包含另一個組織的池。無歸屬的憑證按構造就沒有管理員——沒有人是"什麼都不是"的 admin 成員——所以在一個憑證全部共享的單租戶實例上，只有實例管理員能觸達 `pool` 和 `credential`。
+要求「全部憑證」是為了保證管理一個組織時，不會看到混有其他組織憑證的池。沒有歸屬的憑證也就沒有人能是它的管理員，所以在憑證全部共享的單租戶實例上，只有實例管理員能使用 `pool` 和 `credential`。
 
-**簽發 key 在每種檢視下都被拒絕。** 一把掛在共享訂閱上的長期 API key，正是共享閘道器存在要避免交出去的那種憑據。
+任何檢視下都拒絕簽發 key。共享訂閱上的長期 API key，正是共享閘道要避免發放出去的憑據。
 
-表裡沒有的路徑返回 `404`，除非檢視是 `credential:{id}`。
+### 計量與取消
 
-## 什麼不被計量
+廠商服務呼叫不占用限流租約，否則一次資料查詢就會消耗呼叫方留給付費流量的額度。服務呼叫也不寫 capture 記錄：引擎不為服務呼叫寫上游記錄，下游記錄便無從關聯，看起來會像一個沒有到達任何上游的請求。
 
-廠商服務呼叫**不佔限流租約**——給一次 profile 拉取扣一個視窗，等於花掉呼叫方留給真正花錢流量的額度——也**不寫 capture 記錄**。引擎不給服務寫上游記錄，因此一條下游記錄將無處可指，讀起來會像一個沒到達任何上游的請求。
+服務呼叫仍然經過預算鏈，因為 `caller` 檢視要據此顯示呼叫方自己的額度視窗。查詢額度不會消耗額度。
 
-它確實會帶上預算鏈，因為 `caller` 檢視要用它渲染呼叫方自己的視窗。報告一個配額不等於花掉一個。
-
-廠商服務呼叫與模型請求共用同一套取消機制，覆蓋憑據準備、上游呼叫和 HTTP 回應體讀取。
-WebSocket 服務的 token 覆蓋握手階段，已建立的連線由宿主管理。服務仍不佔限流租約，也不產生模型用量。
+服務呼叫與模型請求使用同一個取消權杖。取消會中止憑證準備、上游呼叫和 HTTP 回應的串流讀取。對 WebSocket 服務，權杖涵蓋握手階段，連線建立後由宿主管理。服務呼叫同樣不占用限流租約，也不產生模型用量。
 
 ## Codex CLI
 
-`codex` 渠道宣告瞭 CLI 在 Responses 之外對 ChatGPT 後端發起的呼叫。wire 事實依據 CLI
-自己在 `samples/codex` 下的原始碼：
+`codex` 渠道宣告了 CLI 在 Responses 之外向 ChatGPT 後端發起的呼叫。介面細節以 `samples/codex` 下 CLI 自己的原始碼為準。
 
-| 家族 | 路徑 |
+| 類別 | 路徑 |
 | --- | --- |
 | 外掛與 MCP | `/backend-api/ps/**` |
 | 帳號、設定、用量、任務、環境、遠端控制 | `/backend-api/wham/**` |
 | 上傳 | `/backend-api/files/**` |
 | 工作區外掛共享 | `/backend-api/public/plugins/**` |
-| 啟動時的身份探測 | `GET /v1/user-auth-credential/whoami` |
+| 啟動時的身分探測 | `GET /v1/user-auth-credential/whoami` |
 
-CLI 用兩種方式定址同一批端點——ChatGPT 主機上是 `/backend-api/wham/**`，Codex API 主機上是 `/api/codex/**`。兩種拼法，以及裸的 `/codex/**` 和 `/ps/**` 掛載，在查表之前都被歸一到 `/backend-api/**`，所以用戶端選哪種主機風格不是一個配置問題。
+CLI 有兩種方式存取同一批端點：ChatGPT 主機上使用 `/backend-api/wham/**`，Codex API 主機上使用 `/api/codex/**`。這兩種寫法，以及裸的 `/codex/**` 和 `/ps/**` 掛載，在查表前都會統一為 `/backend-api/**`，所以用戶端設定成哪種主機風格都可以。
 
-`/backend-api/wham/remote/control/server` 是一個 **WebSocket**，也是唯一一條會升級的服務路由。Codex 直接拒絕被合成的檢視，因此由該憑證的管理員發出的
-`x-gproxy-view: credential:{id}` 是唯一的通路。
+`/backend-api/wham/remote/control/server` 是 WebSocket，也是唯一需要協定升級的服務路由。Codex 不接受合成檢視，因此只能由該憑證的管理員傳送 `x-gproxy-view: credential:{id}` 來存取。
 
-表沒有分類的路徑落進 `/backend-api/{*path}` 字首行，原樣轉發，非 2xx 也一樣。
+表中沒有歸類的路徑落入 `/backend-api/{*path}` 前綴規則，原樣轉發，非 2xx 回應也一樣。
 
 ## Claude Code
 
-`claudecode` 渠道宣告瞭 CLI 在 Messages 之外發起的、OAuth 作用域內的 `/api/**` 呼叫：
-profile、validate、roles、bootstrap、用量、策略限額、帳號設定、檔案上傳下載、組織聯結器、外掛與 skill、引導與計費控制、桌面更新跳轉，以及 Claude Design surface。
+`claudecode` 渠道宣告了 CLI 在 Messages 之外發起的 OAuth 範圍內 `/api/**` 呼叫：profile、validate、roles、bootstrap、用量、政策限額、帳號設定、檔案上傳與下載、組織連接器、外掛與 skill、新手引導與計費控制、桌面端更新跳轉，以及 Claude Design 介面。
 
-它們全部解析到 `api.anthropic.com`；`claude.ai` 只提供 cookie 登入，因此渠道在這裡不查它。
+這些呼叫全部送往 `api.anthropic.com`。`claude.ai` 只用於憑證的 cookie 初始化，所以渠道在處理這些呼叫時不會存取它。
 
-在 `caller` 與 `pool` 下，身份、用量與設定類答案由本實例已知的事實合成，其 id 是對供應商和呼叫方身份的穩定雜湊。關於那個共享帳號，既不編造也不洩漏：CLI 顯示的帳號、組織和套餐是 GPROXY 的合成值，不是上游帳號的。
+在 `caller` 和 `pool` 檢視下，身分、用量和設定類回應由本實例已知的資訊合成，其中的 id 是供應商與呼叫方身分的穩定雜湊。CLI 顯示的帳號、組織和方案都是 GPROXY 產生的值；不會捏造任何關於共享上游帳號的資訊，也不會洩漏它。
 
-## GPROXY 作為 OAuth issuer
+## GPROXY 作為 OAuth 授權伺服器
 
-用 OAuth 登入的 CLI 可以登入到**本實例**，而不是登入到廠商。這和 sdk 的 `login()` 是兩件事，後者是以用戶端身份去講別人的 OAuth：
+使用 OAuth 登入的 CLI 可以登入到本 GPROXY 實例，而不是登入到廠商。這與 SDK 的 `login()` 是兩回事：在 `login()` 中，GPROXY 是別家授權伺服器的 OAuth 用戶端。
 
 ```text
-  Claude Code ──authorize/token──▶ gproxy   （授权服务器）
+  Claude Code ──authorize/token──▶ gproxy   （授權伺服器）
                                      │
-                                     └──login()──▶ OpenAI   （客户端）
+                                     └──login()──▶ OpenAI   （用戶端）
 ```
 
-端點掛在每個掛載點之下，因此用戶端發現的就是它正在對話的那一個：
+每個掛載點下都有這組端點，用戶端探索到的就是它所存取的掛載點對應的授權伺服器：
 
 ```text
 GET  {mount}/v1/oauth/authorize
@@ -124,41 +122,35 @@ curl -s http://127.0.0.1:8787/v1/.well-known/oauth-authorization-server
  "code_challenge_methods_supported":["S256"]}
 ```
 
-v3 把它們放在根路徑；v4 移到 `/v1` 之下，讓字首規則與 `/v1/messages` 同構，只需要一份實現。
+v3 把這些端點放在根路徑；v4 把它們移到 `/v1` 之下，與 `/v1/messages` 遵循同一條前綴規則，共用一份實作。
 
-### 這個 issuer 不讓步的規則
+### 授權伺服器的安全規則
 
-- **永遠 PKCE S256。** `plain` 被拒絕，缺少 challenge 也被拒絕。每個註冊的用戶端都是
-  public、沒有 secret 可證明自己，所以 verifier 是洩漏的授權碼與令牌之間唯一的東西。
-- **redirect URI 精確匹配。** 不是字首、不是萬用字元、也不是"同源"。每一條更寬鬆的規則都會接受一個攻擊者控制的 URL。
-- **授權碼、refresh token 與裝置碼一次性**，在一個原子批裡被消費並替換，因此兩次兌換無論怎麼交錯都不可能都成功。
-- **被重放的授權碼或 refresh token 撤銷整個家族**——授權、它的內部 key，以及它簽發過的每一個令牌。沒有辦法把"應答丟了"和"憑據被偷了"區分開，所以一律按洩漏處理。合法用戶端重新登入一次；小偷不能。裝置流是例外，因為輪詢用戶端按設計就會重發它的碼。
+- 必須使用 PKCE S256。`plain` 會被拒絕，不帶 challenge 也會被拒絕。所有註冊的用戶端都是 public 用戶端，沒有 secret 可以證明身分，能阻止外洩的授權碼換取令牌的只有 verifier。
+- redirect URI 必須精確比對，不接受前綴、萬用字元或「同源」。任何更寬鬆的規則都會放行某個攻擊者控制的 URL。
+- 授權碼、refresh token 和裝置碼都只能使用一次。每次都在一個原子批次中消耗並替換，因此無論兩次兌換如何交錯，都不可能同時成功。
+- 重放授權碼或 refresh token 會撤銷整個令牌族：該授權、它的內部 key，以及它簽發過的所有令牌。回應遺失和憑據被竊無法區分，所以一律按外洩處理。合法用戶端重新登入即可，竊取者則不能。裝置碼流程例外，因為輪詢用戶端本來就會重複傳送裝置碼。
 
-### 一個 OAuth 呼叫方能做什麼
+### OAuth 呼叫方的權限
 
-access token 是使用者交給**別人的二進位制**的一份憑據。除非該用戶端被寫進實例的
-`oauth.cliClientIds`，它只能列模型、取模型、數 token、生成、串流和壓縮。其他一律 `403`，而且這個限制對實例管理員的帳號同樣生效——管理員的帳號恰恰是最不能讓第三方令牌變成管理憑據的那一個。
+access token 是使用者交給別人的程式使用的憑據。除非用戶端列在實例的 `oauth.cliClientIds` 中，否則該令牌只能列出模型、查詢模型、計算 token、生成、串流生成和壓縮，其他操作一律回傳 `403`。實例管理員的帳號也受此限制，管理員帳號恰恰最不應該讓第三方令牌取得管理權限。
 
-把一個用戶端寫進 `cliClientIds`，等於運維者接受它在整個 API 上代表這個使用者說話。
+把用戶端寫進 `cliClientIds`，代表維運者認可它在整個 API 上代表使用者操作。不過令牌仍受使用者授權的 scope 約束：每個操作都要求授權中包含對應的 `gproxy:{operation}` scope，列入名單的用戶端也不例外。
 
-一個 OAuth 呼叫方也不能簽發、輪換、揭示或刪除 key，不能修改帳號密碼。
+OAuth 呼叫方也不能簽發、輪換、檢視或刪除 key，不能修改帳號密碼。
 
-## 會話親和性
+## 工作階段親和性
 
-多輪 CLI 在"一次對話停在一把憑證上"時工作得最好。GPROXY 從**實際發出**請求的用戶端讀取對話標識，絕不從它即將被轉發到的上游讀——一個被轉發到別的渠道的 Claude Code 請求，讀的仍然是 Claude Code 的欄位。
+多輪對話的 CLI 最好讓一個對話始終使用同一把憑證。GPROXY 按實際發出請求的用戶端的格式讀取對話識別碼，而不是按它將被轉發到的上游：轉發到其他渠道的 Claude Code 請求，讀取的仍是 Claude Code 的欄位。
 
-階梯，第一個非空值勝出：
+按以下順序取第一個非空值：
 
-1. `x-gproxy-session-id`，閘道器自己的 header；
-2. `thread-id`、`session-id`、`x-claude-code-session-id`、`x-conversation-id`、
-   `x-grok-session-id`；
-3. 入站 body 自己的欄位——Responses 的 `client_metadata.thread_id`/`session_id`、
-   Claude 在 JSON 編碼的 `metadata.user_id` *內部*的 `session_id`、Gemini 的
-   `request.session_id` 與 `request.sessionId`；
-4. 對話穩定字首的 sha256 指紋；
-5. 請求 id，誠實地標註為兜底，而不是冒充成一個會話。
+1. 閘道自己的請求頭 `x-gproxy-session-id`。
+2. 各用戶端的原生請求頭，依序為 `x-opencode-session`、`thread-id`、`session-id`、`x-claude-code-session-id`、`x-conversation-id`、`x-grok-session-id`、`x-session-id`、`x-session-affinity`、`session_id`。
+3. 傳入請求本文格式自帶的工作階段欄位：Responses 的 `client_metadata.thread_id` 或 `session_id`；Claude 在 JSON 編碼的 `metadata.user_id` 內部的 `session_id`；Gemini 的 `request.session_id` 或 `request.sessionId`。Chat Completions 沒有這類欄位。
+4. 對話穩定前綴的 sha256 指紋。
+5. 請求 id，記錄為備援值，而不是當作工作階段。
 
-不會有任何東西在任意 JSON 裡遞迴找名為 `session_id` 的欄位；而請求級、輪次級和快取級標識——`x-grok-req-id`、`user_prompt_id`、`prompt_cache_key`、`previous_response_id`
-——**絕不是**會話。
+只讀取上述欄位，不會在任意 JSON 中遞迴尋找名為 `session_id` 的欄位。請求級、輪次級和快取級識別碼，如 `x-grok-req-id`、`user_prompt_id`、`prompt_cache_key`、`previous_response_id`，都不會被當作工作階段。
 
-閘道器 header 在請求發往上游前被摘除，用戶端發來的那一份也被摘除：用戶端不能透過傳送閘道器用來命名會話的那個 header 去挑別人的對話。缺少會話 header 從不導致請求被拒。
+閘道請求頭不會轉發給上游，用戶端傳來的也一樣：用戶端不能透過傳送閘道用來標識工作階段的請求頭，去選中其他呼叫方的對話。沒有任何工作階段請求頭的請求也不會被拒絕。

@@ -1,0 +1,347 @@
+---
+title: "Architecture"
+description: "How the GPROXY v4 source is organised: the sdk, app and host layers, the workspace crates, the path of a request, failover, configuration sync, settlement and the WebAssembly build."
+---
+
+This document describes how the GPROXY v4 source tree is organised and how a
+request moves through it. Read it before changing anything below the hosts, or
+when you need to know which crate a piece of behaviour belongs in.
+
+v4 is a rewrite of v3. The gateway does the same job, but the code is split
+differently, and most of the rules at the end of this page exist to keep that
+split from eroding.
+
+## Layers
+
+The code is arranged in three layers. Each one is the layer below plus one
+class of decisions:
+
+```text
+sdk  =  engine + configuration writes + login + resolution + queries + sync
+app  =  sdk + identity and admission + the typed admin / portal / issuer operations
+host =  app + a transport
+```
+
+### sdk
+
+`gproxy-sdk` is the embeddable handle. It assembles the engine (`gproxy-core`) from default
+implementations, performs the configuration writes that advance
+`settings.config_revision`, turns a completed login into a credential row,
+resolves a model name to an execution plan, and keeps every instance of a
+deployment on the same revision. It has no HTTP server and no notion of
+users. See [Embedding the SDK](/development/embedding).
+
+### app
+
+`gproxy-app` is the product layer: who is calling and what they may reach. It owns users,
+gateway API keys, organizations, teams, permissions, rate limits, the OAuth
+issuer and audit, together with the operations that write them. It has no
+router, no runtime and no CLI, so the same code runs behind the native axum
+server and inside a Cloudflare Worker.
+
+### host
+
+A host turns a transport into typed calls on the app and turns the results back
+into bytes. There are three: the axum HTTP server, the Cloudflare Workers
+host, and the Tauri desktop and Android application.
+
+Each layer passes a narrowed answer down and the layers below do not revisit
+it. The engine receives a resolved target and a permitted credential set; it
+never sees the caller and cannot re-derive who they are.
+
+## Workspace crates
+
+All crates live under `crates/`. Version and edition come from the workspace
+(`edition = "2024"`). Crates marked MIT are usable on their own; the rest are
+AGPL-3.0-or-later.
+
+| Crate | License | Contents | Does not |
+| --- | --- | --- | --- |
+| `gproxy-protocol` | MIT | Connection modelling (`WireRequest`, `WireResponse`, bodies, framing, sockets), the operation registry, the OpenAI / Claude / Gemini wire types, pairwise conversion, and the host-capability interfaces protocol adaptation needs | Know that channels exist; match URL paths |
+| `gproxy-protocol-macros` | MIT | The `WireBuilder` and `DeclaredFields` derives used by the wire types | |
+| `gproxy-channel` | AGPL | `BaseChannel`, the optional ability traits, and the upstream adapters, one Cargo feature per channel | Depend on the engine or the store; pick a transport backend |
+| `gproxy-client` | MIT | The outbound transport contract (`OutboundClient`) and its `reqwest` / `wreq` implementations, plus the wasm `fetch` and Workers backends | Read the database, pick a credential, convert a protocol |
+| `gproxy-core` | AGPL | The engine: the provider execution snapshot, credential selection, refresh and health inside a permitted set, conversion, rewriting, budgets, pricing, settlement and observation | Resolve a route, check a permission, run a server |
+| `gproxy-store` | AGPL | SeaORM entities, batch repositories, schema migration; database backend chosen by feature | |
+| `gproxy-cache` | MIT | TTL state, atomic counters, permits and leases, cross-instance invalidation; Memory and Redis backends | Hold business entities; fall back to local state when the backend fails |
+| `gproxy-seaorm` | MIT | SeaORM batch reads and writes, the D1 binding, type mapping, schema sync | Hold business entities |
+| `gproxy-tokenizer` | MIT | String to token count against a local shared vocabulary | Parse requests, download, run background work |
+| `gproxy-file` | MIT | Optional local or S3/R2 content storage over OpenDAL | Track file metadata or ownership |
+| `gproxy-sdk` | AGPL | The handle: assembly, `manage()`, `login()`, resolution, sessions, `call()`, `query()`, sync | Contain HTTP server code or identity |
+| `gproxy-client-sdk` | MIT | The caller-side client for programs that call a GPROXY instance, with a versioned language-model IR | |
+| `gproxy-app` | AGPL | Identity, admission, the admin and portal operation families, the OAuth issuer | Contain a transport |
+| `gproxy-host-axum` | AGPL | The route table: HTTP path to operation | Make product decisions of its own |
+| `gproxy-host-edge` | AGPL | The Workers `fetch` handler, which mounts the `gproxy-host-axum` router | Keep a second route table |
+| `gproxy-host-tauri` | AGPL | The desktop and Android application: Tauri IPC for the management and user surfaces, plus an in-process `gproxy-host-axum` data plane on loopback for CLI clients | Implement a data plane of its own |
+| `gproxy` | AGPL | The command line (`gproxy`, and `gproxy-serverless` with the `postgres` feature): environment, configuration file, socket, terminal | Do anything a library could do |
+
+`gproxy-host-tauri` is a workspace member but not a default member, so
+`cargo check` and `cargo test` without `--workspace` skip it. Building it needs
+the webkit2gtk, gtk and libsoup development headers. See
+[Building from source](/development/building).
+
+### Dependency direction
+
+Dependencies point downward only:
+
+```text
+gproxy, gproxy-host-edge, gproxy-host-tauri
+        └─ gproxy-host-axum
+              └─ gproxy-app
+                    └─ gproxy-sdk
+                          └─ gproxy-core
+                                ├─ gproxy-channel ─ gproxy-client ─ gproxy-protocol
+                                ├─ gproxy-store ─ gproxy-cache, gproxy-seaorm
+                                └─ gproxy-tokenizer, gproxy-file
+```
+
+`gproxy-client-sdk` sits beside the hosts: it depends on `gproxy-sdk` and
+`gproxy-client` and is used by programs that call a GPROXY instance.
+
+The engine never gains a listener, a router or a UI. A change that needs
+`gproxy-core` to know about HTTP paths, users or permissions belongs in a
+higher layer.
+
+### Who answers which question
+
+| Question | Answered by |
+| --- | --- |
+| Who is calling | `gproxy-app`'s authenticator |
+| What they may reach, and whose budget pays | `gproxy-app`'s admission |
+| Which provider serves this model name | the sdk's resolver |
+| Which credential, and what to do when it fails | the engine |
+| What an operation does | `gproxy-app`'s operation families and the sdk's `manage()` |
+| Which HTTP status and error code a failure maps to | `AppError::status_code` / `code` |
+| Which URL means which operation | the axum host |
+
+Hosts must not answer any of the first five themselves. A host that did would
+apply its answer over HTTP and not over IPC (or the other way round), and the
+two front doors would disagree.
+
+## The life of a request
+
+A data-plane request through the native server goes like this:
+
+1. `gproxy-host-axum` matches the path to an operation and dialect, decodes
+   the request into a `DataPlaneRequest`, and for dialects that carry the model
+   in the path (Gemini) parses it out.
+2. `gproxy-app` authenticates the request and produces a `Caller`.
+3. `App::call` runs admission. The result, `Admitted`, carries the scope,
+   usage attribution, budget owner chain, allowed provider set, allowed
+   credential set and session identity. Rate-limit charges are taken here.
+4. The app drives the sdk's call builder with exactly those values and the
+   model name it parsed. The engine never sees the `Caller`.
+5. The sdk resolves the model name to a `Plan` (see below) and walks its
+   targets.
+6. For each target, the engine selects a credential inside the permitted set,
+   prepares the request through the channel, converts it to the upstream's
+   dialect if that differs from the client's, applies the provider's rewrite
+   rules to the request that will actually be sent (so a rule always sees the
+   upstream format), and dispatches it through `gproxy-client`.
+7. The engine classifies the answer. It either retries on another credential of
+   the same provider, returns a failure to the sdk (which may move to the next
+   provider), or returns the response through the settlement funnel.
+8. The host writes the response. For a streamed response it keeps `Admitted`
+   alive until the last byte is written, because a concurrency permit counts
+   requests in flight and the stream is still in flight after `call()` returns.
+
+The edge host runs the same router, so steps 1 to 8 are identical there; it
+only adds a `tick()` before step 1 (see
+[Configuration writes and reload](#configuration-writes-and-reload)).
+
+## Model resolution and the plan
+
+Resolution happens in the sdk, before the engine, so the engine only ever sees
+resolved targets. A model name is resolved by the first rule that matches:
+
+| Name | Resolves to | Attempt budget |
+| --- | --- | --- |
+| absent | every enabled provider, no upstream model | `settings.max_attempts` |
+| an exposed model name | that route's enabled members | the route's own |
+| `provider/model` | that one provider | `settings.max_attempts` |
+| anything else | an unknown-model error | — |
+
+Exposed names are matched exactly and before the prefix form, so an operator
+can expose the literal name `openai/gpt-5` as a route. The prefix is always a
+provider name, never a channel id: a provider named `openai` on the `codex`
+channel is reached as `openai/…`.
+
+The candidates are then narrowed by channel (when the caller pinned one), by
+the allowed provider ids and by the allowed credential ids. The credential
+filter is how the app keeps one organization's credentials out of another's
+requests. An empty allowed set means nothing is allowed and resolves to a
+no-target error.
+
+Within each candidate, disabled, retired and dead credentials are removed.
+Blocked credentials are removed only while the provider still has an unblocked
+one; a provider whose credentials are all temporarily blocked stays in the plan
+with a lower health rank, behind every healthy provider. A rate-limited
+provider is therefore tried last instead of being treated as gone.
+
+Candidates are ordered by `(tier, health, descending weight, stable id)`. Tier
+is a hard preference: a later tier is never balanced against an earlier one.
+Only the leading run (the candidates that share the first one's tier and
+health) is balanced, using the route's strategy. Rotation counters are
+process-local; losing them only restarts rotation at the first candidate.
+
+The result is a `Plan`: the resolved model name, a shared `max_attempts`, and a
+non-empty list of `Target`s, each one provider, one upstream model and the
+credentials of that provider the caller may spend.
+
+## Failover
+
+There are two levels of failover.
+
+Within a provider, the engine moves between the provider's permitted
+credentials: it selects one, sends the request, classifies the answer and,
+if the failure is one another credential could fix, selects the next.
+
+Across providers, the sdk moves to the next target in the plan, but only for
+failures another provider could plausibly serve:
+
+| Outcome | Next provider |
+| --- | --- |
+| no usable credential, credential dead, refresh contended | yes |
+| continuation pinned to another instance | yes |
+| any channel or transport error | yes |
+| an upstream 401, 403, 429 or 5xx (the engine has already tried this provider's credentials) | yes |
+| budget exhausted, cancelled, deadline exceeded, forbidden | no |
+| transform, route, rewrite or operation mismatch errors, invalid target, not implemented | no |
+| store, cache, secret, limits, assembly or file errors | no |
+
+The second group is the caller's own limit, the third is a request or
+configuration that would fail everywhere, and the fourth means this instance is
+broken. Retrying any of them on another provider only costs more.
+
+The attempt budget is shared by the whole plan. Each target is granted at most
+as many attempts as it has credentials and never more than what remains, and
+the grant is subtracted whether or not it was used. A plan therefore never
+makes more upstream calls than its `max_attempts`. When no target is left, the
+last answer is returned as it is: a 429 from the final provider reaches the
+caller as a 429.
+
+## Configuration writes and reload
+
+Every configuration write goes through one primitive in the sdk:
+
+```text
+commit_revision([statements…, config_revision += 1, read back])   one transaction
+      ↓
+reload   the snapshot this instance serves
+      ↓
+publish  ConfigurationChanged { revision, scopes }
+```
+
+The rows and the revision bump are written in one transaction. If the rows
+landed without the bump, other instances would never learn to reload and the
+change would be invisible on them. If the bump landed without the rows, every
+instance would reload for nothing.
+
+The writer reloads before it publishes the notification, so it never announces
+a revision it cannot yet serve. Publishing is best effort: if the cache refuses
+the message, the change reaches other instances at the next poll, and the
+writer logs a warning.
+
+The scopes a write names decide which reload follows. A credential write
+limited to the secret, its expiry and its lifecycle status may use the
+credential-state scope, which takes the cheaper `reload_credentials` path.
+Everything else about a credential is fixed into the execution snapshot at
+assembly and needs a full reload.
+
+### Multi-instance sync
+
+Instances learn about each other's writes in two ways:
+
+| Mechanism | Latency | Failure mode |
+| --- | --- | --- |
+| Invalidation notification on the shared cache | milliseconds | messages can be lost |
+| Poll of `settings.config_revision` | 30 s by default | slow |
+
+A notification carries no state; it only tells the instance to check again.
+The poll is the authority and cannot miss a write, so a lost notification costs
+at most one poll interval. Reloads are serialized and monotonic: an older
+revision never replaces a newer one, and a failed reload leaves the previous
+snapshot serving.
+
+With `SyncMode::Background` (the native default) the handle runs its own
+subscription and poll loops. On wasm there is no process between requests, so
+synchronization is manual: the edge host calls `tick()` at the start of each
+request, which applies pending notifications and then polls the revision once.
+
+A multi-instance deployment needs a cache the instances share: Redis natively,
+or the database-backed `StoreCache` over D1 or libSQL at the edge. The default
+`MemoryCache` is process-local.
+
+## Settlement and metering
+
+Every path that reaches an upstream ends in the same settlement funnel in the
+engine: price the exchange, charge every applicable budget window, and hand the
+usage report to the observer. Settlement happens exactly once per request. There
+is no faster path that skips it, because such a path would be unmetered traffic.
+
+Details:
+
+- Budgets are checked before the first attempt and settled with the priced cost
+  after the upstream has answered. Because cost is only known afterwards,
+  in-flight and concurrent calls can take a budget past its limit.
+- Settlement is idempotent per request id. If settlement fails, the accounting
+  is lost but the response already delivered to the caller is not affected.
+- A model with no matching price rule settles at zero, and its usage carries the
+  dimension `unpriced = true` so the operator can find it.
+- Usage is recorded per physical upstream call.
+- Optional work, such as request capture, is decided before the request runs.
+  When capture is off, no body is cloned and nothing is allocated for it. (v3
+  did the work first and let the sink discard it.)
+
+Core owns pricing and settlement; the observer owns persistence and redaction.
+The default observer, `StoreObserver`, writes to the database, and a host can
+replace it.
+
+## Building for WebAssembly
+
+`gproxy-app` and the axum router both build for `wasm32-unknown-unknown`.
+That is why `gproxy-host-edge` mounts the same `Router` instead of keeping its
+own route table. axum's server parts (`http1`, `http2`, `tokio`) are Cargo
+features, and `Router` itself is target-independent, so what the wasm build
+leaves out is socket handling, not routes.
+
+The obstacle is `Send`. On wasm the engine is deliberately `!Send`: a JS
+transport handle belongs to the isolate that created it, and
+`gproxy-client`'s `ClientBounds` is `Send + Sync` natively and empty on wasm.
+axum, however, requires `Send + Sync` router state and `Send` handler futures.
+Two bridges reconcile this, both relying on a Worker isolate being
+single-threaded:
+
+- `gproxy_app::App` holds its sdk handle in a `send_wrapper::SendWrapper`.
+- `gproxy_host_axum::send` wraps each handler body (and each streamed response
+  body). Natively it is the identity function; on wasm it is a `SendWrapper`,
+  which panics if polled from another thread.
+
+A handler that forgets `send` fails to compile on the wasm target, and the
+error names the handler. This is why the wrapper sits at each handler and not
+behind a `cfg` on the router: a route that cannot compile for the edge cannot
+quietly be missing there.
+
+On wasm the default cache is `StoreCache` and sync is always manual (see
+above). Native-only features (PostgreSQL, MySQL, local file storage, proxies,
+TLS emulation) are not available; `libsql` and the D1 binding are the edge
+databases. For building and deploying the Worker, see
+[Building from source](/development/building).
+
+## Design rules
+
+When you change the code, keep these properties:
+
+- The engine does not depend on a server framework, a router or a UI.
+- Every request that reaches an upstream exits through the settlement funnel.
+- Conversion is pairwise between vendor dialects, with no intermediate
+  representation. A converter reads only declared source fields and never
+  reads or writes the unknown-field bag.
+- A configuration write is one transaction together with its revision bump.
+- Snapshot publication is monotonic; a reload never goes backwards.
+- Assembly does not fail because of one bad row. The row is skipped, counted
+  and logged.
+- The edge host has no route table of its own.
+- Frontend types are generated from Rust (see
+  [Type export](/development/embedding#typescript-type-export)) and never
+  written by hand.

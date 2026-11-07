@@ -1,17 +1,19 @@
 ---
 title: "提示快取"
-description: "透過快取斷點規則或魔法字串配置提示快取，檢視用量與計價。"
+description: "透過快取斷點規則或魔法字串設定提示快取，檢視用量與計價。"
 ---
 
-提示快取由上游提供，命中情況取決於模型、提示字首和有效期。GPROXY 可以透過快取斷點規則或提示中的魔法字串新增標記；新增標記不保證命中，也不能讓不支援快取的上游獲得快取能力。
+本頁介紹 GPROXY 如何為 Claude 和 OpenAI 上游放置提示快取標記（透過快取斷點規則，或透過寫在提示中的魔法字串），以及快取 token 如何記錄和計價。
 
-## 在控制台新增快取斷點
+快取本身由上游提供，能否命中取決於模型、提示前綴和有效期（TTL）。新增標記不保證命中，也不能讓不支援快取的上游獲得快取能力。
 
-在供應商的重寫規則中新增“快取斷點”，選擇上游協議和位置。位置包括全域性、系統和訊息；Claude 還支援工具。區域性位置可填寫索引，正數從 1 開始，負數從末尾計數，留空選擇最後一個可用位置。
+## 快取斷點規則
 
-Claude 可選擇預設、5 分鐘或 1 小時 TTL；OpenAI 局部斷點可選擇預設、30 分鐘或 12 小時；全域規則可選擇預設或 30 分鐘。實際生效方式取決於上游。規則中的協議是轉換後的上游協議，Gemini 不提供這個規則型別。
+在供應商的「重寫規則」頁面新增「快取斷點」規則，選擇上游協定和位置。位置包括全域、系統和訊息，Claude 還支援工具。局部位置可以填寫索引：正數從 1 開始，負數從末尾倒數，留空則選擇最後一個可用位置。
 
-透過 API 配置時使用 `action: "cache_breakpoint"`，`replacement` 是配置物件的 JSON 字串，例如：
+Claude 可選預設、5 分鐘或 1 小時 TTL；OpenAI 局部斷點可選預設、30 分鐘或 12 小時，OpenAI 全域規則可選預設或 30 分鐘。TTL 實際如何生效由上游決定。規則中的協定指轉換後的上游協定。Gemini 不支援這種規則。
+
+透過 API 設定時，使用 `action: "cache_breakpoint"`，並在 `replacement` 中填寫設定物件的 JSON 字串，例如：
 
 ```json
 {"dialect":"claude","target":"message","index":-1,"ttl":"5m"}
@@ -21,13 +23,11 @@ Claude 可選擇預設、5 分鐘或 1 小時 TTL；OpenAI 局部斷點可選擇
 {"dialect":"openai","target":"message","index":-1,"ttl":"12h"}
 ```
 
-這條規則作用於請求正文，與其他重寫規則按配置順序執行。用戶端能自行提交快取標記時，也可以直接使用上游支援的欄位。
+這條規則作用於請求正文，與其他[重寫規則](/zh-tw/guides/rules)按同一順序執行。正文中已有四個標記時，規則不再新增，這與下文魔法字串的上限相同。能夠自行設定原生快取欄位的用戶端，也可以直接傳送上游支援的欄位。
 
-## 使用魔法字串
+## 魔法字串
 
-無法直接設定快取欄位的用戶端，可以在提示文字中放置以下標記，並啟用供應商對應的 magic cache 選項。
-
-### 三個字串
+無法設定快取欄位的用戶端，可以在提示文字中寫入以下字串之一。供應商為目標協定開啟 magic cache 選項後，GPROXY 會去掉該字串，並在原位置放置一個斷點。
 
 ```text
 GPROXY_MAGIC_STRING_TRIGGER_CACHING_CREATE_7D9ASD7A98SD7A9S8D79ASC98A7FNKJBVV80SCMSHDSIUCH
@@ -35,64 +35,61 @@ GPROXY_MAGIC_STRING_TRIGGER_CACHING_CREATE_49VA1S5V19GR4G89W2V695G9W9GV52W95V198
 GPROXY_MAGIC_STRING_TRIGGER_CACHING_CREATE_1FAS5GV9R5H29T5Y2J9584K6O95M2NBVW52C95CX984FRJY
 ```
 
-| 字串 | 在 Claude 目標上 | 在 OpenAI 目標上 |
+| 字串 | Claude 目標 | OpenAI 目標 |
 | --- | --- | --- |
-| …`7D9ASD…` | `cache_control`，用 API 的預設 TTL | 一個顯式斷點 |
+| …`7D9ASD…` | `cache_control`，使用 API 預設 TTL | 明確斷點 |
 | …`49VA1S…` | `cache_control`，`"ttl": "5m"` | `prompt_cache_breakpoint` (`"ttl": "30m"`) |
 | …`1FAS5G…` | `cache_control`，`"ttl": "1h"` | `prompt_cache_breakpoint` (`"ttl": "12h"`) |
 
-同一組字串按目標協定選擇短期和長期快取：Claude 的 `5m` / `1h` 對應 OpenAI 的 `30m` / `12h`，預設字串不指定 TTL。局部規則將 TTL 寫在選中的斷點上，不修改整個請求的快取選項。
+同一個字串按目標協定選擇短期或長期快取：Claude 的 `5m`、`1h` 分別對應 OpenAI 的 `30m`、`12h`，預設字串不設定 TTL。TTL 寫在斷點本身上，不修改整個請求的快取選項。
 
-原生快取欄位在 Claude ↔ OpenAI Chat/Responses 轉換中也使用同一雙向映射。有標記的系統提示、訊息、圖片/文件和工具結果保留區塊邊界。Claude 的自動快取策略在末尾區塊有目標協定表示時轉換為該區塊的顯式斷點；沒有 OpenAI 對應欄位的工具定義級標記仍由轉換報告列出。
+這些字串屬於用戶端與 GPROXY 之間的協定，不會隨版本變化。
 
-OpenAI 轉 Claude 時，只有明確傳入 `prompt_cache_options.mode: "implicit"` 才產生頂層 `cache_control`。省略整個選項物件或省略 `mode`（包括空物件、只傳 TTL）都不會啟用 Claude 自動快取；區塊上的顯式標記仍獨立轉換。
+### 開啟 magic cache
 
-它們是**凍結的**：它們是用戶端到代理之間協議的一部分，不隨版本變化。
-
-## 最要緊的那條規則
-
-**無論快取是否啟用，token 總是被剝掉。** 一個洩漏到別人提示裡的標記，任何時候都不是想要的東西。
-
-開關決定的只是要不要在 token 所在的位置放一個*斷點*。magic cache 關閉時，token 被取走，別的什麼也不動：用戶端自己的 `cache_control` 或 `prompt_cache_breakpoint` 原樣保留，而不含 token 的 body 逐位元組轉發，既不解析也不重新序列化。
-
-只剝不放的那一趟也正是 `claudeweb` 所做的，因為瀏覽器會話根本沒有快取控制。
-
-## 啟用它
-
-兩個供應商 `config` 開關，每族一個：
+供應商 `config` 中有兩個開關，每個協定族一個：
 
 ```json
 { "config": { "enable_claude_magic_cache": true,
               "enable_openai_magic_cache": true } }
 ```
 
-| 開關 | 提供它的渠道 |
+| 開關 | 提供該開關的渠道 |
 | --- | --- |
-| `enable_claude_magic_cache` | `aws_bedrock`、`azure`、`claudeapi`、`claudecode`、`custom`、`opencodego`、`opencodezen`、`openrouter` |
-| `enable_openai_magic_cache` | `aws_bedrock`、`azure`、`openai`、`codex`、`custom`、`opencodego`、`opencodezen`、`openrouter` |
+| `enable_claude_magic_cache` | `aws_bedrock`、`azure`、`claudeapi`、`claudecode`、`custom`、`opencodego`、`opencodezen`、`openrouter`、`vercel` |
+| `enable_openai_magic_cache` | `aws_bedrock`、`azure`、`openai`、`codex`、`custom`、`opencodego`、`opencodezen`、`openrouter`、`vercel` |
 
-開關是對著**目標方言**讀的，不是用戶端的。一個被路由到 Claude 供應商的 OpenAI 形狀請求會先轉成 Claude Messages，因此起作用的是 Claude 開關，寫下的標記是 `cache_control`。用戶端收到的仍然是它自己的格式。
+控制台中這兩個開關顯示為「Claude 魔法快取」和「OpenAI 魔法快取」。
 
-## 標記落在哪
+起作用的是目標協定對應的開關，而不是用戶端協定的開關。OpenAI 格式的用戶端請求路由到 Claude 供應商時，會先轉換為 Claude Messages，因此由 Claude 開關決定，寫入的標記是 `cache_control`。用戶端收到的回應仍是它自己的格式。
+
+### 字串的移除
+
+上表中的渠道無論是否開啟 magic cache，都會移除這些字串，因為殘留在提示中的標記對上游沒有任何用處。
+
+開關只決定是否在字串原來的位置放置斷點。magic cache 關閉時，只移除字串，其他內容都不變：用戶端自己的 `cache_control` 或 `prompt_cache_breakpoint` 原樣保留；不含字串的正文按原位元組轉送，不解析，也不重新序列化。
+
+`claudeweb` 渠道同樣只移除字串而不放置斷點，因為瀏覽器工作階段沒有快取控制。
+
+## 標記的位置
+
+開啟 magic cache 後，魔法字串對應的標記按目標協定放置在以下位置。
 
 ### Claude Messages
 
-body 先被規範化：字串 content 變成塊陣列，空文字塊被丟棄，落在被丟棄塊上的
-`cache_control` 移到最近的可快取塊上——這正是讓一個單獨成行的 token 也能工作的原因。
-thinking 塊只在 assistant 輪次保留。
+先對正文做正規化：字串形式的 content 轉為區塊陣列，空文字區塊被刪除，刪除的區塊上若帶有 `cache_control`，會移到最近的可快取區塊上。因此，單獨佔一行的字串也能正常生效。thinking 區塊只在 assistant 輪次中保留。
 
-然後 `system` 在 `messages` **之前**被遍歷，因此預算按提示順序花掉，而不是按 JSON 鍵序。每個帶 token 的文字塊都被標記：
+隨後先處理 `system`，再處理 `messages`，斷點名額因此按提示順序分配，而不是按 JSON 鍵的順序。每個包含字串的文字區塊都會加上標記：
 
 ```json
 { "cache_control": { "type": "ephemeral", "ttl": "1h" } }
 ```
 
-已經帶 `cache_control` 的塊保持不動。
+已經帶有 `cache_control` 的區塊保持不變。
 
 ### OpenAI Chat Completions
 
-除 `function` 角色外的每條訊息都可以被標記。純字串 `content` 會被拆成一個被標記的
-`text` part，因為標記需要一個落腳處；陣列 content 則就地標記它的 part。
+除 `function` 角色以外的訊息都可以加標記。純字串的 `content` 會拆成一個帶標記的 `text` part，因為標記必須放在某個 part 上；陣列形式的 content 則直接在原有 part 上加標記。
 
 ```json
 { "type": "text", "text": "…", "prompt_cache_breakpoint": { "mode": "explicit" } }
@@ -100,45 +97,48 @@ thinking 塊只在 assistant 輪次保留。
 
 ### OpenAI Responses
 
-三個位置，依次是：
+依次在三個位置放置標記：
 
-1. **`instructions`。** 那裡的 token 被剝掉，並在 `input` 前面插入一條被標記的 developer
-   訊息——`instructions` 是字串，自己承載不了標記。
-2. **`prompt.variables`**，像 Chat 的 part 一樣標記。
-3. **`input`**，無論它是裸字串（變成一條被標記的 user 訊息）還是一組 item，後者的
-   `content` 與 `output` 用 `input_text` / `output_text` 型別標記。
+1. `instructions`。其中的字串被移除，並在 `input` 開頭插入一則帶標記的 developer 訊息，因為 `instructions` 是純字串，無法攜帶標記。
+2. `prompt.variables`，標記方式與 Chat 的 part 相同。
+3. `input`。裸字串會變成一則帶標記的 user 訊息；如果是 item 陣列，則用 `input_text` 和 `output_text` 類型標記其中的 `content` 與 `output`。
 
 ### Gemini
 
-沒有斷點。token 被剝掉，別的什麼都不發生。
+Gemini 沒有斷點。字串被移除，不做其他處理。
 
-## 四個的上限
+## 四個斷點的上限
 
-**最多四個斷點離開代理，含用戶端自己的。** 預算是數 body 裡已有的標記算出來的，所以一個自己放了三個的用戶端還剩一個名額。
+離開代理的斷點最多四個，用戶端自己設定的也計算在內。可用名額等於四減去正文中已有的標記數，所以用戶端已經放了三個時，只剩一個名額。
 
-超出上限的 token 仍然被剝掉——只是不變成標記。這和別處是同一條規則：這些字串永遠不會到達上游。
+超出上限的字串仍會被移除，只是不再變成標記。
+
+## 協定轉換中的原生快取欄位
+
+在 Claude 與 OpenAI Chat/Responses 之間轉換時，原生快取欄位按同樣的 TTL 對應關係雙向對應。帶標記的系統提示、訊息、圖片/文件和工具結果區塊保留各自的邊界。Claude 的自動快取策略會轉換為對應末尾區塊上的明確斷點，前提是該區塊在目標協定中有對應表示。沒有 OpenAI 對應欄位的工具定義級標記會列在轉換報告中。
+
+從 OpenAI 轉換到 Claude 時，只有明確傳入 `prompt_cache_options.mode: "implicit"` 才會產生頂層 `cache_control`。省略整個選項物件或省略 `mode`（包括空物件、只傳 TTL）都不會開啟 Claude 自動快取。區塊上的明確標記不受此影響，單獨轉換。
+
+OpenAI Responses 和 Chat 的明確斷點支援 `prompt_cache_breakpoint: {"mode":"explicit","ttl":"12h"}`（也支援 `"30m"`），Chat 與 Responses 互相轉換時保留這個 TTL。目前的[官方 OpenAPI](https://github.com/openai/openai-openapi/blob/master/openapi.json) 中，請求級的 `prompt_cache_options.ttl` 仍只允許 `"30m"`；`prompt_cache_retention` 是另一套較早的策略。
 
 ## 用量與計價
 
-快取 token 有自己的指標，結算時按你的費率行定價：
+快取 token 作為獨立的指標記錄，並按你設定的費率列計價：
 
-| 上游報了什麼 | 指標 |
+| 上游回報的內容 | 指標 |
 | --- | --- |
-| 快取讀 | `cached_input_tokens` |
-| 快取寫入，按 TTL 分組 | `cache_creation_tokens` + `ttl_seconds` |
+| 快取讀取 | `cached_input_tokens` |
+| 快取寫入，按 TTL 分桶 | `cache_creation_tokens` + `ttl_seconds` |
 | 快取寫入，TTL 未知 | `cache_creation_tokens` |
 
-快取寫入統一使用 `cache_creation_tokens`。費率條件 `{"ttl_seconds":43200}` 匹配 12 小時寫入，省略該條件則為預設價格；同一次請求中的各個寫入桶分別計費。快取讀取仍是單一的 `cached_input_tokens` 計數，沒有 TTL。階梯價格使用 `cacheCreationPerMillion: [{"ttlSeconds":43200,"price":"5"}]`，其中 `ttlSeconds: null` 表示預設價格。價格按百萬 Token 計，不能再乘 TTL。
+快取寫入統一使用 `cache_creation_tokens`。費率條件 `{"ttl_seconds":43200}` 比對 12 小時寫入的價格，不帶該條件的費率作為預設價格；上游回報的每個寫入桶分別計費。快取讀取是單一的 `cached_input_tokens` 計數，沒有 TTL。階梯價格使用 `cacheCreationPerMillion: [{"ttlSeconds":43200,"price":"5"}]`，其中 `ttlSeconds: null` 的條目是預設價格。價格按每百萬 token 計，不再乘以 TTL。
 
-OpenAI Responses 和 Chat 的顯式斷點支援 `prompt_cache_breakpoint: {"mode":"explicit","ttl":"12h"}`（也支援 `"30m"`），Chat ↔ Responses 轉換會保留這個 TTL。目前[官方 OpenAPI](https://github.com/openai/openai-openapi/blob/master/openapi.json) 的請求級 `prompt_cache_options.ttl` 仍只列出 `"30m"`；`prompt_cache_retention` 是獨立的舊策略。單次 usage 目前只宣告 `cache_write_tokens` 總量，因此 GPROXY 將其 TTL 記為未知，不猜測混合斷點的寫入分布。
+OpenAI 單次呼叫的 usage 只回報 `cache_write_tokens` 總量，因此 GPROXY 把這些寫入的 TTL 記為未知，不去猜測它們在不同 TTL 的斷點之間如何分配。
 
-`cached_input_tokens` 以 `input_tokens` 為上限：未命中的餘量按 input 價計，命中部分按快取讀價計，而快取讀**沒有價時繼承 input 價**。沒有自己費率行的快取寫按 0 結算。見
-[價格與分層](/zh-tw/reference/pricing)。
+`cached_input_tokens` 以 `input_tokens` 為上限。未命中的部分按輸入價格計費，命中的部分按快取讀取價格計費；沒有設定快取讀取價格時按輸入價格計費。沒有單獨費率的快取寫入不計費。參見[價格與分層](/zh-tw/reference/pricing)。
 
-單條記錄上的 token 數是可空的——上游沒報某個欄位，不等於它測到了 0——而每個合計都是普通數值，因為"什麼都沒報"的求和確實是 0。
+用量記錄中的各項 token 數可以為空，因為上游沒有回報某個欄位，不代表它測得的是 0。合計值則總是普通數值，因為對「沒有回報」的欄位求和，結果就是 0。
 
-## 保住命中
+## 避免快取未命中
 
-改寫規則跑在轉換**之後**、渠道之前，所以一條改提示文字的規則可以把一次本該命中的快取變成未命中。把穩定內容放在最前、標記放在它之後、每請求都變的內容全部放在邊界之後——並且檢查沒有哪條 `paths` 選得過寬的改寫規則在改這段字首。
-
-見[改寫規則與操作覆蓋](/zh-tw/guides/rules)。
+重寫規則在協定轉換之後、渠道傳送之前執行，因此修改提示文字的規則可能把本應命中的請求變成未命中。把穩定的內容放在最前面，標記放在它後面，每次請求都會變化的內容放在標記之後。同時檢查是否有 `paths` 範圍過寬的重寫規則改動了快取前綴。

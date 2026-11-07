@@ -6,12 +6,17 @@ mode: "wide"
 
 import ConfigurationReference from "/snippets/generated/configuration.en.mdx";
 
-This reference is generated from `AppConfig` and its nested Rust types with
-`schemars`. Field names follow Serde; defaults come from the Rust defaults.
-The shape is shared by native and edge hosts. See [Configuration](/reference/configuration)
-for CLI flags, environment variables and precedence.
+This page lists every field of the configuration document: its type, its
+variants and its default. It is generated from the Rust `AppConfig` type and
+its nested types with `schemars`, so field names are the Serde names and
+defaults are the Rust defaults. The native binary, the Workers host and the
+desktop application all read this same structure.
 
-Schema validation covers the serialized structure. Runtime checks, such as
-whether a master key decodes to 32 bytes or a backend was compiled in, still apply.
+For command-line flags, environment variables and which source wins, see
+[Configuration](/reference/configuration).
+
+The schema describes the structure only. Some checks happen at startup and are
+not expressed here, for example that a master key decodes to exactly 32 bytes
+or that the selected database backend was compiled into the binary.
 
 <ConfigurationReference />

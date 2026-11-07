@@ -1,58 +1,69 @@
 ---
 title: "价格与分层"
-description: "GPROXY v4 怎么给一次交换定价：规则选择、费率行及其条件、上下文与服务档位阶梯，以及完全没有价格时会怎样。"
+description: "GPROXY 如何为一次交换计价：规则选择、费率行与条件、上下文档位与服务档位、费用预算，以及上游未报告用量时的 token 估算。"
 ---
 
-计价在结算时回答一个问题：**这次交换花了多少**——给定供应商、上游模型，以及渠道提取出的归一化用量。
+本页说明 GPROXY 如何根据价格表计算一次交换的费用，以及如何编辑这些表。录入价格、排查费用异常或配置费用预算时会用到。
 
-它发生在**引擎内部**、在结算时，因此预算和观察者看到的是同一个数。v3 由引擎把用量交上去、再由应用层算一遍，于是产生了两套时间语义、两套模型匹配，以及两个"没有价格怎么办"的答案。
-v4 每样只有一个。
+## 概述
 
-三张表，一种形状：一行 `price_rules` 选中一个模型，它的 `price_rates` 行给每个指标定价，它的 `price_tiers` 行按提示长度和服务档位调整 token 阶梯。
+引擎在结算时为每次交换计价，依据是供应商、上游模型，以及渠道从响应中提取出的归一化用量。预算和观察者读取的是同一个计算结果。（v3 中引擎把用量交给应用层，由应用层再算一遍，结果出现了两套模型匹配逻辑，对“模型没有价格”也有两种不同的处理。v4 只在一处计价。）
+
+价格存放在三张表中：
+
+- `price_rules`：每行选中一个模型，可以限定某个供应商和某个操作。
+- `price_rates`：该规则下每个指标的基础价。
+- `price_tiers`：按提示长度和服务档位覆盖该规则的 token 价格。
+
+所有价格和结算金额均以 USD 计。
 
 ## 规则选择
 
-一条规则适用，当
+一条规则同时满足以下条件时适用于某次交换：
 
-- 它的供应商是这次交换的供应商，**或未设**（一条全局规则）；
-- 它的 `modelPattern` glob 匹配**上游**模型名；
-- 它的 `operation` 是这次请求的，**或未设**（覆盖全部操作）。
+- 规则的供应商就是这次交换的供应商，或者规则没有指定供应商（全局规则）；
+- 规则的 `modelPattern` glob 匹配上游模型名；
+- 规则的 `operation` 与请求的操作相同，或者没有指定（覆盖全部操作）。
 
-**供应商规则先于全局规则。** 同一个作用域内 `(priority, id)` 最小者胜。
+供应商规则先于全局规则匹配。同一组内 `(priority, id)` 最小的规则胜出。
 
 | 字段 | 含义 |
 | --- | --- |
-| `providerId` | `null` 是全局规则 |
-| `modelPattern` | 对上游模型名的 `*` / `?` glob |
-| `operation` | `null` 覆盖该模型的每个操作 |
-| `priority` | 越小越先；id 破平 |
-| `currency` | 固定为 `USD`，所有价格和结算金额统一使用美元 |
-| `enabled` | |
+| `providerId` | `null` 表示全局规则 |
+| `modelPattern` | 匹配上游模型名的 `*` / `?` glob |
+| `operation` | `null` 覆盖所匹配模型的全部操作 |
+| `priority` | 越小越先匹配，相同时按 id 排序 |
+| `currency` | 必须为 `USD` |
+| `enabled` | 停用的规则不参与匹配 |
 
-### 一条规则都没有
+币种不是 `USD`、pattern 不是合法 glob 或操作名未知的规则，会在装配快照时被跳过（见[无效行](#无效行)）。
 
-这次交换是**未定价**的：不花钱，照样结算，而且它的用量带着
+如果一次交换的用量按尝试（attempt）分别报告，每个可计费的尝试按其自身模型对应的规则计价，再把金额相加。标记为不可计费的尝试不计入。
+
+### 没有匹配规则的交换
+
+没有任何规则匹配时，这次交换不计价：费用为零，照常结算，用量中带有以下维度：
 
 ```json
 {"dimensions": {"unpriced": "true"}}
 ```
 
-这是一个信号，不是一个拒绝。运维者想知道有个模型在被白嫖；他们不想因为还没人填价格就被拒掉一个请求。
+请求不会因此被拒绝。缺少价格属于配置遗漏，靠这个维度可以找出正在免费提供的模型，而不必在有人录入价格之前拒绝流量。
 
 ## 费率行
 
-一个费率行是某个指标的基础价。
+一个费率行是某条规则下某个指标的基础价。
 
 | 字段 | 含义 |
 | --- | --- |
-| `metric` | 一个内置键，或渠道产出的任意自定义键 |
+| `metric` | 内置指标键，或渠道产出的任意自定义键 |
 | `unit` | `token`、`count`、`second` 或 `character` |
-| `unitQuantity` | 正的分母：1 000 000 个 token、1 张图、60 秒 |
-| `value` | `unitQuantity` 个单位的非负价格，币种取自父规则 |
-| `conditions` | `null` 是兜底行；否则是一个非空的"维度名 → 标量"对象，**全部**条件都要匹配 |
-| `priority` | 同一指标的多行中越小越先 |
+| `unitQuantity` | 正数分母：1 000 000 个 token、1 张图、60 秒 |
+| `value` | `unitQuantity` 个单位的非负价格，单位 USD |
+| `conditions` | `null` 表示兜底行；否则是“维度名 → 标量值”的非空对象，所有条件都必须匹配 |
+| `priority` | 同一指标的多行中，越小越先尝试 |
 
-对一个指标，带条件的行按 `(priority, id)` 顺序尝试，第一个条件全部匹配结算维度的胜出；否则兜底行生效。**被选中的条件费率*替换*基础费率**，不是与它复合。
+对每个指标，带条件的行按 `(priority, id)` 顺序尝试，第一个所有条件都与结算维度匹配的行生效；都不匹配时使用兜底行。命中的条件行取代兜底价，而不是与它叠加。
 
 ```json
 [{"metric":"input_tokens",  "unit":"token","unitQuantity":"1000000","value":"0.40"},
@@ -61,16 +72,19 @@ v4 每样只有一个。
   "conditions":{"quality":"hd","size":"1024x1024"},"priority":0}]
 ```
 
-### 阻止重复计费的那条规则
+### 避免重复计费
 
-**费率必须消费互不相交的量。** 命中缓存的 input 要从普通 input 里扣掉；已经通过聚合项计费的 reasoning 或媒体 token 子集不能再收一次。按图计费和按 token 计费是*互斥*的基准，除非厂商真的两样都收。
+每个费率计价的数量不能与其他费率重叠。具体来说：
 
-一个通用的 `tool_calls` 行和一个具体的 `web_searches` 行不能给同一次调用都计费。而客户端
-*声明*了一个工具，并不构成一次可计费的服务端执行。
+- 命中缓存的 input 与普通 input 分开计数。
+- 已经包含在某个汇总项中计费的 reasoning 或媒体 token 子集，不能再单独计价一次。
+- 按图计费和按 token 计费的输出价格二选一。只有厂商确实两样都收时才同时填写。
+- 通用的 `tool_calls` 行和具体的 `web_searches` 行不能对同一次调用重复计费。
+- 客户端在请求中声明工具不等于服务端执行了工具，不应计费。
 
 ## 指标
 
-**token**——习惯上按每百万计：
+token 指标习惯上按每百万 token 定价：
 
 ```text
 input_tokens          output_tokens           cached_input_tokens
@@ -80,9 +94,7 @@ audio_input_tokens    cached_audio_input_tokens  audio_output_tokens
 video_input_tokens    video_tokens
 ```
 
-缓存写入统一使用 `cache_creation_tokens`。费率条件 `{"ttl_seconds":43200}` 匹配 12 小时写入，省略该条件则为默认价格；同一次请求中的各个写入桶分别计费。缓存读取仍是单一的 `cached_input_tokens` 计数，没有 TTL。阶梯价格使用 `cacheCreationPerMillion: [{"ttlSeconds":43200,"price":"5"}]`，其中 `ttlSeconds: null` 表示默认价格。价格按百万 Token 计，不能再乘 TTL。
-
-**计数、秒与字符：**
+计数、时长与字符指标：
 
 ```text
 image_outputs   video_outputs   audio_seconds   video_seconds   audio_characters
@@ -90,73 +102,82 @@ search_units    web_searches    web_fetches     file_searches
 code_interpreter_sessions       tool_calls      requests
 ```
 
-不在这张表里的指标，只要有费率行点名它，照样被定价。这张表说的是内置键有哪些，不是一个过滤器。
+以上只是内置键的列表，并不限制可用的指标：不在列表中的指标，只要有费率行引用，同样会被计价。
 
-`requests` 是每请求费：每个**被定价的交换**计一个请求。
+非 token 类指标的费用为
+
+```text
+amount × value / unitQuantity
+```
+
+服务档位的乘数不作用于这些指标。
+
+`requests` 是按请求收取的费用，每个被计价的交换计一次请求。
+
+### 缓存写入
+
+缓存写入统一计为 `cache_creation_tokens`。用量中可能有多个保留时长不同的写入桶，每个桶分别计价。要为某个保留时长单独定价，添加带 `ttl_seconds` 条件的费率行：`{"ttl_seconds":43200}` 匹配 12 小时写入；不带该条件的行是默认价格。
+
+在档位中，写入价格以列表形式给出，`ttlSeconds: null` 是默认项：
+
+```text
+cacheCreationPerMillion: [{"ttlSeconds":43200,"price":"5"}]
+```
+
+价格按每百万 token 计。保留时长只用于选择价格，不参与乘法。
+
+缓存读取是单一的 `cached_input_tokens` 计数，没有 TTL。
 
 ## 分层
 
-一行 `price_tiers` **只**覆盖 token 价格，而且一律按每百万。
+`price_tiers` 行只覆盖 token 价格，并且一律按每百万 token 计。
 
 | 字段 | 含义 |
 | --- | --- |
-| `serviceTier` | `null` 使它成为一个**上下文**档位；否则是 `standard`、`priority`、`flex`、`batch`… |
-| `minPromptTokens` | 非负的含端点阈值；默认 0 |
-| `multiplier` | 服务档位用：把继承来的价格乘以多少。仅上下文的行不设它 |
+| `serviceTier` | `null` 表示上下文档位；否则是服务档位，如 `standard`、`priority`、`flex`、`batch` |
+| `minPromptTokens` | 非负阈值，包含端点；默认 0 |
+| `multiplier` | 仅用于服务档位：继承价格要乘的系数。上下文档位不设置 |
 | `*_per_million` | 某一类 token 的显式价格 |
 
-显式列有 `input`、`output`、`cache_read`、`cache_creation_per_million`、
-`reasoning`、`image_input`、`image_output`、`audio_*` 和 `video_*`。
+显式价格列有 `input`、`output`、`cache_read`、`cache_creation`、`reasoning`、`image_input`、`image_output`、`audio_input`、`cached_audio_input`、`audio_output`、`video_input` 和 `video`，均带 `_per_million` 后缀。`cache_creation_per_million` 是[缓存写入](#缓存写入)一节所述的列表。
 
-**提示长度算的是 input 加缓存读加缓存写，各计一次。**
+判断阈值时，提示长度等于 input token、缓存读取与缓存写入之和，每项只计一次。
 
-### 按 token 类的复合
+### token 价格的计算顺序
 
-1. **基础费率**——该指标的 `price_rates` 行，带条件的先试。
-2. **上下文档位**——在**没有**服务档位的行里，取已达到的最大 `minPromptTokens`。它的显式价格替换掉它所设的那些类的基础价。
-3. **服务档位**——在点名了*实际*服务档位的行里，取已达到的最高阈值。那里的显式价格
-   **直接胜出**；否则把上下文调整后的基础价乘以该行的 `multiplier`（默认 1）。
+每类 token 的价格分三步确定：
 
-阈值相同时按 `(priority, id)` 较小者破平。`null` 表示继承；0 表示**明确免费**，不是缺失。
+1. 基础费率：该指标的 `price_rates` 行，带条件的行先尝试。
+2. 上下文档位：在没有服务档位的行中，取提示长度已达到的最高 `minPromptTokens` 那一行。该行设置了哪些类的显式价格，就替换哪些类的基础价。
+3. 服务档位：在服务档位等于实际服务档位的行中，取已达到的最高阈值那一行。该行有显式价格时直接使用；否则把上一步得到的价格乘以该行的 `multiplier`（默认 1）。
 
-乘数从不作用于工具或媒体的*计数*——只作用于 token 价格。
+阈值相同时，`(priority, id)` 较小的行胜出。价格为 `null` 表示沿用上一步的结果；`0` 表示该类免费。
 
 <Warning>
-**显式档位价会替换掉整条阶梯**
-
-基础 input 价为 1、上下文台阶 `≥ 200 000 → 2`、提示 300 000 个 token 时：
+服务档位的显式价格会取代它下面的整条阶梯，包括上下文档位。设基础 input 价为 1，上下文台阶为 `≥ 200 000 → 2`，提示长度为 300 000 个 token：
 
 | `batch` 行 | 实际 input 费率 |
 | --- | --- |
 | `{"serviceTier":"batch","multiplier":"0.5"}` | `2 × 0.5 = 1` |
-| `{"serviceTier":"batch","inputPerMillion":"0.5"}` | `0.5`——200k 那级丢了 |
+| `{"serviceTier":"batch","inputPerMillion":"0.5"}` | `0.5`（200k 台阶失效） |
 | `{"serviceTier":"batch","minPromptTokens":200000,"inputPerMillion":"1"}` | `1` |
 
-要么在它必须覆盖的每一级都重复写一遍显式档位价，要么用乘数。
+要么在需要覆盖的每个阈值上重复写出显式档位价，要么改用乘数。
 </Warning>
-### 两个特例
 
-- **reasoning 是 output 的子集。** 存在 reasoning 价格时，reasoning token 从
-  `output_tokens` 里扣出来单独计；不存在时它们留在 output 里，只被计一次。
-- **没有价格的缓存读继承 input 价。** 没有价格的*其他*每一类都免费。这个不对称是刻意的：缓存读毫无疑义就是一个 input token，而缺失的音频或视频价格是运维者应该看到为 0 的配置缺口。
+### reasoning token 与缓存读取
 
-### 要求的档位 vs 实际提供的
+reasoning token 是 output token 的子集。规则有 reasoning 价格时，reasoning token 从 `output_tokens` 中扣除，按 reasoning 价格单独计费；没有时，它们留在 output 中，按 output 价格计一次。
 
-被收费的是响应**实际报告**的那个档位，不是请求要求的那个。一个被厂商降级的 `priority`
-请求，按降级后那一行结算。
+没有单独价格的缓存读取沿用 input 价格；其他没有价格的 token 类一律免费。缓存读取本来就是 input token，沿用 input 价格是稳妥的默认值。而音频或视频缺少价格属于配置遗漏，按零计价能让这个遗漏在费用里直接显现出来。
 
-## 其余一切
+### 请求的服务档位与实际服务档位
 
-不是 token 类的每个指标都按
-
-```text
-amount × value / unitQuantity
-
-```
-
-计费，而且**从不被服务档位乘**。
+计价使用响应中报告的服务档位，而不是请求中要求的档位。厂商把 `priority` 请求降级处理时，按降级后的档位行结算。服务档位名比较时不区分大小写。
 
 ## 编辑价格
+
+每张表都有对应的管理 API：
 
 ```sh
 curl -s http://127.0.0.1:8787/admin/api/price-rules  -H "Authorization: Bearer $GPROXY_KEY"
@@ -164,9 +185,11 @@ curl -s http://127.0.0.1:8787/admin/api/price-rates  -H "Authorization: Bearer $
 curl -s http://127.0.0.1:8787/admin/api/price-tiers  -H "Authorization: Bearer $GPROXY_KEY"
 ```
 
-每个家族都有通常的五条路由外加一个批量，而一次批量无论点名多少行都是一个 revision 提交。
+每组都有通常的五个路由和一个批量路由。一次批量操作无论包含多少行，都作为一个 revision 提交。在控制台中，全局价格在“模型”页编辑，供应商价格在供应商的“模型”标签中编辑，见[控制台](/zh-cn/guides/console#配额与价格)。
 
-内置目录能把本次发布知道的模型填进去：
+### 应用内置目录价格
+
+内置模型目录收录了发布时已知模型的价格。从目录创建规则：
 
 ```sh
 curl -s -X POST http://127.0.0.1:8787/admin/api/default-model-catalog/apply-prices \
@@ -174,21 +197,29 @@ curl -s -X POST http://127.0.0.1:8787/admin/api/default-model-catalog/apply-pric
   -d '{"providerId":"…","modelIds":["gpt-4o-mini"],"overwrite":false}'
 ```
 
-不带供应商时使用目录自己的 glob 与优先级，因此一条规则给这个模型在任何地方定价；带供应商时字面名字成为 pattern，优先级为 0。**`overwrite: false` 正是让重复应用安全的东西**：运维者改过的规则保留它的改动，并被报告为跳过。
+不带 `providerId` 时，规则使用目录自带的 glob 和优先级，一条全局规则即可为所有提供该模型的供应商计价。带 `providerId` 时，模型名原样作为 pattern，优先级为 0。
 
-一行坏的计价数据在装配时被丢掉并打 warn，**不会**阻塞快照。一个打错的小数不该拖垮一个本来还在正常服务流量的实例。
+使用 `"overwrite": false` 可以随时重复应用目录：已经存在的规则（例如你修改过的规则）保持不变，在响应中计入跳过数。
 
-## 预算花的是这个结果
+### 无效行
 
-一个预算就是一行 metric 为 `cost`、unit 为 USD 的 `quotas`。准入把调用方的链
-`[api_key?, user, team?, org?]` 交给引擎，而链上**任何** owner 的**每一个**
-启用预算都适用。
+无法使用的计价行（币种不是 USD 的规则、非法 pattern、未知操作、`unitQuantity` 不为正数的费率、不是“非空标量对象”的条件）会在装配配置快照时被丢弃并记录 warn 日志。快照的其余部分照常加载，一个输错的数值不会让正在服务流量的实例停下来。修改价格后请检查日志中是否有这类警告。
 
-费用在上游调用结束后结算，在途请求和并发调用可能使预算超出上限。预算归属与检查方式见[权限、限流与费用预算](/zh-cn/guides/permissions)。
+## 费用预算
 
-## Token 估算
+费用预算是一行 metric 为 `cost`、以 USD 计的 `quotas`。准入阶段，引擎拿到调用方链 `[api_key?, user, team?, org?]`，链上每个归属者的每个已启用预算都对该请求生效。
 
-当一个可计费的响应完全没带用量时，引擎自己数 token，并把记录标为 `estimated = true`。计数用的是本地词表：GPT 系列用 tiktoken 编码，其他用该模型目录行点名的词表，再没有就用内置的 DeepSeek。
+费用在上游调用返回后才结算，因此在途请求和并发请求可能使预算超出上限。预算的归属和检查方式见[权限、限流与费用预算](/zh-cn/guides/permissions)。
+
+## token 估算
+
+可计费的响应完全没有用量时，引擎自行统计 token，并把记录标记为 `estimated = true`。统计使用本地词表，按以下顺序选择：
+
+1. GPT 系列模型使用 tiktoken 编码；
+2. 模型目录行指定的词表；
+3. 内置的 DeepSeek 词表。
+
+列出已存储的词表，或从 Hugging Face 下载词表并指定给某个模型和实例默认值：
 
 ```sh
 curl -s http://127.0.0.1:8787/admin/api/tokenizer-vocabs -H "Authorization: Bearer $GPROXY_KEY"
@@ -197,6 +228,6 @@ curl -s -X POST http://127.0.0.1:8787/admin/api/tokenizer-vocabs \
   -d '{"repo":"…","filename":"tokenizer.json","modelId":"…","setAsDefault":true}'
 ```
 
-一次抓取经配置好的文件存储下载文件，然后插入那一行并把模型与默认值指过去——**一行加两个指针在一个 revision 提交里**。字节先落地、行后落库：一行指向从未被写入的对象会让此后每次重载都失败，而一个没有行的对象只是浪费空间。
+下载的文件先写入已配置的文件存储，然后在一次 revision 提交中写入词表行、模型指针和默认指针。顺序不能颠倒：指向从未写入的文件的行会让之后每次重载都失败，而没有对应行的文件只是浪费一点空间。
 
-没有文件存储时整个家族回答"不支持"：没有地方放这些字节。
+词表依赖文件存储。没有配置文件存储时，所有词表路由都返回“不支持”。见[文件存储](/zh-cn/reference/database#文件存储)。

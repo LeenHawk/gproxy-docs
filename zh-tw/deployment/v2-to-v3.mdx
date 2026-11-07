@@ -1,36 +1,78 @@
 ---
-title: "從 v2 SQLite 遷移到 v3"
-description: "使用 v3.0.22 升級 v2 SQLite 資料庫，了解遷移範圍與失敗後的還原方式。"
+title: "從 v2 升級到 v3"
+description: "使用 v3.0.22 升級 v2 SQLite 資料庫，檢查結果，必要時還原 v2。"
+sidebarTitle: "v2 升級到 v3"
 ---
 
-原生 v3 服務會在開啟 v3 儲存前識別 v2 SQLite 資料庫。原有啟動命令可繼續使用 `--persistence db`、`--data-dir`、檔案型 `--dsn sqlite://PATH?mode=rwc` 和 `--update-channel staging`。如果來源資料庫已加密，保留原有 `GPROXY_MASTER_KEY`，不要同時輪換主金鑰。
+本文供管理員將使用 SQLite 的 v2 部署升級到 v3 時參考。原生 v3 服務（v3.0.22）啟動時會辨識 v2 SQLite 資料庫，並在開啟 v3 儲存之前完成轉換。如果最終目標是 v4，可以略過 v3，直接使用 [v2 升級到 v4](/zh-tw/deployment/v2-to-v4)，它同樣支援 PostgreSQL 和 MySQL。
 
-## 升級前
+## 變更內容
 
-- 保存目前的 v2 執行檔與啟動設定。v2 自動更新會替換執行檔，不保留舊版；v3 資料庫遷移無法找回已被替換的程式。
-- 停止其他使用此資料庫的執行個體。原生入口會在存取資料庫前占用監聽連接埠，遷移還需要 SQLite 獨佔鎖。
-- 預留完整來源備份、遷移工作資料庫和獨立切換快照所需的磁碟空間。
-- 自動升級不支援 PostgreSQL、MySQL、遠端 libSQL、v1 資料庫或非標準 SQLite DSN。這些輸入需要先明確匯出、遷移。直接遷移到 v4 可使用[離線遷移工具](/zh-tw/deployment/v2-to-v4)。
+會遷移的內容：
 
-## 啟動時的處理
+- 支援的設定，以及可以復原的金鑰。
+- 組織、團隊和使用者對全部路由（`*`）的授權。
+- 歷史用量：`usages` 中仍保留的明細列。v3 據此重建每小時彙總。
+- 請求日誌：`downstream_requests` 遷入 `request_logs`，`upstream_requests` 遷入 `wire_logs`。請求 ID、時間、方法、路徑或 URL、狀態、請求標頭以及請求和回應本文都會保留，同一請求的多次上游嘗試也一併保留。v2 中為 0 的狀態碼變為未知回應狀態。供應商和憑證參照會重新對應，已刪除的物件以停用的佔位物件代替。
+- 可以復原的 API key。
 
-1. 取得遷移鎖，避免多個程序同時升級。
+不遷移的內容（資料仍保留在 v2 備份中）：
+
+- v2 用量彙總、每日憑證統計和歷史配額週期。因此，明細已被 v2 保留策略刪除的用量不會出現在 v3 統計中。
+- 憑證健康快照、tokenizer 快取和 Codex 任務繫結。
+- v2 限流規則、針對特定路由的授權、未知的權限範圍，以及主體已不存在的授權。這些策略在 v3 中不生效，需要升級後重新設定。
+- 未知的資料表，無論其中是否有資料。
+- v2 特有的日誌建立、更新時間和每次嘗試的 `latency_ms`。v3 從用量明細推算請求時長。
+- 稽核日誌。瀏覽器和用戶端可能需要重新登入。
+
+每個被略過的非空資料表都會連同列數和原因列在 `report.txt` 中。
+
+## 準備工作
+
+1. 保存目前使用的 v2 執行檔及其啟動參數。v2 自我更新替換程式時不保留舊版本，v3 的遷移也無法找回它，而回復時需要用到。
+2. 確認資料庫類型。只有 v2 SQLite 資料庫會自動升級，即預設資料庫或檔案型的 `--dsn sqlite://PATH?mode=rwc`。PostgreSQL、MySQL、遠端 libSQL、v1 資料庫和其他 SQLite DSN 都不在此列，需要另行遷移，例如使用 [v2 升級到 v4](/zh-tw/deployment/v2-to-v4)。
+3. 如果資料庫已加密，請記下 `GPROXY_MASTER_KEY`。升級時不要同時輪換主金鑰；開啟輪換時，v3 會以 `disable master-key rotation during the v2 upgrade; rotate after the upgrade completes` 拒絕啟動。
+4. 確認磁碟有足夠空間，容納一份完整的資料庫副本、轉換用的工作資料庫，以及用於切換的獨立副本。
+5. 安排停止其他所有使用該資料庫的處理程序。升級需要 SQLite 獨占鎖；v3 服務在存取資料庫之前先占用監聽連接埠，因此期間無法再啟動第二個執行個體。
+
+## 升級步驟
+
+1. 停止 v2。
+2. 以 [v3.0.22](https://github.com/LeenHawk/gproxy/releases/tag/v3.0.22) 執行檔取代 v2。
+3. 以原來的 v2 啟動指令啟動。v3 接受 `--persistence db`、`--data-dir`、檔案型 `--dsn sqlite://PATH?mode=rwc` 和 `--update-channel staging`。`GPROXY_MASTER_KEY` 保持不變。
+4. 觀察日誌。依序會看到 `checking v2 configuration before database copy`、`configuration preflight passed; copying the v2 database`、`importing v2 configuration, usage, and request logs` 和 `validating the migrated database before cutover`，最後是一條註明備份目錄的警告：`v2 database upgraded; retain this backup to roll back with a v2 executable`。
+
+啟動時，v3 依以下順序處理：
+
+1. 取得遷移鎖（資料庫旁的 `.gproxy-v2-upgrade.lock`），確保只有一個處理程序執行升級。
 2. 在資料庫旁建立私有目錄 `gproxy-v2-backup-TIMESTAMP-PID`。
-3. 獨佔鎖定 SQLite，執行 WAL checkpoint，再將來源複製為備份目錄中的 `gproxy-v2.db`。
-4. 將支援的設定、可恢復的秘密、原始用量及上下游請求記錄匯入 `candidate/` 中的新 v3 資料庫。
-5. 驗證匯入數量、SQLite 完整性、參照關係、執行階段控制狀態、用量筆數與精確的歷史結算費用總額。
-6. 僅在驗證通過後寫入資料並原子替換設定所指向的資料庫。保留備份和 `report.txt`；重新啟動 v3 不會重複匯入。
+3. 在複製之前檢查 v2 設定。
+4. 獨占鎖定 SQLite 資料庫，執行 WAL checkpoint，再將資料庫複製為該目錄中的 `gproxy-v2.db`。
+5. 從副本中將設定、金鑰、用量和請求日誌匯入 `candidate/` 下的新 v3 資料庫，日誌以有上限的批次讀寫。
+6. 驗證匯入數量、SQLite 完整性、參照關係、執行階段控制狀態、用量列數以及精確的結算費用總額。
+7. 全部通過後，才將新資料庫寫入磁碟並以原子操作替換設定所指向的資料庫。
 
-組織、團隊與使用者的萬用路由授權（`*`）會保留。歷史用量只遷移仍在 `usages` 中的明細，v3 據此重建小時彙總。v2 用量彙總、每日憑證統計和歷史配額週期不會匯入，因此已被 v2 保留策略刪除明細的歷史不會出現在 v3 統計中；這些來源資料表仍保留在完整備份內。
+備份目錄及其中的 `report.txt` 會保留下來。重新啟動 v3 不會再次匯入。
 
-憑證健康快照、tokenizer 快取與 Codex 工作繫結不會匯入。`report.txt` 會列出每個非空但略過的資料表、筆數與原因。未知資料表（即使非空）與 v2 限流規則也會略過並記錄。不支援的特定路由授權、未知權限範圍及主體已不存在的授權會略過；支援的萬用授權仍會匯入。略過的策略在 v3 不會生效，需要升級後重新設定。
+## 檢查升級結果
 
-`downstream_requests` 和 `upstream_requests` 分別遷入 `request_logs` 和 `wire_logs`。請求 ID、時間、方法、路徑或 URL、狀態、請求標頭及請求/回應本文會保留，包括同一請求的多次上游嘗試。v2 狀態碼 0 變為未知回應狀態。供應商與憑證參照會重新對應；已刪除物件使用停用的歷史預留物件。記錄以有界批次讀寫。
+1. 閱讀備份目錄中的 `report.txt`，其中列出了被略過的資料表和策略。
+2. 登入控制台，檢查供應商、憑證、使用者和 API key。
+3. 與 v2 比對用量統計。注意只有仍保留的明細列被匯入。
+4. 重新設定報告中列為略過的限流規則和特定路由授權。
 
-v2 特有的記錄建立/更新時間及每次嘗試的 `latency_ms` 沒有對應的 v3 欄位，仍保留在備份中；v3 從用量明細推導請求時長。稽核記錄不會匯入。瀏覽器與用戶端可能需要重新登入；可恢復的 API key 會保留。
+## 升級失敗時
 
-## 失敗與還原
+在替換之前失敗，v2 資料庫保持原樣。v3 會將 `migration failed:` 和錯誤訊息附加到本次工作目錄的 `report.txt` 中，並將同樣的錯誤連同目錄路徑寫入資料庫旁的 `.gproxy-v2-upgrade-blocked`。
 
-替換前失敗會保留原 v2 資料庫。檢查輸出中的工作目錄及資料庫旁的 `.gproxy-v2-upgrade-blocked`。這個標記避免程序管理器反覆複製失敗的資料庫而耗盡磁碟。修正原因後，只刪除這個標記再重試；不要透過刪除備份重試。
+只要這個標記檔案存在，v3 就不會重試，而是以 `automatic migration previously failed; inspect … and remove that marker only after resolving the failure` 停止。這樣可以避免處理程序管理員反覆複製一個注定失敗的資料庫，把磁碟寫滿。修正原因後，只刪除這個標記檔案，再啟動 v3。不要靠刪除備份來觸發重試。
 
-還原時停止 v3，保留目前的 v3 資料庫供調查，重新安裝已保存的 v2 執行檔或相同的官方版本，再將備份 `gproxy-v2.db` 還原到原資料庫路徑。還原前，將目前的 `-wal` 和 `-shm` 檔案隨目前資料庫一起移開。還原原啟動設定與主金鑰，再啟動 v2。不要讓 v2 開啟已遷移的 v3 資料庫。切換後寫入的用量留在保存的 v3 資料庫中，不會自動合併回 v2。
+## 回復
+
+1. 停止 v3。
+2. 將目前的 v3 資料庫連同 `-wal`、`-shm` 檔案一起移到別處，留作排查。
+3. 將備份目錄中的 `gproxy-v2.db` 複製到設定的資料庫路徑。
+4. 重新安裝保存的 v2 執行檔，或相同版本的官方 v2 發行版本。
+5. 以原來的啟動參數和主金鑰啟動 v2。
+
+不要讓 v2 開啟已轉換的 v3 資料庫。切換後記錄的用量留在保存下來的 v3 資料庫中，不會合併回 v2。
