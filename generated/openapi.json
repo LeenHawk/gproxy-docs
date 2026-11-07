@@ -74545,7 +74545,7 @@
   "info": {
     "description": "Forwarding, management, portal and OAuth APIs generated from Rust types. Input and output schemas preserve their respective Serde contracts. Streaming events and WebSocket messages are documented alongside HTTP payloads.",
     "title": "GPROXY HTTP API",
-    "version": "4.2.0"
+    "version": "4.2.1"
   },
   "openapi": "3.1.0",
   "paths": {
