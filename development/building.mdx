@@ -366,10 +366,9 @@ Missing signing keys or Store identity variables make packaging fail.
   Store submission, and with `MS_STORE_PUBLISH_ENABLED` set, a successful
   GitHub publication triggers the Store submission workflow. Store submission
   packages are unsigned; the Store signs them for distribution.
-- Windows on GitHub: when SignPath is enabled (`SIGNPATH_ENABLED`), the MSIX
-  files attached to a version release are rebuilt with the signing
-  certificate's publisher and signed in a separate job, so they install
-  directly. SignPath requires a maintainer to approve each signing request,
-  and the job waits for that approval; a request that is not approved in time
-  fails the release, and re-running the failed jobs submits it again. Without
-  SignPath, the GitHub MSIX files are unsigned as well.
+- Windows on GitHub: release packages are not code-signed. The ZIP and MSIX
+  files attached to a release are unsigned, so Windows may warn before
+  running them, and an MSIX has to be installed with sideloading enabled.
+  Signed copies come from the Microsoft Store, also through
+  `winget install --source msstore`. The WinGet community source only takes
+  signed MSIX, so it receives no new versions while releases are unsigned.
