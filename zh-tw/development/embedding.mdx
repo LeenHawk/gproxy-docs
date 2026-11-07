@@ -30,7 +30,7 @@ gproxy-sdk = { git = "https://github.com/LeenHawk/gproxy", tag = "v4.0.0" }
 
 範例中固定的是 `v4.0.0` tag，實際使用時請換成你要對接的版本。workspace 使用 Rust edition 2024。v4 的 Rust API 和管理 API 與 v3 不同。
 
-`gproxy-sdk` 的許可證是 AGPL-3.0-or-later。MIT 協議的配套庫（`gproxy-protocol`、`gproxy-client`、`gproxy-cache`、`gproxy-seaorm`、`gproxy-tokenizer`、`gproxy-file` 等）也會單獨發布到 crates.io。
+`gproxy-sdk` 的許可證是 AGPL-3.0-or-later，沒有發布到 crates.io。MIT 協議的配套庫（`gproxy-protocol`、`gproxy-client`、`gproxy-cache`、`gproxy-seaorm`、`gproxy-tokenizer`、`gproxy-file`、`gproxy-client-sdk` 等）和 `gproxy-store` 會單獨發布到 crates.io。
 
 ## 建置控制代碼
 
@@ -88,6 +88,7 @@ builder 可以從 `GproxyBuilder::sqlite(path)`、`GproxyBuilder::sqlite_memory(
 | `s3` | S3/R2 儲存 |
 | `bundled-vocabulary`（預設） | 內建 DeepSeek 詞表，為沒有自帶詞表檔案的模型估算 token |
 | `ts` | 為每個 DTO 和每個渠道 descriptor 生成 `ts-rs` 宣告 |
+| `client-sdk` | `ClientBackend`：在處理程序內以這個控制代碼驅動 `gproxy-client-sdk` 的 `Client`（僅原生平台） |
 
 預設 feature 集合可以為 `wasm32-unknown-unknown` 建置，`libsql` 也可以。
 

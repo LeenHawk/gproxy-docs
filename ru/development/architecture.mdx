@@ -108,9 +108,11 @@ gproxy, gproxy-host-edge, gproxy-host-tauri
                                 └─ gproxy-tokenizer, gproxy-file
 ```
 
-`gproxy-client-sdk` находится на уровне хостов: он зависит от `gproxy-sdk` и
-`gproxy-client` и используется программами, которые обращаются к экземпляру
-GPROXY.
+`gproxy-client-sdk` используется программами, которые обращаются к экземпляру
+GPROXY. Он зависит только от `gproxy-protocol`, `gproxy-client` и `gproxy-file`,
+но не от движка. Встроенный бэкенд `gproxy_sdk::ClientBackend` находится в
+`gproxy-sdk` за функцией `client-sdk`, поэтому зависимость направлена от
+движка под AGPL к клиенту под MIT, а не наоборот.
 
 У движка никогда не появляется слушающий сокет, маршрутизатор или UI. Если
 изменение требует, чтобы `gproxy-core` знал об HTTP-путях, пользователях или

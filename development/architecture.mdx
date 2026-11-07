@@ -95,8 +95,11 @@ gproxy, gproxy-host-edge, gproxy-host-tauri
                                 └─ gproxy-tokenizer, gproxy-file
 ```
 
-`gproxy-client-sdk` sits beside the hosts: it depends on `gproxy-sdk` and
-`gproxy-client` and is used by programs that call a GPROXY instance.
+`gproxy-client-sdk` is used by programs that call a GPROXY instance. It
+depends only on `gproxy-protocol`, `gproxy-client` and `gproxy-file`, not on
+the engine. Its in-process backend, `gproxy_sdk::ClientBackend`, is in
+`gproxy-sdk` behind the `client-sdk` feature, so the dependency points from
+the AGPL engine to the MIT client and not the other way.
 
 The engine never gains a listener, a router or a UI. A change that needs
 `gproxy-core` to know about HTTP paths, users or permissions belongs in a

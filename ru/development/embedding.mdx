@@ -49,10 +49,10 @@ gproxy-sdk = { git = "https://github.com/LeenHawk/gproxy", tag = "v4.0.0" }
 работаете. Workspace использует Rust edition 2024. Rust API и API управления в
 v4 отличаются от v3.
 
-`gproxy-sdk` распространяется под AGPL-3.0-or-later. Вспомогательные
-библиотеки под MIT (`gproxy-protocol`, `gproxy-client`, `gproxy-cache`,
-`gproxy-seaorm`, `gproxy-tokenizer`, `gproxy-file` и другие) также публикуются
-на crates.io отдельно.
+`gproxy-sdk` распространяется под AGPL-3.0-or-later и на crates.io не
+публикуется. Библиотеки под MIT (`gproxy-protocol`, `gproxy-client`,
+`gproxy-cache`, `gproxy-seaorm`, `gproxy-tokenizer`, `gproxy-file`,
+`gproxy-client-sdk` и другие) и `gproxy-store` публикуются там отдельно.
 
 <a id="building-a-handle"></a>
 
@@ -125,6 +125,7 @@ println!("serving revision {}", gproxy.revision().0);
 | `s3` | Хранилище S3/R2 |
 | `bundled-vocabulary` (по умолчанию) | Словарь DeepSeek для оценки токенов у моделей без собственного файла словаря |
 | `ts` | Объявления `ts-rs` для каждого DTO и каждого дескриптора канала |
+| `client-sdk` | `ClientBackend`: обслуживает `Client` из `gproxy-client-sdk` этим дескриптором внутри процесса (только нативные платформы) |
 
 Набор features по умолчанию компилируется под `wasm32-unknown-unknown`, как и
 `libsql`.
