@@ -72,7 +72,7 @@ gproxy, gproxy-host-edge, gproxy-host-tauri
                                 └─ gproxy-tokenizer, gproxy-file
 ```
 
-`gproxy-client-sdk` 与宿主处于同一层：它依赖 `gproxy-sdk` 和 `gproxy-client`，供调用 GPROXY 实例的程序使用。
+`gproxy-client-sdk` 供调用 GPROXY 实例的程序使用，只依赖 `gproxy-protocol`、`gproxy-client` 和 `gproxy-file`，不依赖引擎。它的进程内后端 `gproxy_sdk::ClientBackend` 放在 `gproxy-sdk` 的 `client-sdk` feature 后面，因此依赖方向是 AGPL 的引擎依赖 MIT 的客户端，而不是反过来。
 
 引擎不会拥有监听器、router 或 UI。如果某项修改需要 `gproxy-core` 知道 HTTP 路径、用户或权限，这项修改应当放到更高的层。
 

@@ -46,10 +46,10 @@ The example pins the `v4.0.0` tag; use the tag of the release you build
 against. The workspace uses Rust edition 2024. The v4 Rust and management APIs
 differ from v3.
 
-`gproxy-sdk` is AGPL-3.0-or-later. The MIT support libraries
+`gproxy-sdk` is AGPL-3.0-or-later and is not on crates.io. The MIT libraries
 (`gproxy-protocol`, `gproxy-client`, `gproxy-cache`, `gproxy-seaorm`,
-`gproxy-tokenizer`, `gproxy-file` and others) are also published separately to
-crates.io.
+`gproxy-tokenizer`, `gproxy-file`, `gproxy-client-sdk` and others) and
+`gproxy-store` are published there separately.
 
 ## Building a handle
 
@@ -118,6 +118,7 @@ Other builder methods:
 | `s3` | S3/R2 storage |
 | `bundled-vocabulary` (default) | DeepSeek's vocabulary for token estimation on models without their own vocabulary file |
 | `ts` | `ts-rs` declarations for every DTO and every channel descriptor |
+| `client-sdk` | `ClientBackend`, which serves a `gproxy-client-sdk` `Client` from this handle in process (native only) |
 
 The default feature set compiles for `wasm32-unknown-unknown`, and so does
 `libsql`.

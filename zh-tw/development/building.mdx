@@ -242,7 +242,7 @@ Release 工作流（`.github/workflows/release.yml`）在推送時發布：
 
 工作流負責構建各個包、生成簽名的更新清單並上傳附件。構建或簽名任一步失敗，發布就不完整。
 
-版本 tag 還會執行 `scripts/publish-crates.sh`，把選定的 MIT 許可庫發布到 crates.io。其他 crate 透過 git 或路徑依賴使用，見[嵌入核心庫](/zh-tw/development/embedding)。
+版本 tag 還會執行 `scripts/publish-crates.sh`，把 MIT 授權的函式庫和 `gproxy-store` 發布到 crates.io。其他 crate 透過 git 或路徑依賴使用，見[嵌入核心庫](/zh-tw/development/embedding)。
 
 ### 簽名與商店提交
 
