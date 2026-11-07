@@ -252,4 +252,4 @@ Release 工作流（`.github/workflows/release.yml`）在推送時發布：
 - Android：APK 使用 `ANDROID_SIGNING_*` secrets 簽名。
 - macOS：只做 ad-hoc 簽名。
 - Windows：各包使用 Microsoft Store 的包身份。在 `release` 環境中配置四個變數：`MS_STORE_IDENTITY_NAME`、`MS_STORE_DISPLAY_NAME`、`MS_STORE_IDENTITY_PUBLISHER`、`MS_STORE_PUBLISHER_DISPLAY_NAME`；CLI 使用對應的 `MS_STORE_CLI_*` 變數。Headless 的包身份和顯示名固定，Store 提交只需在共用的發布者變數之外再配置 `MS_STORE_HEADLESS_PRODUCT_ID`。正式版保留兩種架構的 Store 提交包；設定 `MS_STORE_PUBLISH_ENABLED` 後，GitHub 發布成功會觸發 Store 提交流程。Store 提交包不簽名，由 Store 在分發時簽名。
-- GitHub 上的 Windows 包：啟用 SignPath（`SIGNPATH_ENABLED`）時，版本發布附帶的 MSIX 會按簽名證書的發布者重新打包，並在單獨的任務中籤名，可以直接安裝。SignPath 要求維護者逐個批准簽名請求，該任務會一直等待批准；未在時限內批准的請求會使發布失敗，重新執行失敗的任務即可再次提交。未啟用 SignPath 時，GitHub 上的 MSIX 同樣不簽名。
+- GitHub 上的 Windows 套件：發布套件不做程式碼簽章。版本附帶的 ZIP 和 MSIX 都沒有簽章，Windows 執行前可能會跳出警告，MSIX 需要開啟側載才能安裝。已簽章的版本只能從 Microsoft Store 取得，也可以用 `winget install --source msstore` 安裝。WinGet 社群來源只接受已簽章的 MSIX，發布套件不簽章期間不會有新版本。
