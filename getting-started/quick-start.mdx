@@ -6,41 +6,51 @@ sidebarTitle: "Quick Start"
 
 import { VideoTutorial } from "/snippets/video-tutorial.jsx";
 
-Install and start GPROXY from [Download & Install](/download#setup). Application users complete the setup wizard and open the in-app console. The CLI runs the same wizard in the terminal the first time `gproxy` starts there; container users open `http://127.0.0.1:8787/console/` and sign in with the administrator account created on first startup. If the wizard already created a provider and credential, skip to step 3.
-
-Quick start video tutorial.
+This tutorial takes a freshly installed GPROXY to a working request: you add an upstream provider, test a credential, give it a model name and call it with curl. It uses an OpenAI-compatible service, so you need an API key for that service and a model ID it supports.
 
 <VideoTutorial locale="en" />
 
-This example uses an OpenAI-compatible service. You need an upstream API key and a model ID supported by that service.
+## Before you start
+
+Install and start GPROXY as described in [Download and install](/download#setup), then open the console:
+
+- Application: complete the setup wizard; it opens the in-app console.
+- CLI: the first time `gproxy` runs in a terminal, it runs the same wizard there.
+- Container: open `http://127.0.0.1:8787/console/` and sign in with the administrator account created on first startup.
+
+If the wizard already created a provider and credential for you, skip to step 3.
 
 ## 1. Add a provider
 
-Open **Providers** and create a connection:
+Open **Providers** and create a new provider:
 
 - Name it `openai-main`.
 - For the official OpenAI service, select the `openai` channel.
-- For another compatible service, select `custom`, enter its base URL, and select its supported protocols, such as Chat Completions (`openai_chat`). Check the upstream documentation for these values.
+- For another OpenAI-compatible service, select `custom`, enter the service's base URL and select the protocols it supports, for example Chat Completions (`openai_chat`). The upstream's documentation tells you which.
 
-The provider name can also be used for direct requests. Multiple providers may use the same channel, with separate addresses and credentials.
+The provider name is also part of the URL for calling this provider directly. You can create several providers on the same channel, each with its own address and credentials.
 
 ## 2. Add and test a credential
 
-Open the provider's **Credentials** tab and add the upstream API key. For channels such as Codex or Claude Code, choose the login option and follow its authorization steps.
+Open the provider's **Credentials** tab and add the upstream API key. Channels that sign in with an account, such as Codex or Claude Code, offer a login option instead; follow its authorization steps.
 
-Use the test action on the credential, select a supported model, and send a short message. Generation tests make a real upstream request and may incur charges. Save the working model ID for the next step.
+Run **Test generation** on the credential, pick a model the upstream supports and send a short message. Note the model ID that worked; step 3 needs it.
 
-The upstream key stays in GPROXY. Your client uses a gateway API key issued by GPROXY; these are different credentials.
+<Note>
+Generation tests are real upstream requests and may be charged by the upstream.
+</Note>
+
+The upstream key stays in GPROXY. Clients call GPROXY with a gateway API key that GPROXY issues, and never see the upstream key.
 
 ## 3. Create a model route
 
-Open **Model routes**, create a route named `fast`, and add a member. Select `openai-main` and enter the model ID you just tested. Keep the default tier and weight for now.
+Open **Model routes**, create a route named `fast` and add one member: provider `openai-main`, upstream model the ID you tested in step 2. Leave the tier and weight at their defaults.
 
-Clients can now request `fast`. You can change the upstream by editing the route member. Direct provider calls are also available without a route; see [Models and routes](/guides/models).
+Clients can now ask for `fast`. To move them to another upstream later, you edit the route member and leave the clients alone. A provider can also be called without any route; see [Models and routes](/guides/models).
 
 ## 4. Send a request
 
-Use the gateway API key saved during setup, or create a new key under **My account → Keys**. Replace the placeholder below and adjust the port if needed.
+You need a gateway API key. Use the one saved during setup, or create one under **Your keys** in the console's **Personal** view. Put it in place of the placeholder below, and change the port if you changed it from the default:
 
 ```sh
 export GPROXY_KEY='your-gproxy-api-key'
@@ -50,23 +60,25 @@ curl -sS http://127.0.0.1:8787/v1/chat/completions \
   -d '{"model":"fast","messages":[{"role":"user","content":"Hello. Please introduce yourself briefly."}]}'
 ```
 
-An OpenAI client's Base URL setting usually takes `http://127.0.0.1:8787/v1`. A field asking for the complete request URL takes the `/v1/chat/completions` address above.
+The response is an OpenAI Chat Completions JSON object with the model's reply in `choices`.
 
-See [First request](/getting-started/first-request) for other protocols and streaming, or [CLI clients](/guides/cli-clients) for Codex CLI and Claude Code configuration.
+To configure an OpenAI client, set its Base URL to `http://127.0.0.1:8787/v1`. If the client asks for the complete request URL instead, give it the `/v1/chat/completions` address from the example.
+
+[First request](/getting-started/first-request) shows the same call in the other protocols and with streaming. [CLI clients](/guides/cli-clients) covers Codex CLI and Claude Code.
 
 ## 5. Check usage
 
-Open the console's request and usage pages to check the model, provider, token counts, and cost. Costs depend on configured pricing rules and are not a live copy of the upstream bill. Usage fields not reported by the upstream may be empty.
+Open **Usage** or **Recent requests** in the console. The record shows the model, provider, token counts and cost of the request you just sent.
+
+The cost is computed from the pricing rules configured in GPROXY, not taken from the upstream bill. Usage fields the upstream did not report stay empty.
 
 ## Troubleshooting
 
-| Result | Check first |
-| --- | --- |
-| Cannot connect | Whether GPROXY is running and the address and port are correct |
-| `401` | Whether you supplied a valid GPROXY gateway key |
-| `403` | The user or key's permission to access the target model |
-| `404 unknown_model` | Whether `fast` exists, is enabled, and has a member |
-| `429` | Local limits, upstream allowance, and credential availability |
-| Upstream error or unsupported operation | Credential test results, model ID, protocol selection, and endpoint configuration |
+- Cannot connect: check that GPROXY is running and that the address and port are correct.
+- `401`: the request did not carry a valid GPROXY gateway key. An upstream API key is rejected here.
+- `403`: the user or key is not permitted to use the target model.
+- `404 unknown_model`: check that the `fast` route exists, is enabled and has a member.
+- `429`: a local rate limit or budget was reached, the upstream allowance is used up, or no credential is currently available.
+- Upstream error or unsupported operation: check the credential test result, the model ID, the provider's protocol selection and its endpoint configuration.
 
-For scripted management, see the API examples in [Providers](/guides/providers) and [Models and routes](/guides/models).
+Everything in this tutorial can also be done through the management API; [Providers](/guides/providers) and [Models and routes](/guides/models) have the API examples.

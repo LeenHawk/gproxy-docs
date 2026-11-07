@@ -1,85 +1,136 @@
 ---
-title: "Migrating v3 to v4"
-description: "Automatic migration when v4 starts with an existing v3 database."
+title: "Upgrading from v3 to v4"
+description: "Back up a v3 deployment, start v4 on the same database, verify the conversion, and roll back if needed."
+sidebarTitle: "v3 to v4"
 ---
 
-**Replace the binary and start it with your existing configuration.** v4 recognizes
-v3 databases on SQLite, PostgreSQL, MySQL, and D1 and upgrades them automatically. Keep the same data directory,
-database path and `GPROXY_MASTER_KEY`; no export, new directory or password reset
-is needed. Existing usernames, passwords and API keys continue to work.
+These notes are for administrators moving a v3 deployment to v4. v4 recognizes a v3 database when it starts and converts it in place, on SQLite, PostgreSQL, MySQL and D1. You keep the same data directory or connection string and the same `GPROXY_MASTER_KEY`; there is nothing to export and no password to reset.
 
-## SQLite file migration
+## What changes
 
-Before binding its HTTP port, v4 takes a complete SQLite snapshot, including
-committed WAL contents, and imports it into a temporary database beside the
-original. It opens credentials with the existing master key and preserves the
-users' Argon2 password hashes. Only after import and snapshot assembly succeed
-does it replace the original database path. It keeps a `gproxy.db.v3-*.bak` backup
-beside that path and logs its name.
+The database schema is replaced. v4 reads the v3 tables and writes v4 tables in their place before it serves any traffic. What happens to each kind of data:
 
-A failed conversion does not replace the original. Correct the reported cause
-(for example, restore the existing master key) and start again. An interruption
-before replacement leaves v3 in place; after replacement, the v4 migration ledger
-makes subsequent starts ordinary v4 starts. There is no repeated import.
+- Providers and credentials: known channel names and their configuration are translated, and secrets are re-sealed under the configured master key.
+- Routes and members: a route's public model name becomes the route name. Each additional name becomes a separate route with a copy of the members.
+- Users, passwords, API keys, organizations and teams: carried over. Password hashes (Argon2) and API key digests are preserved, so existing usernames, passwords and keys keep working.
+- Prices and budgets: converted to v4's units. v4 stores amounts to 9 decimal places; a value with more digits is rounded half to even and the change is listed in the report.
+- Permissions, rate limits and rewrite rules: supported forms are migrated. Changed meanings and forms that cannot be mapped are listed in the report.
+- Team and organization permissions: expanded into one user rule per imported member, disabled users included. The rules reflect membership at the time of the upgrade and do not follow later membership changes. A group with no imported members is reported as skipped. Instances upgraded by a release that did not yet expand these permissions lost them, and a later release does not restore them.
+- Usage history: imported in bounded batches with the original token counts, attribution and settled costs. Nothing is repriced and no quota is settled again. v3 fields without a v4 column are kept in `metrics.v3`.
+- Captures, request logs, sessions and audit history: not converted. They remain in the v3 backup. Everyone has to sign in to the console again.
 
-Run one database writer during the upgrade, as for other schema migrations. Stop
-v3 before starting v4. Running both deployments with the same OAuth credentials
-can also invalidate refresh tokens, independently of database migration.
+A provider whose channel or configuration cannot be translated is left out together with the rows that depend on it, and the report says so. This applies only to translation: a database read error or a wrong master key still stops the upgrade.
 
-## PostgreSQL, MySQL, and D1
+Your v3 launch settings keep working. v4 still accepts `--persistence db` and a `sqlite://` DSN. The Docker image has the same layout as v3 (data in `/app/data`, user `65532:65532`), but v3 image tags run v3; switch to a v4 tag.
 
-Keep the original connection URL or D1 binding and master key. No export or new database is required. Native PostgreSQL / MySQL builds must include the corresponding driver.
+## Before you start
 
-Migration validates source configuration and credential encryption, then renames the old tables to `gproxy_v3_<original-name>`. These tables retain the source data. New v4 tables use the original names. Configuration, identity, and historical usage are converted before the instance opens to traffic.
+1. Find where your `GPROXY_MASTER_KEY` is set (a `.env` file, the service unit, the container environment) and keep a copy. v4 needs the same key to open the credentials; with a different key the upgrade stops before changing anything.
+2. Keep a copy of the v3 executable or note the v3 image tag. You need it to roll back.
+3. Plan to stop every v3 instance. Only one process may write to the database during the upgrade. If you run v3 and v4 side by side on separate databases, do not give them the same OAuth credentials: each refreshes the tokens and invalidates the other's.
+4. For PostgreSQL or MySQL on the CLI, make sure your v4 build includes the driver for that database.
 
-- **PostgreSQL** uses a session advisory lock and renames the source tables in one transaction.
-- **MySQL** keeps its session lock across implicit DDL commits and renames all source tables with one `RENAME TABLE` statement.
-- **D1** uses transactional batches for renaming, plus a migration lease and a holder check on each write batch. An interrupted lease expires within 60 seconds.
+Then back up the database with v3 stopped:
 
-`gproxy_v3_upgrade` stores progress. Its `report_json` field retains skipped records and semantic-change warnings. Identity and usage imports checkpoint between batches. After interruption, the next startup or Worker request resumes unfinished work. A partially migrated instance does not serve traffic or bootstrap a new administrator.
+<Tabs>
+  <Tab title="SQLite">
+    Copy the whole data directory. It holds `gproxy.db` and, if present, `gproxy.db-wal` and `gproxy.db-shm`; the WAL file can hold committed data that is not yet in `gproxy.db`, so copy all three together.
 
-After a failure, old tables remain under archive names and new tables may contain completed portions of the import. Fix the reported error and restart to resume. Do not delete the progress table or rename archives during migration. To roll back to v3, stop all instances and restore the pre-upgrade backup; do not point v3 at a partially migrated database. Keep archived tables until the upgrade has been verified.
+    ```sh
+    cp -a data data.v3-backup
+    ```
 
-## What carries over
+    v4 also writes its own backup next to the database during the upgrade (see below), so leave free space for two more copies of the database: the backup and the converted copy.
+  </Tab>
+  <Tab title="PostgreSQL">
+    ```sh
+    pg_dump --format=custom --file=gproxy-v3.dump "$GPROXY_DSN"
+    ```
+  </Tab>
+  <Tab title="MySQL">
+    ```sh
+    mysqldump --single-transaction --databases gproxy > gproxy-v3.sql
+    ```
+  </Tab>
+  <Tab title="D1">
+    ```sh
+    wrangler d1 export gproxy --remote --output=gproxy-v3.sql
+    ```
+  </Tab>
+</Tabs>
 
-| Data | Result |
-| --- | --- |
-| Providers and credentials | Known channel names and configurations are translated; secrets are re-sealed using the configured key. |
-| Routes and members | Public model names become route names. Additional names get separate routes with copied members. |
-| Users, passwords, API keys, organizations and teams | Password hashes and API key digests are preserved. |
-| Prices and budgets | Translated to v4's units. Values beyond 9 decimal places use the store's nearest-even rounding and are reported. |
-| Permissions, rate limits and rewrites | Supported forms migrate; changes and unmappable forms are reported. |
-| Usage history (SQLite import) | Imported in bounded batches with original token counts, attribution and settled costs; no repricing or quota settlement. Extra v3 fields remain in `metrics.v3`. |
-| Captures, request logs, sessions and audit history | Retained in the v3 backup. Existing browser sessions need a fresh login. |
+## Upgrading
 
-Team and organization permissions expand into user rules for each imported member, including disabled users. The report lists every resulting rule; groups without imported members are reported as skipped. These rules capture membership at migration time: later membership changes do not update them. This fix applies to new v3 imports and does not restore permissions lost in an already completed upgrade.
+1. Stop all v3 instances.
+2. Install the v4 executable in place of v3, or change the container image to a v4 tag. For Workers, deploy the v4 Worker with the same D1 binding and secrets.
+3. Start v4 with the same data directory or connection string and the same `GPROXY_MASTER_KEY`. You can also run the conversion as its own step with `gproxy migrate`, which takes the same path and exits.
+4. Watch the log. On SQLite you should see `migrating v3 database to v4`, a `migrated` line per table, `v3 import complete` with row, dropped and warning counts, and finally `v3 migration complete` with the path of the backup. Anything that changed meaning is printed under `Changed on the way in`, and rows with no v4 form are printed under `NOT migrated`.
+5. When the log shows the server listening, sign in to the console.
 
-Providers with no translatable channel/configuration are left behind together with
-their dependent rows, with an explicit report. This does not ignore database I/O
-errors or incorrect encryption keys. Review the startup report for channel-specific
-omissions or permission changes.
+A Worker converts its database on the first request after deployment. A partially converted instance serves no traffic and does not create a new administrator, so requests fail until the conversion has finished.
 
-`gproxy migrate` uses the same automatic upgrade path. Once the database is v4,
-SeaORM's `seaql_migrations` ledger records its schema changes. `migrate --status`
-only reports status and never performs the v3 upgrade.
+## How the conversion works
 
-## Optional: import a separate backup or export
+### SQLite
 
-For a deliberate import into another instance, the explicit command is still
-available:
+Before it opens the HTTP port, v4 takes a consistent snapshot of the v3 database with `VACUUM INTO`, which includes committed WAL contents, and keeps it beside the database as `gproxy.db.v3-*.bak`. It converts that snapshot into a new database in a temporary directory beside the original, decrypting credentials with the existing master key. Only when the import has succeeded does it rename the new database over the original path.
+
+If the conversion fails, the original file is left as it was: fix the cause the log names (for example, restore the original master key) and start again. If the process is interrupted before the rename, the path still holds the v3 database and the next start tries again. After the rename, the path holds a v4 database whose migration ledger marks it as current, and later starts are ordinary v4 starts. Nothing is imported twice.
+
+### PostgreSQL, MySQL and D1
+
+v4 first reads the v3 data and checks it, including that the master key opens the credentials. Only then does it rename every v3 table to `gproxy_v3_<original name>` and create the v4 tables under the original names. Configuration, identity and usage history are converted from the renamed tables, and the instance opens to traffic only after the last step.
+
+Progress is kept in the table `gproxy_v3_upgrade`. Its `report_json` column holds the skipped rows and the warnings about changed meaning. Identity and usage are written in batches with a checkpoint after each, so an interrupted upgrade resumes where it stopped on the next start (or, on Workers, the next request).
+
+Each backend keeps a second process out in its own way:
+
+- PostgreSQL holds a session advisory lock for the whole upgrade and renames the v3 tables in one transaction.
+- MySQL holds a session lock (`GET_LOCK`) across DDL statements, which commit implicitly, and renames all v3 tables in one `RENAME TABLE` statement.
+- D1 renames the tables in transactional batches. A migration lease, checked on every write batch, keeps a second isolate from writing. The lease of an interrupted upgrade expires within 60 seconds.
+
+A second PostgreSQL or MySQL instance that finds the lock taken stops with `another instance is migrating this database; retry after it finishes`. On Workers the message asks you to retry after the lease is released.
+
+After a failure, the v3 data is still in the archive tables and the v4 tables may already hold part of the import. Fix the reported error and restart; the upgrade continues. Do not delete `gproxy_v3_upgrade` or rename the archive tables while the upgrade is incomplete.
+
+## Verifying the upgrade
+
+1. Read the conversion report: on SQLite in the startup log, on the other backends in `gproxy_v3_upgrade.report_json`. Check the skipped providers and the permission changes in particular.
+2. Run `gproxy migrate --status`. It lists each schema migration of this build and whether the database has it. It only reads; it never performs the v3 conversion.
+3. In the console, check that providers, credentials, routes, users and API keys are present, and that usage history shows the old totals.
+4. Send a request through an existing API key, as in [Your first request](/getting-started/first-request).
+
+Once you are satisfied, you can delete `gproxy.db.v3-*.bak` (SQLite) or drop the `gproxy_v3_<name>` archive tables (other backends). Keep `gproxy_v3_upgrade` if you want to keep the report. From here on, v4 schema changes are recorded in SeaORM's `seaql_migrations` table.
+
+## Rolling back
+
+v3 cannot read a v4 database, and a partially converted database is neither. Rolling back always means restoring the v3 data. Anything written after the upgrade (new usage, configuration changes) is lost.
+
+<Tabs>
+  <Tab title="SQLite">
+    1. Stop v4.
+    2. Move `gproxy.db` and any `gproxy.db-wal` and `gproxy.db-shm` aside.
+    3. Copy `gproxy.db.v3-*.bak` (or `gproxy.db` from your own backup) to `gproxy.db`.
+    4. Reinstall the v3 executable or image tag and start it with the original settings and master key.
+  </Tab>
+  <Tab title="PostgreSQL, MySQL and D1">
+    1. Stop all instances.
+    2. Restore the backup you took before the upgrade into an empty database.
+    3. Start v3 against the restored database with the original master key.
+
+    Do not point v3 at a database that is partly or fully converted.
+  </Tab>
+</Tabs>
+
+## Importing into a separate instance
+
+The upgrade above converts a database in place. To bring a v3 database or export into a different v4 instance instead, use `import --from-v3`:
 
 ```sh
 gproxy --data-dir ./other-instance migrate
 gproxy --data-dir ./other-instance import --from-v3 /path/to/v3-backup.db
 ```
 
-A sealed source needs `--source-master-key` or `GPROXY_IMPORT_SOURCE_MASTER_KEY`
-when using this explicit command. The destination must be empty or contain an
-incomplete earlier import. `--skip-unmappable-providers` opts into the omission
-policy automatic startup already uses.
+The destination must be empty, or hold only an unfinished earlier run of the same import. If the source's secrets are sealed, pass the v3 master key with `--source-master-key` or `GPROXY_IMPORT_SOURCE_MASTER_KEY`. `--skip-unmappable-providers` leaves out providers that cannot be translated, as the automatic upgrade does; without it, such a provider stops the import.
 
-JSON from v3's `POST /admin/api/export` is also accepted. Export with
-`{"include_secrets": true}`. Unlike SQLite, those exports omit password hashes,
-permissions, rate limits and provider models. Use `--admin-password` to set a
-console password when importing a JSON export without hashes; direct SQLite
-migration does not need it.
+The input can also be the JSON document from v3's `POST /admin/api/export`, taken with `{"include_secrets": true}`. Such an export lacks password hashes, permissions, rate limits and provider models, which a SQLite database carries. When importing an export without hashes, set a console password with `--admin-password`; a SQLite import does not need it.

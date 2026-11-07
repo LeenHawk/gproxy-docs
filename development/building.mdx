@@ -1,0 +1,375 @@
+---
+title: "Building from Source"
+description: "Build every GPROXY v4 target from source (the CLI with and without the console, the desktop and mobile application, the Worker), run the checks CI runs, and publish a release."
+---
+
+This page describes how to build GPROXY yourself, what each published package
+contains, which checks CI runs on a change, and how releases are published and
+signed. If you only want to run GPROXY, a prebuilt package from
+[Releases](https://github.com/LeenHawk/gproxy/releases) is simpler; the table
+in [Release packages](#release-packages) tells you which one to pick.
+
+## Release packages
+
+Every release contains three programs, each with its own portable archives and
+installers:
+
+- `gproxy-*`: the CLI, with the web console built in.
+- `gproxy-headless-*`: the same CLI without the console, for CI and small
+  servers. See [Headless CLI](#headless-cli).
+- `gproxy-tauri-*`: the desktop and mobile application, which also embeds the
+  console.
+
+| Platform | CLI | Application |
+| --- | --- | --- |
+| Linux GNU (x86_64, aarch64, riscv64) | ZIP, DEB | ZIP, DEB |
+| Linux musl (x86_64, aarch64, riscv64) | ZIP, Alpine APK | ZIP, Alpine APK |
+| Windows (x86_64, aarch64) | ZIP, MSIX | ZIP, MSIX |
+| macOS (x86_64, aarch64) | ZIP, DMG | ZIP, DMG |
+| Android (x86_64, aarch64) | ZIP, Termux DEB | APK only |
+| OpenHarmony / HarmonyOS NEXT | ARM64 / x86_64 ZIP | ARM64 unsigned HAP |
+
+The release workflow also publishes the serverless executable
+(`gproxy-serverless-linux-<arch>-musl` for x86_64 and aarch64), the Cloudflare
+Workers bundle (`gproxy-edge-cloudflare.zip`), and GNU and musl container
+images. Application packages receive build provenance attestations hosted on
+GitHub. Public release attachments are limited to the packages,
+`manifest.json` and `SHA256SUMS`; individual checksum files and build
+provenance remain internal CI inputs.
+
+Notes per platform:
+
+- Linux: the CLI DEB installs `gproxy` under `/usr/bin`. GNU Linux
+  applications require the distribution's GTK 3 and WebKitGTK 4.1 packages.
+  musl builds target Alpine and ship as APKs, not DEBs.
+- Android CLI: the Termux DEB installs under
+  `/data/data/com.termux/files/usr`. Android CLI builds use the source recipe in
+  `distribution/termux/` and a pinned official Termux builder. Both the DEB and
+  the ZIP use Termux's `libc++`, OpenSSL and CA certificates; the ZIP contains
+  the launcher, the executable and `TERMUX.txt` with installation and update
+  instructions. Self-update is disabled in these builds: install a newer DEB
+  with APT, or use `pkg upgrade gproxy` once an enabled repository provides
+  it.
+- Android application: the APK is signed and verified with the
+  `ANDROID_SIGNING_*` secrets. Each app's `<target-triple>-tauri-apk` entry is
+  part of the Ed25519-signed update manifest, separately from the CLI ZIP
+  updates. The legacy server-wrapper APK is no longer built.
+- Windows: the CLI MSIX has its own Partner Center identity,
+  `LeenHawk.GPROXYCLI`, and a console execution alias. The application
+  requires the system WebView2 Runtime.
+- macOS: CLI DMGs contain the executable and instructions for installing it
+  from Terminal. Application ZIPs keep the desktop resources and, on macOS, the
+  complete `.app`. Builds are ad-hoc signed; Developer ID signing and
+  notarization are not configured.
+- OpenHarmony: builds use a cached toolchain image and a pinned experimental
+  Tauri branch; other platforms use stable Tauri. The HAP must be signed before
+  it can be installed. It has been verified on an emulator. Continuous
+  background execution is implemented, but whether it works depends on the
+  device, the OS version and the granted permissions; the proxy stops when the
+  application process exits.
+
+Nightly filenames do not change between builds; the manifest records the
+commit SHA.
+
+## Build environment
+
+Install stable Rust (edition 2024), Go, Clang, Node.js 22.12+ (24 LTS
+recommended), and pnpm. Linux desktop builds also need the
+`webkit2gtk-4.1`, `gtk+-3.0` and `libsoup-3.0` development packages. The
+release workflow sets up the toolchains for the other platforms.
+
+## CLI and console
+
+From the repository root:
+
+```sh
+pnpm --dir console install --frozen-lockfile
+pnpm --dir console build
+cargo build -p gproxy --release
+./target/release/gproxy serve --data-dir ./data
+```
+
+`pnpm --dir console build` copies the built console into the embed directories
+of the HTTP host and the Tauri host, and the following Rust build includes it.
+The order matters: a fresh checkout built with Rust alone has no console
+assets, and `/console` returns 404. To serve a separately built console
+instead, pass `--console-path console/dist`.
+
+### Cargo features
+
+The default feature set of the `gproxy` crate is
+`channels,memory,fs,bundled-vocabulary,embedded-console,postgres,mysql`.
+
+| Feature | Effect |
+| --- | --- |
+| `channels` | Every channel in this repository. Name channels one by one (`codex`, `claudecode`, `openai`, ...) instead to carry only what a deployment uses |
+| `embedded-console` | Compile the web console into the binary |
+| `memory` | In-process cache |
+| `redis` | Redis cache, required when several instances share one deployment |
+| `fs` | Local file storage for published bodies and downloaded vocabularies |
+| `s3` | S3 object storage |
+| `bundled-vocabulary` | Ship DeepSeek's tokenizer vocabulary for models that have no vocabulary file in the catalog |
+| `postgres`, `mysql` | The PostgreSQL and MySQL drivers. SQLite is always compiled in; without these, `GPROXY_PERSISTENCE`/`GPROXY_DSN` naming another database are refused at startup |
+
+A smaller build with four channels and no external database drivers:
+
+```sh
+cargo build -p gproxy --release --no-default-features \
+  --features embedded-console,memory,fs,codex,claudecode,openai,custom
+```
+
+The crate also has a `gproxy-serverless` binary for the serverless platforms;
+it requires the `postgres` feature.
+
+## Headless CLI
+
+The headless CLI is the `gproxy` binary built without `embedded-console`. It
+keeps the proxy routes, the management API, all channels, SQLite, the
+PostgreSQL and MySQL drivers, the memory cache, local file storage and the
+bundled vocabulary. You configure it through the CLI or the management API.
+Building it needs no Node.js, pnpm or desktop libraries:
+
+```sh
+cargo build --locked --release -p gproxy --bin gproxy \
+  --no-default-features --features channels,memory,fs,bundled-vocabulary,postgres,mysql
+./target/release/gproxy serve --console=false
+```
+
+Leaving out `embedded-console` keeps the frontend assets out of the binary even
+when the checkout already contains a built console. `--console=false` also
+stops the server from serving an external console directory. To build a
+custom feature set that does include the console, add `embedded-console`.
+
+The release workflow builds the headless packages independently of the
+console build:
+
+| Platform | Architectures | Package |
+| --- | --- | --- |
+| Linux GNU | x86_64, aarch64, riscv64 | `gproxy-headless-linux-<arch>.zip` |
+| Linux musl | x86_64, aarch64, riscv64 | `gproxy-headless-linux-<arch>-musl.zip`, `gproxy-headless-linux-<arch>-musl.apk` |
+| Windows | x86_64, aarch64 | `gproxy-headless-windows-<arch>.zip`, `gproxy-headless-windows-<arch>.msix` |
+| macOS | x86_64, aarch64 | `gproxy-headless-macos-<arch>.zip` |
+| Android (Termux) | x86_64, aarch64 | `gproxy-headless-android-<arch>.zip`, `gproxy-headless-android-<arch>.deb` |
+
+Download them from [Releases](https://github.com/LeenHawk/gproxy/releases):
+`nightly` for the dev channel, `staging` for beta, or a stable version.
+Self-update on a headless install picks the matching headless package.
+
+On Android, inside Termux, install the package and start the server:
+
+```sh
+pkg install ./gproxy-headless-android-<arch>.deb
+gproxy serve --console=false
+```
+
+The headless package replaces the full `gproxy` package, because both provide
+the `gproxy` command. To use the ZIP instead, install the runtime libraries,
+extract the ZIP into a directory under Termux's home directory (Android's
+shared storage cannot execute files), and run it from there:
+
+```sh
+pkg install libc++ openssl ca-certificates
+./gproxy serve --console=false
+```
+
+On Windows, use `gproxy.exe` in place of `gproxy`. The Windows MSIX has the
+identity `LeenHawk.GPROXYHeadless` and the alias `gproxy-headless.exe`, so it
+does not replace the CLI's `gproxy.exe`. GPROXY Headless is also on the
+Microsoft Store (`9ND7FQQMV566`).
+
+## Desktop and mobile application
+
+After building the console:
+
+```sh
+cargo run -p gproxy-host-tauri --bin gproxy-desktop
+```
+
+A new instance opens the setup wizard. The window manages the instance over
+IPC, and the HTTP listener serves gateway clients. For mobile builds, use the
+platform toolchains and packaging scripts from the release workflow.
+
+The workspace's default members leave out the Tauri host, so backend builds do
+not need the desktop dependencies. `--workspace` includes it.
+
+To produce release packages locally, build the console and run the packaging
+script. `pnpm --dir console build` already runs `sync-to-embed.mjs`; running
+it again is harmless.
+
+```sh
+pnpm --dir console build
+node console/scripts/sync-to-embed.mjs
+pnpm --dir crates/gproxy-host-tauri install --frozen-lockfile
+TARGET_OS=linux TARGET_TRIPLE=x86_64-unknown-linux-gnu \
+  ARTIFACT_NAME=gproxy-tauri-linux-x86_64 \
+  GPROXY_BUILD_VERSION=$(scripts/release-metadata.sh version) \
+  scripts/package-tauri-release.sh
+```
+
+The packages are written to `dist/release/`.
+
+## Cloudflare Workers
+
+From the repository root:
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install worker-build
+pnpm --dir console install --frozen-lockfile
+pnpm --dir deploy/cloudflare install
+pnpm --dir deploy/cloudflare build
+pnpm --dir deploy/cloudflare check
+```
+
+`worker-build` compiles and optimizes the WebAssembly module. `check` runs a
+Wrangler deployment dry run without publishing anything. See
+[Edge deployment](/deployment/edge) for configuration and runtime limits, and
+[Adding a channel](/development/adding-a-channel#building-the-worker) for
+building a Worker that carries a channel of your own.
+
+## Checks CI runs
+
+Run these before you open a pull request. CI runs them on every change, split
+into backend, desktop and WebAssembly jobs.
+
+Backend (the workspace's default members):
+
+```sh
+cargo fmt --all --check
+cargo clippy --all-targets -- -D warnings
+cargo test
+```
+
+CI additionally lints the serverless binary and the out-of-tree channel
+example, which are not default members:
+
+```sh
+cargo clippy -p gproxy --bin gproxy-serverless --no-default-features --features channels,postgres,embedded-console -- -D warnings
+cargo clippy -p gproxy-example-channel -p gproxy-example-native --all-targets -- -D warnings
+```
+
+Desktop host:
+
+```sh
+cargo clippy -p gproxy-host-tauri --all-targets -- -D warnings
+cargo test -p gproxy-host-tauri
+```
+
+WebAssembly: the check covers the libraries and hosts that support the target,
+not the CLI or Tauri. Do not run it on the whole workspace; both of those reach
+tokio's `net` feature, and mio does not build for this target.
+
+```sh
+cargo check --target wasm32-unknown-unknown \
+  -p gproxy-protocol -p gproxy-store -p gproxy-seaorm -p gproxy-client \
+  -p gproxy-cache -p gproxy-channel -p gproxy-core -p gproxy-file \
+  -p gproxy-tokenizer -p gproxy-sdk -p gproxy-app -p gproxy-host-axum \
+  -p gproxy-host-edge
+```
+
+CI also checks the non-default feature sets that the crate READMEs document as
+wasm-clean, one invocation each, because cargo unifies features within a single
+invocation:
+
+```sh
+cargo check --target wasm32-unknown-unknown -p gproxy-sdk --features libsql
+cargo check --target wasm32-unknown-unknown -p gproxy-cache --all-features
+cargo check --target wasm32-unknown-unknown -p gproxy-file --no-default-features --features s3
+cargo check --target wasm32-unknown-unknown -p gproxy-channel --all-features --lib
+cargo check --target wasm32-unknown-unknown -p gproxy-example-edge --lib
+```
+
+Console and docs:
+
+```sh
+pnpm --dir console lint
+pnpm --dir console test
+pnpm --dir console build
+git submodule update --init docs
+pnpm --dir docs install --frozen-lockfile
+pnpm --dir docs check
+```
+
+`pnpm --dir console lint` includes the translation parity check
+(`pnpm i18n:check`). After changing Rust DTOs, run `pnpm --dir console types`
+to regenerate the TypeScript types.
+
+## Publishing
+
+### Branches and update channels
+
+The Release workflow (`.github/workflows/release.yml`) publishes on push:
+
+- `dev` develops new features. Its pushes publish only to `nightly`, the dev
+  update channel.
+- `main` maintains released functionality and bug fixes. Its pushes publish
+  only to `staging`, the beta update channel.
+- Stable version tags are created from `main` and publish to both the release
+  and the beta channel. They never overwrite the dev channel.
+
+Before pushing `dev`, run `bash scripts/push-dev.sh`. It fetches the latest
+`origin/main`, rebases `dev` onto it, and pushes with an explicit
+`--force-with-lease` against the previously published `dev`. Enable the local
+push guard with `git config core.hooksPath .githooks`.
+
+### Releasing a version
+
+Run `bash scripts/release.sh` on top of the latest `main`, with only
+`chore(release):` commits added. The script refuses to continue unless:
+
+- the tag matches the workspace version, and `release-notes/v<version>.md`
+  exists;
+- the tracked worktree is clean;
+- `HEAD` contains the latest `origin/main`, and every commit after it is a
+  `chore(release):` commit.
+
+For a stable version, the script then refreshes dependencies: it updates the
+console's npm dependencies with `pnpm update --latest`, upgrades the Rust
+registry requirements with `cargo upgrade` (including major and pinned
+versions), and refreshes `Cargo.lock` with `cargo update`. The bridges for
+RSA/getrandom, JNI/Tauri, Codex reqwest and the WebSocket configuration keep
+their upstream-required version lines, but `cargo update` still refreshes their
+compatible versions. Install the helper first with
+`cargo install cargo-edit --locked`. If the refresh changes tracked files, the
+script stops before tagging: resolve the compatibility changes, run the checks
+above, commit and push to `main`, then run the script again. Prerelease tags
+skip the dependency refresh.
+
+The script then creates the tag and pushes `main` and the tag in one atomic
+push. The tag's workflow run publishes the release and beta channels, and the
+run for `main` at the tagged commit publishes nothing. Afterwards, push `dev`
+with `scripts/push-dev.sh`.
+
+The workflow builds the packages, creates the signed update manifest and
+uploads the assets. If a build or a signing step fails, the release is not
+completely published.
+
+Version tags also run `scripts/publish-crates.sh`, which publishes selected
+MIT-licensed libraries to crates.io. The other crates are used as git or path
+dependencies; see [Embedding the core](/development/embedding).
+
+### Signing and store submission
+
+Missing signing keys or Store identity variables make packaging fail.
+
+- Update manifest: signed with Ed25519. Self-update verifies it before
+  installing.
+- Android: APKs are signed with the `ANDROID_SIGNING_*` secrets.
+- macOS: ad-hoc signing only.
+- Windows: the packages use the Microsoft Store package identity. Configure
+  four variables in the `release` environment: `MS_STORE_IDENTITY_NAME`,
+  `MS_STORE_DISPLAY_NAME`, `MS_STORE_IDENTITY_PUBLISHER` and
+  `MS_STORE_PUBLISHER_DISPLAY_NAME`. The CLI uses the `MS_STORE_CLI_*`
+  counterparts. Headless has a fixed identity and display name, so its Store
+  submission only adds `MS_STORE_HEADLESS_PRODUCT_ID` to the shared publisher
+  variables. Stable releases keep the packages for both architectures for
+  Store submission, and with `MS_STORE_PUBLISH_ENABLED` set, a successful
+  GitHub publication triggers the Store submission workflow. Store submission
+  packages are unsigned; the Store signs them for distribution.
+- Windows on GitHub: when SignPath is enabled (`SIGNPATH_ENABLED`), the MSIX
+  files attached to a version release are rebuilt with the signing
+  certificate's publisher and signed in a separate job, so they install
+  directly. SignPath requires a maintainer to approve each signing request,
+  and the job waits for that approval; a request that is not approved in time
+  fails the release, and re-running the failed jobs submits it again. Without
+  SignPath, the GitHub MSIX files are unsigned as well.

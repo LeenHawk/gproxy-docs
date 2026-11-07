@@ -1,71 +1,90 @@
 ---
-title: "Pricing & Tiers"
-description: "How GPROXY v4 prices one exchange: rule selection, rate rows and their conditions, the context and service-tier ladders, and what happens with no price at all."
+title: "Pricing and tiers"
+description: "How GPROXY prices an exchange: rule selection, rate rows and their conditions, context and service tiers, budgets, and token estimation when the upstream reports no usage."
 ---
 
-Pricing answers one question at settlement: **what did this exchange cost**,
-given the provider, the upstream model and the normalized usage the channel
-extracted.
+This page describes how GPROXY computes the cost of an exchange from the
+pricing tables, and how to edit those tables. Read it when you enter prices,
+when a cost looks wrong, or when you set up cost budgets.
 
-It happens **inside the engine**, at settlement, so budgets and the observer
-see the same number. In v3 the engine handed usage up and an application layer
-priced it again, which produced two time semantics, two model matchers and two
-answers to "what if there is no price". v4 has one of each.
+## Overview
 
-Three tables, in one shape: a `price_rules` row selects a model, its
-`price_rates` rows price each metric, and its `price_tiers` rows adjust the
-token ladder by prompt size and service tier.
+The engine prices each exchange at settlement, from the provider, the upstream
+model and the normalized usage the channel extracted from the response. Budgets
+and the observer read the same computed number. (In v3 the engine passed usage
+up and the application layer priced it a second time, which gave two model
+matchers and two different answers for a model without a price. v4 prices in
+one place.)
 
-## Rule Selection
+Prices live in three tables:
 
-A rule fits when
+- `price_rules`: one row selects a model, optionally for one provider and one
+  operation.
+- `price_rates`: the rule's base price for each metric.
+- `price_tiers`: overrides of the rule's token prices by prompt length and by
+  service tier.
 
-- its provider is the exchange's provider, **or is unset** (a global rule);
-- its `modelPattern` glob matches the **upstream** model name;
-- its `operation` is the request's, **or is unset** (all operations).
+All prices and settlements are in USD.
 
-**Provider rules precede global rules.** Within one scope, the lowest
-`(priority, id)` wins.
+## Rule selection
+
+A rule applies to an exchange when all of the following hold:
+
+- its provider is the exchange's provider, or it has no provider (a global
+  rule);
+- its `modelPattern` glob matches the upstream model name;
+- its `operation` is the request's operation, or it has none (all operations).
+
+Provider rules are tried before global rules. Within each group the rule with
+the lowest `(priority, id)` wins.
 
 | Field | Meaning |
 | --- | --- |
-| `providerId` | `null` is a global rule |
-| `modelPattern` | `*` / `?` glob against the upstream model name |
+| `providerId` | `null` makes the rule global |
+| `modelPattern` | `*` / `?` glob matched against the upstream model name |
 | `operation` | `null` covers every operation of the matched model |
-| `priority` | lower first; the id breaks ties |
-| `currency` | Must be `USD`; all prices and settlements use USD |
-| `enabled` | |
+| `priority` | lower is tried first; the id breaks ties |
+| `currency` | must be `USD` |
+| `enabled` | disabled rules are ignored |
 
-### No rule at all
+A rule whose currency is not `USD`, whose pattern is not a valid glob or whose
+operation is unknown is skipped when the snapshot is assembled (see
+[Invalid rows](#invalid-rows)).
 
-The exchange is **unpriced**: it costs nothing, it still settles, and its usage
-carries
+When the usage of one exchange is reported per attempt, each billable attempt
+is priced by the rule for its own model and the amounts are added together.
+Attempts marked as not billable are skipped.
+
+### Exchanges with no matching rule
+
+If no rule matches, the exchange is unpriced. It costs nothing, it settles
+normally, and its usage carries this dimension:
 
 ```json
 {"dimensions": {"unpriced": "true"}}
 ```
 
-That is a signal, not a refusal. An operator wants to know that a model is
-being served for free; they do not want a request rejected because nobody has
-entered a price yet.
+The request is not rejected. A missing price is a configuration gap, and the
+dimension lets you find models that are being served for free without
+refusing traffic until someone enters a price.
 
-## Rate Rows
+## Rate rows
 
-A rate row is the base price of one metric.
+A rate row is the base price of one metric under one rule.
 
 | Field | Meaning |
 | --- | --- |
-| `metric` | a built-in key, or any custom one a channel emits |
+| `metric` | a built-in metric key, or any custom key a channel emits |
 | `unit` | `token`, `count`, `second` or `character` |
 | `unitQuantity` | the positive denominator: 1,000,000 tokens, 1 image, 60 seconds |
-| `value` | the non-negative price for `unitQuantity` units, in the rule's currency |
-| `conditions` | `null` is the fallback row; otherwise a non-empty object of dimension names to scalars, **all** of which must match |
-| `priority` | lower first among rows of the same metric |
+| `value` | the non-negative price of `unitQuantity` units, in USD |
+| `conditions` | `null` for the fallback row; otherwise a non-empty object mapping dimension names to scalar values, all of which must match |
+| `priority` | among rows of the same metric, lower is tried first |
 
-For one metric, conditional rows are tried in `(priority, id)` order and the
-first whose conditions all match the settlement's dimensions wins; otherwise
-the fallback row applies. **A selected conditional rate replaces the base
-rate**, it does not compose with it.
+For each metric, the conditional rows are tried in `(priority, id)` order. The
+first row whose conditions all match the settlement's dimensions is used; if
+none matches, the fallback row is used. A matching conditional row replaces the
+fallback price, it is not added to it.
 
 ```json
 [{"metric":"input_tokens",  "unit":"token","unitQuantity":"1000000","value":"0.40"},
@@ -74,20 +93,23 @@ rate**, it does not compose with it.
   "conditions":{"quality":"hd","size":"1024x1024"},"priority":0}]
 ```
 
-### The rule that stops double billing
+### Avoiding double billing
 
-**Rates must consume disjoint quantities.** Cached input is removed from
-ordinary input; a reasoning or media token subset must not be charged again
-when it is already billed through an aggregate. Per-image and per-token output
-are *alternative* bases, unless the provider really charges both.
+Each rate must price a quantity that no other rate prices. In particular:
 
-A generic `tool_calls` row and a specific `web_searches` row must not both bill
-the same call. And a client *declaring* a tool is not a billable server-side
-execution.
+- Cached input is counted separately from ordinary input.
+- A reasoning or media token subset that is already billed as part of an
+  aggregate must not be priced again.
+- Per-image and per-token output prices are alternatives. Enter both only if
+  the provider really charges both.
+- A generic `tool_calls` row and a specific `web_searches` row must not both
+  bill the same call.
+- A tool that the client declares in its request is not a server-side
+  execution and is not billable.
 
-## The Metrics
+## Metrics
 
-**Tokens** — conventionally per 1,000,000:
+Token metrics are conventionally priced per 1,000,000 tokens:
 
 ```text
 input_tokens          output_tokens           cached_input_tokens
@@ -97,9 +119,7 @@ audio_input_tokens    cached_audio_input_tokens  audio_output_tokens
 video_input_tokens    video_tokens
 ```
 
-Cache writes use `cache_creation_tokens`. A rate condition such as `{"ttl_seconds":43200}` selects a 12-hour write price; omit this condition for the fallback price. Each reported write bucket is priced separately. Cache reads remain a single `cached_input_tokens` count, with no TTL. Tier overrides use `cacheCreationPerMillion: [{"ttlSeconds":43200,"price":"5"}]`; an entry with `ttlSeconds: null` is the fallback. Prices are per million tokens, not per token-second.
-
-**Counts, seconds and characters:**
+Count, duration and character metrics:
 
 ```text
 image_outputs   video_outputs   audio_seconds   video_seconds   audio_characters
@@ -107,88 +127,116 @@ search_units    web_searches    web_fetches     file_searches
 code_interpreter_sessions       tool_calls      requests
 ```
 
-A metric outside this list is still priced as long as a rate row names it. The
-list is what the built-in keys are, not a filter.
+These lists are the built-in keys. They do not restrict anything: a metric that
+is not listed is still priced if a rate row names it.
 
-`requests` is the per-request fee: one request is charged per **priced
-exchange**.
-
-## Tiers
-
-A `price_tiers` row overrides **token prices only**, always per million.
-
-| Field | Meaning |
-| --- | --- |
-| `serviceTier` | `null` makes it a **context** tier; otherwise `standard`, `priority`, `flex`, `batch`, … |
-| `minPromptTokens` | a non-negative inclusive threshold; default 0 |
-| `multiplier` | for a service tier: what to multiply the inherited price by. Context-only rows leave it unset |
-| `*_per_million` | an explicit price for one token kind |
-
-The explicit columns are `input`, `output`, `cache_read`,
-`cache_creation_per_million`, `reasoning`, `image_input`,
-`image_output`, `audio_*` and `video_*`.
-
-**Prompt length counts input plus cache reads and cache writes, once.**
-
-### Composition, per token kind
-
-1. **The base rate** — the `price_rates` row for that metric, conditional rows
-   first.
-2. **The context tier** — the highest reached `minPromptTokens` among rows with
-   **no** service tier. Its explicit prices replace the base for the kinds it
-   sets.
-3. **The service tier** — the highest reached threshold among rows naming the
-   *actual* service tier. An explicit price there **wins outright**; otherwise
-   the context-adjusted base is multiplied by that row's `multiplier`
-   (default 1).
-
-Equal thresholds break on the lower `(priority, id)`. `null` inherits; zero is
-**explicitly free**, not missing.
-
-A multiplier never applies to tool or media *counts* — only to token prices.
-
-<Warning>
-**An explicit tier price replaces the whole ladder**
-
-With a base input price of 1, a context step `≥ 200,000 → 2`, and 300,000
-prompt tokens:
-
-| The `batch` row | Effective input rate |
-| --- | --- |
-| `{"serviceTier":"batch","multiplier":"0.5"}` | `2 × 0.5 = 1` |
-| `{"serviceTier":"batch","inputPerMillion":"0.5"}` | `0.5` — the 200k step is lost |
-| `{"serviceTier":"batch","minPromptTokens":200000,"inputPerMillion":"1"}` | `1` |
-
-Repeat an explicit tier price at every threshold it must cover, or use a
-multiplier.
-</Warning>
-### Two special cases
-
-- **Reasoning is a subset of output.** When a reasoning price exists, the
-  reasoning tokens are subtracted from `output_tokens` and charged separately.
-  When it does not, they stay inside output and are charged once.
-- **A cache read with no price inherits the input price.** Every *other* kind
-  with no price is free. That asymmetry is deliberate: a cache read is
-  unambiguously an input token, while a missing audio or video price is a
-  configuration gap the operator should see as zero.
-
-### Requested versus served
-
-The tier that is charged is the one the response **actually reported**, not the
-one the request asked for. A `priority` request the provider downgrades settles
-at the downgraded row.
-
-## Everything Else
-
-Every metric that is not a token kind is charged as
+A metric that is not a token kind is charged as
 
 ```text
 amount × value / unitQuantity
 ```
 
-and is **never multiplied by a service tier**.
+Service-tier multipliers never apply to these metrics.
 
-## Editing Prices
+`requests` is a per-request fee. It charges one request for each priced
+exchange.
+
+### Cache writes
+
+Cache writes are counted as `cache_creation_tokens`. The usage may report
+several write buckets with different retention times, and each bucket is priced
+separately. To price a retention time, add a rate row with a `ttl_seconds`
+condition: `{"ttl_seconds":43200}` selects the 12-hour write price, and a row
+without the condition is the fallback price.
+
+In a tier, write prices are given as a list, with `ttlSeconds: null` as the
+fallback entry:
+
+```text
+cacheCreationPerMillion: [{"ttlSeconds":43200,"price":"5"}]
+```
+
+Prices are per million tokens. The retention time selects a price; it is not
+multiplied into it.
+
+Cache reads are a single `cached_input_tokens` count with no TTL.
+
+## Tiers
+
+A `price_tiers` row overrides token prices only, and always per million
+tokens.
+
+| Field | Meaning |
+| --- | --- |
+| `serviceTier` | `null` makes the row a context tier; otherwise a service tier such as `standard`, `priority`, `flex`, `batch` |
+| `minPromptTokens` | non-negative, inclusive threshold; default 0 |
+| `multiplier` | service tiers only: the factor applied to the inherited price. Context tiers leave it unset |
+| `*_per_million` | an explicit price for one token kind |
+
+The explicit price columns are `input`, `output`, `cache_read`,
+`cache_creation`, `reasoning`, `image_input`, `image_output`, `audio_input`,
+`cached_audio_input`, `audio_output`, `video_input` and `video`, each with the
+`_per_million` suffix. `cache_creation_per_million` is the list described in
+[Cache writes](#cache-writes).
+
+Prompt length, for threshold purposes, is input tokens plus cache reads plus
+cache writes, each counted once.
+
+### How a token price is computed
+
+For each token kind, the price is built in three steps:
+
+1. Base rate: the `price_rates` row for that metric, with conditional rows
+   tried first.
+2. Context tier: among rows with no service tier, the row with the highest
+   `minPromptTokens` that the prompt reaches. Its explicit prices replace the
+   base price for the kinds it sets.
+3. Service tier: among rows naming the service tier that was actually served,
+   the row with the highest threshold reached. An explicit price in that row is
+   used as is. Otherwise the context-adjusted price is multiplied by the row's
+   `multiplier` (default 1).
+
+When two rows have the same threshold, the lower `(priority, id)` wins. A
+`null` price inherits from the previous step; `0` means the kind is free.
+
+<Warning>
+An explicit service-tier price replaces the whole ladder below it, including
+the context tier. With a base input price of 1, a context step `≥ 200,000 → 2`,
+and 300,000 prompt tokens:
+
+| The `batch` row | Effective input rate |
+| --- | --- |
+| `{"serviceTier":"batch","multiplier":"0.5"}` | `2 × 0.5 = 1` |
+| `{"serviceTier":"batch","inputPerMillion":"0.5"}` | `0.5` (the 200k step is lost) |
+| `{"serviceTier":"batch","minPromptTokens":200000,"inputPerMillion":"1"}` | `1` |
+
+Either repeat the explicit tier price at every threshold it must cover, or use
+a multiplier.
+</Warning>
+
+### Reasoning tokens and cache reads
+
+Reasoning tokens are a subset of output tokens. If the rule has a reasoning
+price, the reasoning tokens are subtracted from `output_tokens` and charged at
+that price. If it has none, they stay in output and are charged once, at the
+output price.
+
+A cache read with no price of its own inherits the input price. Every other
+token kind without a price is free. Cache reads are always input tokens, so
+inheriting the input price is a safe default. A missing audio or video price,
+on the other hand, is a gap in the configuration, and pricing it at zero makes
+the gap visible in the costs.
+
+### Requested and served service tier
+
+The service tier used for pricing is the one the response reports, not the one
+the request asked for. A `priority` request that the provider downgrades is
+settled at the downgraded tier's row. Service tier names are compared without
+regard to case.
+
+## Editing prices
+
+Each table has its own admin API family:
 
 ```sh
 curl -s http://127.0.0.1:8787/admin/api/price-rules  -H "Authorization: Bearer $GPROXY_KEY"
@@ -196,10 +244,15 @@ curl -s http://127.0.0.1:8787/admin/api/price-rates  -H "Authorization: Bearer $
 curl -s http://127.0.0.1:8787/admin/api/price-tiers  -H "Authorization: Bearer $GPROXY_KEY"
 ```
 
-Each family takes the usual five routes plus a batch, and a batch is one
-revision commit however many rows it names.
+Each family has the usual five routes plus a batch route. A batch is committed
+as one revision, however many rows it contains. In the console, global prices
+are edited on the **Models** page and provider prices on a provider's
+**Models** tab; see [Console](/guides/console#quotas-and-prices).
 
-The bundled catalogue fills them in for the models this release knew about:
+### Applying catalogue prices
+
+The bundled model catalogue contains prices for the models known at release
+time. To create rules from it:
 
 ```sh
 curl -s -X POST http://127.0.0.1:8787/admin/api/default-model-catalog/apply-prices \
@@ -207,30 +260,46 @@ curl -s -X POST http://127.0.0.1:8787/admin/api/default-model-catalog/apply-pric
   -d '{"providerId":"…","modelIds":["gpt-4o-mini"],"overwrite":false}'
 ```
 
-Without a provider, the catalogue's own glob and priority are used, so one rule
-prices that model wherever it is served; with a provider, the literal name
-becomes the pattern at priority zero. **`overwrite: false` is what makes
-re-applying safe**: a rule an operator edited keeps its edit and is reported as
-skipped.
+Without `providerId`, the rule uses the catalogue's own glob and priority, so
+one global rule prices the model on every provider that serves it. With
+`providerId`, the literal model name becomes the pattern and the priority is 0.
 
-A bad pricing row is dropped with a warning at assembly and does **not** block
-the snapshot. One mistyped decimal must not take down an instance that is
-otherwise serving traffic.
+With `"overwrite": false` you can apply the catalogue again at any time: a rule
+that already exists, for example one you have edited, is left alone and
+counted as skipped in the response.
 
-## Budgets Spend the Result
+### Invalid rows
 
-A budget is a `quotas` row whose metric is `cost` in USD. Admission hands the
-engine the caller's chain — `[api_key?, user, team?, org?]` —
-and **every** enabled budget of **any** owner in the chain applies.
+A pricing row that cannot be used (a non-USD rule, an invalid pattern, an
+unknown operation, a rate whose `unitQuantity` is not positive, or conditions
+that are not a non-empty object of scalars) is dropped with a warning when the
+configuration snapshot is assembled. The rest of the snapshot loads normally,
+so one mistyped value does not stop an instance that is otherwise serving
+traffic. Check the log for these warnings after editing prices.
 
-Costs settle after the upstream call. In-flight and concurrent requests may exceed a budget. See [Permissions, rate limits, and budgets](/guides/permissions) for ownership and checks.
+## Budgets
 
-## Token Estimation
+A cost budget is a `quotas` row with metric `cost`, in USD. At admission the
+engine receives the caller's chain, `[api_key?, user, team?, org?]`, and every
+enabled budget of every owner in that chain applies to the request.
 
-When a billable response carries no usage at all, the engine counts the tokens
-itself and marks the record `estimated = true`. Counting uses a local
-vocabulary: the tiktoken encodings for GPT-family models, otherwise the
-vocabulary the model's catalogue row names, otherwise the bundled DeepSeek one.
+Costs are settled after the upstream call returns, so requests that are in
+flight or run concurrently can take a budget past its limit. Ownership and the
+checks themselves are described in
+[Permissions, rate limits, and budgets](/guides/permissions).
+
+## Token estimation
+
+If a billable response carries no usage at all, the engine counts the tokens
+itself and marks the record `estimated = true`. It counts with a local
+vocabulary, chosen in this order:
+
+1. the tiktoken encodings, for GPT-family models;
+2. the vocabulary named by the model's catalogue row;
+3. the bundled DeepSeek vocabulary.
+
+To list stored vocabularies, or to download one from Hugging Face and assign it
+to a model and as the instance default:
 
 ```sh
 curl -s http://127.0.0.1:8787/admin/api/tokenizer-vocabs -H "Authorization: Bearer $GPROXY_KEY"
@@ -239,11 +308,11 @@ curl -s -X POST http://127.0.0.1:8787/admin/api/tokenizer-vocabs \
   -d '{"repo":"…","filename":"tokenizer.json","modelId":"…","setAsDefault":true}'
 ```
 
-A fetch downloads the file through the configured file storage, then inserts
-the row and points the model and the default at it — **the row and both
-pointers in one revision commit**. The bytes land before the row: a row
-pointing at an object that was never written would fail every reload, while an
-object with no row is only wasted space.
+The download is written to the configured file storage first. Then the
+vocabulary row, the model's pointer and the default pointer are written in one
+revision commit. The order matters: a row pointing at a file that was never
+written would make every later reload fail, while a file without a row only
+wastes space.
 
-Without file storage the whole family answers "unsupported": there is nowhere
-to put the bytes.
+Vocabularies need file storage. Without it, every tokenizer vocabulary route
+answers "unsupported". See [File storage](/reference/database#file-storage).

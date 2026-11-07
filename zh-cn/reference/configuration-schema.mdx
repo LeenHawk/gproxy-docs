@@ -6,8 +6,10 @@ mode: "wide"
 
 import ConfigurationReference from "/snippets/generated/configuration.zh-cn.mdx";
 
-本页通过 `schemars` 从 `AppConfig` 及其嵌套 Rust 类型生成。字段名遵循 Serde，默认值来自 Rust 的默认实现；原生和边缘宿主共用这套结构。命令行参数、环境变量及优先级见[配置](/zh-cn/reference/configuration)。
+本页列出配置文档的全部字段及其类型、变体和默认值。内容通过 `schemars` 从 Rust 的 `AppConfig` 及其嵌套类型生成：字段名即 Serde 名称，默认值即 Rust 中的默认实现。原生二进制、Workers 宿主和桌面应用读取的都是这一套结构。
 
-Schema 描述序列化结构；主密钥是否解码为 32 字节、后端是否已编译等运行时校验仍然适用。
+命令行参数、环境变量以及各来源的优先级见[配置](/zh-cn/reference/configuration)。
+
+Schema 只描述结构。有些检查在启动时进行，这里无法体现，例如主密钥解码后是否恰好为 32 字节、所选数据库后端是否已编译进二进制。
 
 <ConfigurationReference />

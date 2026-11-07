@@ -1,5 +1,7 @@
 # GPROXY documentation
 
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FLeenHawk%2Fgproxy-docs.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FLeenHawk%2Fgproxy-docs?ref=badge_shield)
+
 The source of <https://gproxy.leenhawk.com>, built and hosted by
 [Mintlify](https://mintlify.com) from this repository. It is also the `docs/`
 submodule of [LeenHawk/gproxy](https://github.com/LeenHawk/gproxy), and is

@@ -1,120 +1,94 @@
 ---
 title: "Rewrite rules and protocol overrides"
 description: "Configure system text, caching, JSON and text edits, and upstream protocol and endpoint overrides."
-sidebarTitle: "Rewrite Rules & Operation Overrides"
+sidebarTitle: "Rewrite rules and overrides"
 ---
 
-Add rules from a provider's rewrite page, choosing a type and entering its settings. New providers receive a bound default rule set with the same name. Use advanced bindings when several providers need to share rules.
+Rewrite rules change a request on its way to the upstream, or a response on
+its way back: adding system text, placing cache breakpoints, editing JSON
+fields, replacing text and setting headers. The last section of this page
+covers protocol and endpoint overrides, which decide which upstream protocol
+and URL a provider uses for an operation.
 
-## Rule types
+## Adding a rule
+
+Open the provider's **Rewrite rules** page, add a rule, choose its type and
+fill in its settings. Every new provider gets a default rule set with the same
+name, already bound to it, so for a single provider you do not need to manage
+bindings. Use the advanced binding settings when several providers should
+share one rule set.
 
 | Console type | Purpose | API `action` |
 | --- | --- | --- |
 | System text | Prepend or append text to system instructions | `system_text` |
 | Cache breakpoint | Add protocol-specific global, system, message, or tool cache markers | `cache_breakpoint` |
-| JSON rewrite | Set or delete a field, or merge an object | `set`, `delete`, `merge` |
-| Text transform | Apply a regular expression to body text, headers, or query values | `replace` |
-| Header | Set a value or merge comma-separated values | `header_set`, `header_merge` |
+| Rewrite | Set or delete a field, or merge an object | `set`, `delete`, `merge` |
+| Transform | Apply a regular expression to body text, headers, or query values | `replace` |
+| Request header | Set a value or merge comma-separated values | `header_set`, `header_merge` |
 
-System text supports Claude, OpenAI Chat, Responses (including WebSocket), and Gemini. Cache breakpoints support Claude and OpenAI formats; see [Prompt caching](/guides/claude-caching) for positions and TTLs.
+System text supports Claude, OpenAI Chat, Responses (including WebSocket) and
+Gemini. Cache breakpoints support Claude and OpenAI formats; positions and TTLs
+are described in [Prompt caching](/guides/claude-caching).
 
-## Advanced JSON editing
-
-When creating or editing a rule within a rule set, select **Advanced JSON** to paste one v4 rule object. This is also available on a provider's rewrite page. Switch between the form and JSON, or format the JSON. Invalid input stays in the editor with an error; saving also checks that the rule can execute.
-
-For example, replace `"type":"function"}` in the body with `"type":"function","strict":false}`:
-
-```json
-{
-  "action": "replace",
-  "phase": "request",
-  "target": "body",
-  "pattern": "\"type\":\"function\"\\}",
-  "replacement": "\"type\":\"function\",\"strict\":false}"
-}
-```
-
-Use the v4 `action`, `pattern`, and `replacement` fields. The page manages the rule set, ID, and order, so omit those from the JSON. Optional filters and `enabled` can be included. Omitted filters impose no restriction, and `enabled` defaults to true. Each edit accepts one rule object, not an array.
+Each rule has a `phase` (`request`, `response` or `both`) and a `target`
+(`body`, `header` or `query`).
 
 ## Execution order
 
-Requests are converted to the upstream protocol, rewritten, and then sent by the channel. Responses are rewritten before conversion back to the client protocol. Rule paths must therefore use the **upstream format**.
+A request is first converted to the upstream protocol, then the request rules
+run, then the channel sends it. A response goes through the response rules
+first and is converted back to the client's protocol afterwards. Rule paths
+therefore use the upstream format. For example, when an OpenAI Chat request is
+routed to a Claude provider, request rules already see Claude's `system` and
+`messages` fields.
 
-For example, an OpenAI Chat request routed to Claude uses Claude's `system` and `messages` fields by the time request rules run.
+Enabled rule-set bindings run in `sortOrder` and then ID order, and so do the
+enabled rules inside each set. Each rule sees the output of the one before it.
+System text and cache breakpoint rules are ordered the same way as every other
+rule.
 
-Enabled rule-set bindings and the rules within each set run in `sortOrder`, then ID order. Each rule sees the previous rule's output. System text and cache breakpoint rules follow the same ordering.
+## Paths, regular expressions and headers
 
-## Fields and regular expressions
+JSON edits need a path such as `temperature` or `messages.*.content`; a `*`
+segment selects every element. `set` takes any valid JSON value, `merge` takes
+a JSON object, and `delete` takes no value.
 
-JSON edits require paths such as `temperature` or `messages.*.content`. A `*` segment selects all elements. `set` requires a valid JSON value, `merge` requires a JSON object, and `delete` needs no value.
+Text transforms use Rust regular expressions, including `(?i)`, `(?s)`, and
+`$1` and `${name}` in the replacement. With body paths, they replace inside
+the selected JSON string values. Without paths, they operate on the whole body
+text, so make sure the result is still valid JSON.
 
-Text transforms use Rust regular expressions, including `(?i)`, `(?s)`, `$1`, and `${name}` replacements. With body paths, they replace selected JSON string values. Without paths, they operate on the full body text; take care to preserve valid JSON.
-
-Header and query rules require `targetName`. `header_set` replaces the header value. `header_merge` merges comma-separated values and removes duplicates. Avoid storing upstream secrets in shared rules.
+Header and query rules require `targetName`. `header_set` replaces the header
+value. `header_merge` merges comma-separated values and removes duplicates.
+Do not put upstream secrets in rules that other providers share.
 
 ## Filters
 
-| Filter | Matches |
-| --- | --- |
-| Operation and protocol | The converted operation executed on the provider |
-| Model | Either the upstream or requested model name, with `*` and `?` wildcards |
-| Request headers | A regular expression over inbound headers |
-| Stream event | An SSE event name or JSON `type`, for body rules |
+Filters restrict when a rule runs. A rule runs only when every filter it has
+matches; a filter you leave out imposes no restriction.
 
-All supplied filters must match. Omitted filters add no restriction. Scope client-specific compatibility rules by request headers so they do not affect other clients.
+| Filter | API field | Matches |
+| --- | --- | --- |
+| Operation and protocol | `filterOperationKeys` | The converted operation executed on the provider |
+| Model | `filterModelPattern` | Either the upstream or requested model name, with `*` and `?` wildcards |
+| Request headers | `filterHeaderPattern` | A regular expression tested against each inbound header as `name: value` |
+| Stream event | `filterEventPattern` | An SSE event name or JSON `type`, for body rules |
 
-Model suggestions contain only saved provider models and variants. A provider's page lists that provider's models; the standalone rule-set page combines models from its attached providers. An unattached set has no suggestions, but you can still enter a model name or a pattern such as `gpt-*`. Suggestions do not fetch upstream model directories.
+To add a compatibility rule for one client, filter it by request headers so it
+does not affect other clients.
 
-## Streaming responses
-
-Body rewrites operate on complete events, such as an SSE event or JSON array element, rather than network chunks. An event exceeding `settings.maxStreamEventBytes` fails. Use an event filter to target particular event types.
-
-## Management API
-
-This example replaces `widget` with `gadget` in selected strings. Substitute your actual rule-set ID.
-
-```sh
-curl -sS -X POST http://127.0.0.1:8787/admin/api/rules \
-  -H "Authorization: Bearer $GPROXY_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{"ruleSetId":"your-rule-set-id","action":"replace",
-       "phase":"request","target":"body","paths":["messages.*.content"],
-       "pattern":"(?i)\\bwidget\\b","replacement":"gadget",
-       "filterOperationKeys":[{"operation":"generate_content","dialect":"openai_chat"}]}'
-```
-
-`PUT /admin/api/rule-sets/{id}/rules` replaces a complete rule list. For system text and cache breakpoints, `replacement` contains a JSON-encoded configuration string. The console constructs it for you.
-
-## Compatibility presets
-
-`GET /admin/api/rule-presets` returns the built-in OpenCode, the agent-mono, Aider, Cline, Continue, and Cursor presets. Query the endpoint for the current rules.
-
-`POST /admin/api/rule-sets/{id}/rule-presets/{preset}` **replaces** the set's existing rules. To retain existing rules, export or read them first and save a merged list.
-
-## Protocol and endpoint overrides
-
-A provider's routing rules select an upstream protocol. Model routes select providers; these are separate settings.
-
-- `operation_rules` overrides a provider's protocol list for an operation. A supported client protocol passes through; otherwise, conversion targets the first protocol in the list.
-- `operation_endpoints` overrides the full endpoint URL for an operation, protocol, and transport.
-
-For example, change the protocols for generation:
-
-```sh
-curl -sS -X POST http://127.0.0.1:8787/admin/api/operation-rules \
-  -H "Authorization: Bearer $GPROXY_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{"providerId":"your-provider-id","operation":"generate_content",
-       "action":"dialects","target":["claude","openai_chat"]}'
-```
-
-Without overrides, channel defaults apply. `POST /admin/api/providers/{id}/routing-defaults/reset` clears the provider's operation and endpoint overrides.
-
-The `custom` channel also requires a `dialects` configuration, for example `["openai_chat", "openai"]`. If an operation fails, check upstream support, this list, and operation overrides.
+The model filter's suggestions come only from saved provider models and their
+variants. On a provider's page they list that provider's models; on a
+standalone rule-set page they combine the models of the attached providers. A
+set with no attached providers has no suggestions, but you can still type a
+model name or a pattern such as `gpt-*`. Suggestions never query upstream model
+directories.
 
 ## Body and header conditions
 
-Add `filterBody` and/or `filterHeader` to gate an existing action. Both conditions and all other configured filters must match.
+`filterBody` and `filterHeader` run a rule only when a body field or a request
+header has a given value. They can be used separately or together, and both
+must match along with every other filter:
 
 ```json
 {
@@ -139,17 +113,40 @@ Add `filterBody` and/or `filterHeader` to gate an existing action. Both conditio
 }
 ```
 
-`filterBody` reads the current JSON payload after preceding rules. It is supported only for body targets. Paths accept dot-separated keys and array indexes, without wildcards. Equality preserves JSON types; missing differs from `null`. Invalid JSON never matches a body condition, including `not_exists`.
+`filterBody` reads the current JSON payload, including changes made by earlier
+rules, and is supported only on body targets. Its path takes dot-separated keys
+and array indexes such as `reasoning.effort` or `messages.0.role`, without
+wildcards. Equality compares JSON types, so `"1"` does not equal `1`, and a
+missing field is different from `null`. A body that is not valid JSON never
+matches a body condition, not even `not_exists`.
 
-`filterHeader` reads original inbound request headers for any target and phase. Header names are case-insensitive; values are exact, case-sensitive strings without comma splitting. With repeated headers, `eq` matches any equal value; `ne` requires a present header with no equal value.
+`filterHeader` reads the original inbound request headers and works for any
+target and phase. Header names are case-insensitive. Values are compared as
+exact, case-sensitive strings and are not split at commas. When a header is
+repeated, `eq` matches if any value is equal, and `ne` requires the header to
+be present with no equal value.
 
-Operators are `eq`, `ne`, `exists`, and `not_exists`. Equality/inequality require `value`; existence operators reject it. A missing field does not satisfy `ne`. Conditions run per complete body, SSE event, NDJSON record, JSON-array element or WebSocket message, without cross-message state. Clear a condition with `null`; omitted PATCH fields retain existing conditions.
+The operators are `eq`, `ne`, `exists` and `not_exists`. `eq` and `ne` require
+`value`; `exists` and `not_exists` reject it. A missing field does not satisfy
+`ne`.
+
+In a stream, conditions are evaluated separately for each complete SSE event,
+NDJSON record, JSON-array element or WebSocket message, with no state carried
+between them; a plain HTTP body is evaluated as a whole. To remove a condition,
+clear it in the form or set the API field to `null`. A PATCH that omits the
+field keeps the existing condition.
 
 ### JMESPath expressions
 
-`filterBody` also accepts a JMESPath expression string. It evaluates the current body, and only boolean `true` runs the action. Type errors, unknown functions, other evaluation errors and non-boolean results do not match. Syntax is validated on save. The existing `{ "path", "op", "value" }` object form remains supported.
+`filterBody` also accepts a JMESPath expression as a string. The expression is
+evaluated against the current body, and the action runs only when the result
+is boolean `true`. Type errors, unknown functions, other evaluation errors and
+non-boolean results do not match. Syntax is checked when the rule is saved. The
+`{ "path", "op", "value" }` object form is still supported.
 
-This rule sets `max_tokens` to 0 only when a text block in the last message contains the keepalive marker. Earlier messages cannot trigger it:
+This rule sets `max_tokens` to 0 only when a text block in the last message
+contains the keepalive marker; the marker in an earlier message does not
+trigger it:
 
 ```json
 {
@@ -164,6 +161,110 @@ This rule sets `max_tokens` to 0 only when a text block in the last message cont
 }
 ```
 
-Negative indexes, projections, `contains()`, comparisons and boolean composition follow the [JMESPath specification](https://jmespath.org/specification.html). Missing fields evaluate to `null` and may be explicitly tested; non-JSON payloads never match. The action's `paths` still use the existing dot-path syntax independently of the expression.
+Negative indexes such as `[-1]`, projections, `contains()`, comparisons and
+boolean operators follow the
+[JMESPath specification](https://jmespath.org/specification.html). Missing
+fields evaluate to `null` and can be tested explicitly; non-JSON payloads never
+match. The action's `paths` still use the dot-path syntax described above,
+independently of the expression.
 
-Expressions compile once. An unchanged payload shares one converted JMESPath document; an actual preceding body edit invalidates that snapshot. Rules without expressions do not create this extra representation. Each stream unit is independent. Queries traversing the full document still scale with its size.
+Expressions are compiled once. While the payload is unchanged, all expressions
+share one converted JMESPath document; when an earlier rule actually edits the
+body, the document is rebuilt so no rule sees stale values. Rules without
+expressions do not create this extra copy. Each stream unit is evaluated on its
+own, and a query that walks the whole document still costs time proportional to
+its size.
+
+## Streaming responses
+
+Body rewrites operate on complete events, such as an SSE event or a JSON array
+element, not on network chunks. An event larger than
+`settings.maxStreamEventBytes` fails. Use an event filter to rewrite only
+particular event types.
+
+## Editing a rule as JSON
+
+When you create or edit a rule, either inside a rule set or on a provider's
+**Rewrite rules** page, select **Advanced JSON** to paste one v4 rule object.
+You can switch between the form and JSON and format the JSON. Invalid input
+stays in the editor with an error message, and saving also checks that the
+rule can execute.
+
+For example, to replace `"type":"function"}` in the body with
+`"type":"function","strict":false}`:
+
+```json
+{
+  "action": "replace",
+  "phase": "request",
+  "target": "body",
+  "pattern": "\"type\":\"function\"\\}",
+  "replacement": "\"type\":\"function\",\"strict\":false}"
+}
+```
+
+Use the v4 `action`, `pattern` and `replacement` fields. The page manages the
+rule set, ID and order, so leave those out. You may include optional filters
+and `enabled`; omitted filters impose no restriction and `enabled` defaults to
+true. The editor takes one rule object at a time, not an array.
+
+## Managing rules through the API
+
+This example replaces `widget` with `gadget` in the selected strings. Use your
+own rule-set ID.
+
+```sh
+curl -sS -X POST http://127.0.0.1:8787/admin/api/rules \
+  -H "Authorization: Bearer $GPROXY_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"ruleSetId":"your-rule-set-id","action":"replace",
+       "phase":"request","target":"body","paths":["messages.*.content"],
+       "pattern":"(?i)\\bwidget\\b","replacement":"gadget",
+       "filterOperationKeys":[{"operation":"generate_content","dialect":"openai_chat"}]}'
+```
+
+`PUT /admin/api/rule-sets/{id}/rules` replaces the whole rule list of a set.
+For system text and cache breakpoints, `replacement` holds a JSON-encoded
+configuration string; the console builds it for you.
+
+## Compatibility presets
+
+`GET /admin/api/rule-presets` returns the built-in OpenCode, pi-mono,
+Aider, Cline, Continue and Cursor presets. The endpoint's answer is the
+authoritative list of rules in each.
+
+<Warning>
+`POST /admin/api/rule-sets/{id}/rule-presets/{preset}` replaces all existing
+rules in the set. To keep them, read or export them first and save a merged
+list.
+</Warning>
+
+## Protocol and endpoint overrides
+
+A provider's **Routing rules** choose which upstream protocol it uses for an
+operation. They are separate from model routes, which choose the provider.
+
+- `operation_rules` overrides a provider's protocol list for an operation. If
+  the client's protocol is in the list, the request passes through unchanged;
+  otherwise it is converted to the first protocol in the list.
+- `operation_endpoints` overrides the full endpoint URL for an operation,
+  protocol and transport.
+
+For example, to change the protocols used for generation:
+
+```sh
+curl -sS -X POST http://127.0.0.1:8787/admin/api/operation-rules \
+  -H "Authorization: Bearer $GPROXY_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"providerId":"your-provider-id","operation":"generate_content",
+       "action":"dialects","target":["claude","openai_chat"]}'
+```
+
+Without overrides, the channel's defaults apply.
+`POST /admin/api/providers/{id}/routing-defaults/reset` removes the provider's
+operation and endpoint overrides.
+
+The `custom` channel also needs a `dialects` list in the provider
+configuration, for example `["openai_chat", "openai"]`. If an operation fails,
+check that the upstream supports it, then check this list and the operation
+overrides.

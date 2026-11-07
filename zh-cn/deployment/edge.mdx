@@ -1,38 +1,39 @@
 ---
-title: "托管平台部署"
-description: "在 Cloudflare Workers、Netlify 或 Vercel 上部署 GPROXY，选择数据库并完成首次登录。"
+title: "Cloudflare Workers、Netlify 与 Vercel"
+description: "在 Cloudflare Workers、Netlify 或 Vercel 上部署 GPROXY，连接数据库并登录。"
+sidebarTitle: "Workers 与函数平台"
 ---
 
-Render 和 Heroku 的原生容器模板见[容器托管部署](/zh-cn/deployment/containers)。
+GPROXY 为 Cloudflare Workers、Netlify Functions 和 Vercel Functions 提供部署模板，适合不想自己维护服务器的场景。Docker、Render 和 Heroku 见 [Docker、Render 与 Heroku](/zh-cn/deployment/containers)。
 
-GPROXY 提供 Cloudflare Workers、Netlify 和 Vercel 的部署模板。模板下载预编译的发布包，不需要安装 Rust。部署后，控制台和 API 使用同一个域名，控制台入口为 `/console/`。
+模板在构建时下载预编译的发布包，不需要 Rust 工具链。控制台和 API 使用部署的同一个域名，控制台入口为 `/console/`。
 
 ## 选择平台
 
-| 平台 | 使用平台数据库 | 使用已有数据库 | 当前模板 WebSocket / Realtime |
+| 平台 | 平台数据库 | 已有数据库 | WebSocket / Realtime |
 | --- | --- | --- | --- |
 | [Cloudflare Workers](#cloudflare-workers) | 部署时创建 D1 | libSQL / Turso | 支持 |
 | [Netlify Functions](#netlify) | Netlify Database | PostgreSQL | 不支持 |
 | [Vercel Functions](#vercel) | 部署时选择 PostgreSQL 产品 | PostgreSQL | 支持（平台 Beta） |
 
-只需要 HTTP 和 SSE 流式调用时，可选用任一模板；需要 WebSocket 或 Realtime 时，可选择 Cloudflare Workers、Vercel Functions（WebSocket Beta），或使用 [CLI / 容器部署](/zh-cn/download)。
+三个平台都支持 HTTP 和 SSE 流式调用。客户端需要 WebSocket 或 Realtime 时，选择 Cloudflare Workers 或 Vercel，或者改用 [CLI 或容器部署](/zh-cn/download)。
 
-Cloudflare 使用 WASM，另外三个平台使用原生 serverless 程序。它们共用 GPROXY 的管理 API 和控制台，但数据库类型、函数时长和请求大小限制取决于平台。
+在 Cloudflare 上，网关以 WebAssembly 形式运行在 Worker 中；在 Netlify 和 Vercel 上，由一个小的 Node.js 函数启动原生 `gproxy-serverless` 程序并把请求转发给它。三者的管理 API 和控制台相同，数据库类型、函数时长和请求大小限制则由平台决定。
 
-## 准备密码与主密钥
+## 部署前的准备
 
-每个平台都需要填写以下两项：
+每个模板都要求填写两项密钥，请先准备好并妥善保存：
 
-| 配置 | 填写内容 |
-| --- | --- |
-| `GPROXY_ADMIN_PASSWORD` | 至少 8 个字符的登录密码 |
-| `GPROXY_MASTER_KEY` | 用于加密上游凭证的 32 字节主密钥；支持 64 位十六进制或 base64 |
+- `GPROXY_ADMIN_PASSWORD`：控制台登录密码，至少 8 个字符。
+- `GPROXY_MASTER_KEY`：32 字节主密钥，用于加密数据库中的上游凭证，写成 64 位十六进制或 base64。可以用 `openssl rand -hex 32` 生成。
 
-可以用 `openssl rand -hex 32` 生成主密钥。保存好这个值，更新和重新部署时继续使用它。
+用户名默认为 `admin`，也可以另设 `GPROXY_ADMIN_USER`。密码在每次启动时生效：存在同名用户时，只修改该用户的密码；没有同名用户时，重新启用 0 号管理员，并改为配置的用户名和密码。完整规则见配置参考中的[首次初始化](/zh-cn/reference/configuration#首次初始化)。
 
-用户名默认为 `admin`，可通过 `GPROXY_ADMIN_USER` 指定。密码配置会在启动时应用：优先更新同名用户的密码；没有同名用户时恢复 0 号管理员并修改用户名和密码。详见[管理员初始化与密码覆盖](/zh-cn/reference/configuration#首次初始化)。
+<Warning>
+每次更新和重新部署都要使用同一个 `GPROXY_MASTER_KEY`。用一个密钥加密的凭证无法用另一个密钥解开，换了密钥，库中所有上游凭证都将无法读取。
+</Warning>
 
-使用已有数据库时，还需要数据库连接信息。各平台的填写方式如下。
+如果连接已有数据库而不是平台数据库，还要准备好连接信息。各平台需要填写哪些值，见下文对应小节。
 
 ## Cloudflare Workers
 
@@ -40,17 +41,17 @@ Cloudflare 使用 WASM，另外三个平台使用原生 serverless 程序。它�
 
 [使用外部 libSQL / Turso 数据库][cloudflare-external]
 
-使用 D1 点部署按钮，已有 libSQL/Turso 数据库则点外部数据库链接。
+部署按钮会创建 D1 数据库。第二个链接部署的版本连接已有的 libSQL 或 Turso 数据库，不创建 D1。
 
-1. 进入所选部署入口，连接 GitHub 或 GitLab 账户。
-2. 使用 D1 时，填写数据库名称，Cloudflare 会创建并绑定它。使用外部数据库时，填写 `GPROXY_DATABASE_URL` 和 `GPROXY_LIBSQL_TOKEN`；这个入口不会创建 D1。
-3. 填写管理员密码和主密钥，保留 `npm run build`、`npm run deploy` 命令，然后部署。
+1. 打开所选入口，连接 GitHub 或 GitLab 账户。
+2. 使用 D1 时填写数据库名称，Cloudflare 会创建数据库并以 `DB` 绑定。使用外部数据库时，填写 `GPROXY_DATABASE_URL` 和 `GPROXY_LIBSQL_TOKEN`。
+3. 填写管理员密码和主密钥。构建命令保持 `npm run build`，部署命令保持 `npm run deploy`，然后开始部署。
 
-Turso 地址可使用 `libsql://your-db.turso.io` 或对应的 HTTPS 地址。这里使用 libSQL 的 HTTP 接口，不能填写 PostgreSQL 连接串。
+Turso 地址可以写成 `libsql://your-db.turso.io`，也可以写成对应的 HTTPS 地址。Worker 通过 libSQL 的 HTTP 接口访问数据库，因此不能填写 PostgreSQL 连接串。
 
-已有 D1 部署也可以通过上述两个变量改用 libSQL。设置 `GPROXY_DATABASE_URL` 后，它优先于 D1；更改连接只切换数据库，不会搬迁原有数据。
+使用 D1 的部署之后也可以通过这两个变量改用 libSQL，`GPROXY_DATABASE_URL` 优先于 D1 绑定。切换连接只是换一个数据库，D1 中的数据不会被复制过去。
 
-需要使用 Wrangler 或调整 Workers 配置时，见本页的[手动部署 Cloudflare](#手动部署-cloudflare)。
+需要自己用 Wrangler 部署或修改 Worker 配置时，见[手动部署到 Cloudflare](#手动部署到-cloudflare)。
 
 ## Netlify
 
@@ -58,15 +59,15 @@ Turso 地址可使用 `libsql://your-db.turso.io` 或对应的 HTTPS 地址。�
 
 [使用已有 PostgreSQL 数据库][netlify-external]
 
-使用 Netlify Database 点部署按钮，已有 PostgreSQL 则点外部数据库链接。
+部署按钮使用 Netlify Database。第二个链接打开同一个模板，并多出一个填写外部 PostgreSQL 连接的字段。
 
-1. 进入所选部署入口，授权仓库，并填写管理员密码和主密钥。
-2. 使用 Netlify Database 时，模板读取平台提供的连接，无需手填连接串。使用已有数据库时，在 `GPROXY_DATABASE_URL` 中填写 PostgreSQL 连接串。
+1. 打开所选入口，授权仓库，填写管理员密码和主密钥。
+2. 使用 Netlify Database 时，函数读取平台提供的连接串，无需填写。使用已有数据库时，把 PostgreSQL 连接串填入 `GPROXY_DATABASE_URL`。
 3. 保留模板的构建命令和 Functions 配置，开始部署。
 
-外部连接的格式例如 `postgresql://user:password@db.example.com/gproxy?sslmode=require`，请替换为数据库服务提供的实际连接信息。
+外部连接串形如 `postgresql://user:password@db.example.com/gproxy?sslmode=require`，请按数据库服务商提供的信息填写。
 
-两个入口使用同一个 Netlify 模板。即使填写外部连接，Netlify 仍可能创建平台数据库；GPROXY 会优先使用 `GPROXY_DATABASE_URL`。
+即使填写了外部连接，Netlify 仍可能创建平台数据库。这不影响使用，因为程序优先读取 `GPROXY_DATABASE_URL`。
 
 ## Vercel
 
@@ -74,37 +75,52 @@ Turso 地址可使用 `libsql://your-db.turso.io` 或对应的 HTTPS 地址。�
 
 [使用已有 PostgreSQL 数据库][vercel-external]
 
-需要新数据库时点部署按钮，已有 PostgreSQL 则点外部数据库链接。
+部署按钮会要求关联一个新的 PostgreSQL 产品；第二个链接跳过这一步，改为要求填写 `GPROXY_DATABASE_URL`。
 
-1. 进入所选部署入口。使用平台数据库时，按页面提示选择并关联 PostgreSQL 产品；外部数据库入口不要求安装数据库产品。
-2. 填写管理员密码和主密钥。使用已有数据库时，再填写 `GPROXY_DATABASE_URL`。
+1. 打开所选入口。使用部署按钮时，按提示选择并关联 PostgreSQL 产品。
+2. 填写管理员密码和主密钥；使用已有数据库时，再填写 `GPROXY_DATABASE_URL`。
 3. 保留模板的构建命令和 `vercel.json`，开始部署。
 
-平台数据库连接从 `DATABASE_URL` 或 `POSTGRES_URL` 读取。如果所选产品使用其他变量名，把连接串填入 `GPROXY_DATABASE_URL`。
+函数依次从 `GPROXY_DATABASE_URL`、`DATABASE_URL`、`POSTGRES_URL` 读取连接串。如果所关联的产品使用其他变量名，把它的值复制到 `GPROXY_DATABASE_URL`。
 
-这个模板使用 **Node.js Functions**，部署时不要改为 Edge Runtime。
+模板使用 Node.js Functions，不要改成 Edge Runtime：函数需要启动一个原生程序，Edge Runtime 做不到。
 
-## 首次登录与调用
+## 登录
 
-部署完成后，打开 `https://你的域名/console/`，使用 `admin`（或自定义用户名）和配置的密码登录。
+1. 打开 `https://你的域名/console/`。直接访问域名也会进入控制台。
+2. 用 `admin`（或 `GPROXY_ADMIN_USER` 中设置的用户名）和配置的密码登录。
+3. 添加供应商和凭证，并测试凭证。
+4. 创建模型路由和 API key，然后按[第一个请求](/zh-cn/getting-started/first-request)发起调用。
 
-在控制台添加供应商与凭证，测试成功后创建模型路由和网关 API Key，再按[第一个请求](/zh-cn/getting-started/first-request)发起调用。客户端使用部署域名作为服务地址，例如 `https://gateway.example.com/v1`，使用网关 API Key 鉴权。
+客户端以部署地址作为服务地址，例如 `https://gateway.example.com/v1`，并使用刚创建的 API key 鉴权。
 
-如果 Netlify 或 Vercel 返回 503，先查看函数日志，确认数据库已绑定、连接串有效，以及管理员密码和主密钥已设置。这些平台的 PostgreSQL 账户还需要创建 `gproxy` schema 和应用表的权限。
+在 Netlify 和 Vercel 上，如果网关无法启动，请求会得到 503 状态码和消息 `GPROXY is unavailable. Check the deployment database and secrets in the platform console.`。此时查看函数日志，常见原因有：没有关联数据库，连接串不是以 `postgres://` 或 `postgresql://` 开头，或者没有设置密码或主密钥。程序必须在 45 秒内报告就绪，数据库连不上时通常表现为启动超时。PostgreSQL 账户还需要有创建 `gproxy` schema 和应用表的权限。
 
-## 更新与运行限制
+## 更新
 
-配置、账户和用量保存在数据库中，更新时保留数据库和主密钥。模板默认下载最新稳定版并校验 SHA-256；升级时清除平台构建缓存后重新部署即可。只有需要固定版本时，才将构建环境变量 `GPROXY_RELEASE_VERSION` 设为发布标签。所选版本需包含对应平台的发布附件。托管部署不使用控制台的原地二进制更新。
+配置、账户和用量都保存在数据库中，更新只替换程序。请保留数据库和主密钥。
 
-所有模板均支持 HTTP 与 SSE；Netlify Functions 不接受 WebSocket 升级。Vercel 使用平台的 [WebSocket Beta](https://vercel.com/docs/functions/websockets)。WebSocket 连接仍可能因函数时长限制或实例回收而断开，客户端需要处理重连。长时间推理、大文件和高并发请求仍受平台限制，部署前可查看 [Netlify Functions](https://docs.netlify.com/build/functions/overview/) 和 [Vercel Functions](https://vercel.com/docs/functions/limitations) 的当前额度。
+D1 模板以及 Netlify、Vercel 模板在构建时下载最新稳定版，并按发布中的 `SHA256SUMS` 校验 SHA-256。升级时清除平台构建缓存并重新部署即可。需要固定版本时，把构建环境变量 `GPROXY_RELEASE_VERSION` 设为发布标签，该版本必须包含对应平台的发布包。
 
-这两个模板不配置文件存储。需要 S3/R2 或可公开下载的文件时，可以使用下方的 Workers 自定义构建，或选择 CLI 部署。Netlify 和 Vercel 可用 `GPROXY_PUBLIC_BASE_URL` 固定公开访问地址。不设置时，Netlify 和 Vercel 使用平台提供的生产地址；其他平台的 OAuth 端点按每个请求的 Host 应答，发布链接保持禁用。
+外部数据库版的 Cloudflare 模板与此不同：它的 `prepare-release.mjs` 写死了一个发布标签（目前为 `v4.2.0`），不读取 `GPROXY_RELEASE_VERSION`。升级时在部署所创建的仓库中修改这个文件里的标签，再重新部署。
 
-## 手动部署 Cloudflare
+托管部署不使用控制台的原地二进制更新。
+
+## 运行限制
+
+所有模板都支持 HTTP 和 SSE。Netlify Functions 不接受 WebSocket 升级，网关会以 501 状态码拒绝这类请求。Vercel 通过平台的 [WebSocket Beta](https://vercel.com/docs/functions/websockets) 支持 WebSocket。无论哪个平台，函数时长限制和实例回收都可能断开 WebSocket，客户端需要自行重连。
+
+Vercel 模板在 `vercel.json` 中把 `maxDuration` 设为 300 秒。长时间推理、大文件和高并发仍受各平台限制，部署前请对照 [Netlify Functions](https://docs.netlify.com/build/functions/overview/) 和 [Vercel Functions](https://vercel.com/docs/functions/limitations) 的当前额度评估。
+
+Netlify 和 Vercel 模板不配置文件存储。需要 S3、R2 或可通过公开链接下载的文件时，按下文自行构建 Worker，或改用 CLI 部署。
+
+OAuth 端点和文件发布链接需要知道网关的公开地址。在 Netlify 和 Vercel 上，可以用 `GPROXY_PUBLIC_BASE_URL` 固定这个地址；不设置时，函数使用平台报告的生产地址。如果无从得知公开地址，OAuth 端点按每个请求自身的 `Host` 应答，发布链接保持禁用。Workers 上则在 `GPROXY_CONFIG` 中设置 `public_base_url`（见下文）。
+
+## 手动部署到 Cloudflare
 
 ### 使用发布包
 
-下载 `gproxy-edge-cloudflare.zip`，解压并进入 `cloudflare` 目录。包内包含 Worker、控制台和 `wrangler.toml`。
+从发布页面下载 `gproxy-edge-cloudflare.zip`，解压后进入其中的 `cloudflare` 目录。包内有构建好的 Worker、控制台和 `wrangler.toml`。
 
 使用 D1 时，安装依赖并创建数据库：
 
@@ -113,7 +129,7 @@ pnpm install
 pnpm exec wrangler d1 create gproxy
 ```
 
-把返回的数据库 ID 填入 `wrangler.toml`，保留 binding 名 `DB`：
+把 Wrangler 输出的数据库 ID 填入 `wrangler.toml`，binding 名保持为 `DB`：
 
 ```toml
 [[d1_databases]]
@@ -122,7 +138,7 @@ database_name = "gproxy"
 database_id = "replace-with-your-database-id"
 ```
 
-设置主密钥和管理员密码，再部署：
+把主密钥和管理员密码存为 Secrets，先预检再部署：
 
 ```sh
 pnpm exec wrangler secret put GPROXY_MASTER_KEY
@@ -131,18 +147,20 @@ pnpm exec wrangler deploy --dry-run
 pnpm exec wrangler deploy
 ```
 
-使用 libSQL 时，设置 `GPROXY_DATABASE_URL` 和 `GPROXY_LIBSQL_TOKEN`，并移除不使用的 D1 binding。发布包已启用 libSQL；自行构建时需保留对应 feature。数据库表由 GPROXY 首次启动时创建，无需单独执行 Wrangler SQL migrations。
+改用 libSQL 时，设置 `GPROXY_DATABASE_URL` 和 `GPROXY_LIBSQL_TOKEN`，并删除不用的 D1 binding。发布包构建时已启用 libSQL 支持，自行构建时要保留这个 feature。
 
-### Workers 配置与静态资源
+GPROXY 在首次启动时自动建表，不需要执行 Wrangler SQL migrations。
 
-`GPROXY_CONFIG` 接受 JSON 配置，具名 Secrets 覆盖对应字段。以下为 D1 与公开访问地址的配置示例：
+### Worker 配置
+
+`GPROXY_CONFIG` 存放 JSON 格式的配置文档，`GPROXY_MASTER_KEY` 等具名 Secrets 会覆盖其中对应的字段。下面的示例使用 D1，并设置公开地址：
 
 ```toml
 [vars]
 GPROXY_CONFIG = '{"store":{"kind":"d1","binding":"DB"},"cache":{"kind":"store"},"public_base_url":"https://gateway.example.workers.dev"}'
 ```
 
-控制台由 Workers Assets 提供。保留模板中的路由配置，让 `/console/` 使用静态资源，其他请求进入网关：
+控制台由 Workers Assets 提供，加载控制台不会运行 Worker。请保留模板中的路由配置，让 `/console/` 走静态资源，其余路径进入网关：
 
 ```toml
 [assets]
@@ -152,11 +170,11 @@ not_found_handling = "single-page-application"
 run_worker_first = ["/*", "!/", "!/console", "!/console/*"]
 ```
 
-Workers 支持 D1 或 libSQL，不使用本地 SQLite、TCP 数据库或本地文件目录。需要 S3/R2 时，构建时启用 `s3` feature，并设置 `GPROXY_S3_ACCESS_KEY_ID`、`GPROXY_S3_SECRET_ACCESS_KEY` 和相应的文件存储配置。完整字段见[配置参考](/zh-cn/reference/configuration)。
+Worker 可以使用 D1 或 libSQL，没有本地 SQLite、TCP 数据库连接和本地文件目录。需要 S3 或 R2 文件存储时，构建时启用 `s3` feature，设置 `GPROXY_S3_ACCESS_KEY_ID` 和 `GPROXY_S3_SECRET_ACCESS_KEY`，并在配置中加入文件存储字段。字段说明见[配置参考](/zh-cn/reference/configuration)。
 
 ### 从源码构建
 
-从仓库根目录执行：
+在仓库根目录执行：
 
 ```sh
 rustup target add wasm32-unknown-unknown
@@ -167,7 +185,7 @@ pnpm --dir deploy/cloudflare build
 pnpm --dir deploy/cloudflare check
 ```
 
-构建与打包选项见[从源码构建](/zh-cn/deployment/release-build)。
+`build` 把 Worker 编译到 `deploy/cloudflare/build/`，把控制台放到 `deploy/cloudflare/public/`；`check` 是 Wrangler 的预检部署。其他构建与打包选项见[从源码构建](/zh-cn/development/building)。
 
 [cloudflare-auto]: https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fcloudflare-button
 [cloudflare-external]: https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fcloudflare-external

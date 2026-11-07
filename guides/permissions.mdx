@@ -4,15 +4,29 @@ description: "Configure access rules, request limits, and budgets, and distingui
 sidebarTitle: "Permissions, Rate Limits & Quotas"
 ---
 
-Permissions control access, rate limits control request frequency, and cost budgets control spending. These checks are separate.
+This page describes the checks GPROXY makes before it sends a request upstream: permission rules decide what a caller may use, rate limits decide how often, and cost budgets decide how much it may spend. Each is configured and checked separately; one cannot stand in for another.
 
-## Permissions
+## Order of checks
 
-A permission rule belongs to a user or API key and may filter by provider, model pattern, and operation. Model patterns support `*` and `?`, so model restrictions do not require separate providers.
+After the key is authenticated, a request is admitted in this order:
 
-Rules are ordered by descending priority, then ID. The first matching rule supplies the `allow` or `deny` decision. Ordinary users need an applicable allow rule. Instance administrators bypass ordinary permission rules, while OAuth access tokens are still limited to a fixed operation baseline (model catalogue, token counting, generation, streaming, compaction) unless the client is listed in `oauth.cli_client_ids`.
+1. OAuth scopes and the OAuth operation baseline, for requests made with an OAuth access token.
+2. Permission rules, which produce the set of providers the caller may reach for this model and operation.
+3. Credential visibility, which produces the set of credentials the caller may use.
+4. The applicable budgets are collected.
+5. Rate limits.
 
-Every operation also requires its exact `gproxy:<operation>` scope, using snake_case operation IDs (for example `gproxy:list_models`, `gproxy:generate_content`, and `gproxy:stream_generate_content`). Vendor services require `gproxy:services` and a configured CLI client. Neither an administrator nor a CLI allowlist entry bypasses scope checks. Empty scopes, `openid`, and `profile` grant no resource access; existing clients must request the required scopes and authorize again. Scopes never override the baseline or ordinary permission rules.
+Rate limits come last because they are the only step that uses something up. A request refused by an earlier check never increments a counter, so a caller without access cannot exhaust a limit that someone else depends on. Budgets are checked once more before any credential is touched, and are charged after the upstream call.
+
+## Permission rules
+
+A permission rule belongs to one user or one API key. It can be narrowed to a provider, a model pattern and an operation, and its action is `allow` or `deny`. Model patterns support `*` and `?`, so you can restrict individual models without creating separate providers for them.
+
+For each provider, rules are scanned in order of descending priority, then by ID, and the first rule that applies decides. To carve out an exception, give it a higher priority than the broad rule: `allow *` at priority 0 with `deny gpt-4*` at 10 allows everything except `gpt-4*`, and `deny *` at 0 with `allow gpt-4o` at 10 allows only `gpt-4o`. Two applicable rules that disagree at the same priority are resolved by ID, which is stable but arbitrary, so give overlapping rules different priorities.
+
+There is no default grant. An ordinary user needs an applicable `allow` rule; if no provider is allowed for the model, the request fails with `403` before any routing happens.
+
+Instance administrators bypass permission rules and can reach every provider. This keeps a mistaken `deny` rule from locking the operator out of their own instance. It does not lift the OAuth restrictions described below.
 
 | API field | Meaning |
 | --- | --- |
@@ -23,38 +37,60 @@ Every operation also requires its exact `gproxy:<operation>` scope, using snake_
 | `action` | `allow` or `deny` |
 | `priority` | Higher values match first |
 
-The model catalog's `permitted` field reports caller access. An inaccessible model may still appear in the catalog.
+The model catalog's `permitted` field tells the caller whether it may use an entry. A model the caller cannot use may still be listed.
+
+### Vendor service routes
+
+Vendor service routes are the account, usage and other non-model endpoints a channel declares. They name no model and no operation, so only a rule that covers the whole provider (any model, no operation) allows or denies them.
+
+## OAuth access tokens
+
+An OAuth access token is a credential a user has handed to another program, so GPROXY restricts it beyond the user's own permissions.
+
+By default, a token may only use a fixed baseline of operations: listing and reading the model catalog, token counting, generation, streaming generation and compaction. Embeddings, images, audio, files, video, Realtime and other operations are refused. Listing a client in `oauth.cli_client_ids` lifts the baseline for that client. Vendor service routes are outside the baseline, so they also require a listed client.
+
+Each operation additionally requires its exact `gproxy:<operation>` scope, using snake_case operation IDs (for example `gproxy:list_models`, `gproxy:generate_content` and `gproxy:stream_generate_content`). Vendor services require `gproxy:services`. Empty scopes, `openid` and `profile` grant no resource access; existing clients must request the scopes they need and authorize again.
+
+These checks apply to every token. Neither an instance administrator's account nor a listing in `oauth.cli_client_ids` bypasses the scope check, and scopes never override the baseline or ordinary permission rules.
 
 ## Credential visibility
 
-Permission alone is not enough: the caller also needs an available credential. Credential ownership and the API key's user, organization, and team bindings determine visibility. Management scope, model permission, and credential ownership are separate settings.
+Permission to use a model is not enough on its own; the caller also needs a credential it is allowed to use. Credentials belong to a user, an organization or a team. Which of them a request can select is decided by the calling key's binding, not by all of the user's memberships: a user in two organizations can hold a key bound to one of them, and that key cannot use the other organization's credentials. A key bound to a team can also use credentials of the team's parent organization. Instance administrators can select every credential.
 
-Vendor service routes (account, usage, and other non-model endpoints a channel declares) have no model or operation, so only a rule covering the whole provider — any model, no operation — allows or denies them. They are outside the OAuth operation baseline.
+Management scope, model permissions and credential ownership are three separate settings. If a model is permitted but no visible credential can serve it, the request fails with `503` (`no_usable_target`) rather than `403`.
 
 ## Rate limits
 
-User or API-key rate limits specify a metric, limit, period in seconds, optional model pattern, and enabled state. Common metrics are `requests` and `concurrency`. Live counters use the cache backend; multiple instances need shared cache state.
+A rate limit belongs to a user or an API key and has a metric, a limit, a period in seconds, an optional model pattern and an enabled state. Two metrics behave differently:
 
-Permission checks run before rate-limit accounting. Inspect the error and logs to distinguish caller limits from upstream credential limits.
+- `concurrency` counts requests in flight. A request holds its slot until the response has been sent completely, which for a streamed response is long after the request started.
+- `requests`, and any other metric name, counts requests made in the current period. Each request counts as 1, whatever the metric is called. A token count is not known until the upstream has answered, so to limit tokens or spending, use a cost budget instead.
+
+Counters are kept in the cache backend. In a multi-instance deployment the instances must share the cache, or each instance would enforce the full limit on its own. If the cache cannot be reached, requests subject to a rate limit are refused rather than let through unchecked.
+
+Check the error message and logs to tell a caller rate limit apart from a limit on the upstream credential.
 
 ## Cost budgets
 
-Budgets can belong to users, API keys, organizations, and teams, in USD. Requests check the key and user budgets plus those of the key's actual organization and team bindings. A team's parent organization is not charged merely because that relationship exists.
+Budgets can be set on users, API keys, organizations and teams, in USD. A request is checked against the key's budget, the user's budget, and the budgets of the organization and team the key is actually bound to. A key bound to a team is not charged to the team's parent organization; to charge both, bind the key to both.
 
-Every applicable enabled budget must have remaining capacity. Period and model filters are configurable in the console. Actual cost is settled after the upstream call, so in-flight and concurrent calls may exceed the limit. A budget is not a hard cap on upstream spending.
+Every applicable enabled budget must have capacity left. Periods and model filters are set in the console.
 
-Missing prices affect cost totals and budget consumption. Check [Pricing](/reference/pricing) as well. Budget amounts use decimal strings in the API.
+The actual cost is known only after the upstream call finishes, and is settled then. Requests that are already in flight, and concurrent requests, can therefore take the total past the limit. A budget stops new requests once it is exhausted; it is not a hard cap on upstream spending.
+
+Missing prices affect both cost totals and budget consumption, so check [Pricing](/reference/pricing) as well. Budget amounts are decimal strings in the API.
 
 ## Provider and credential limits
 
-A provider's default limits apply separately to each credential, not to one shared provider pool. An enabled same-name credential rule overrides the provider default. Restoring inheritance removes the individual configuration.
+A provider's default limits apply to each of its credentials separately, not to one pool shared by all of them. An enabled rule of the same name on a credential overrides the provider default. Restoring inheritance deletes the credential's own rule.
 
-Local limits differ from upstream account allowance. Resetting a local rule does not reset the upstream balance or window. See [Providers and credentials](/guides/providers) and [Console](/guides/console).
+These are local limits and are separate from the upstream account's allowance. Resetting a local rule does not reset the upstream balance or window. See [Providers and credentials](/guides/providers) and [Console](/guides/console).
 
-## Diagnose a rejection
+## Diagnosing a rejection
 
-- `401`: check key and user validity.
-- `403`: check permissions, credential visibility, OAuth scopes, and the OAuth operation baseline.
-- `429`: check caller rate limits, budgets, local credential limits, and upstream allowance.
+- `401`: check that the key and its user exist, are enabled and have not expired.
+- `403`: check permission rules, OAuth scopes and the OAuth operation baseline.
+- `429`: check caller rate limits, budgets, local credential limits and the upstream allowance.
+- `503` with `no_usable_target`: check that the caller can see an enabled credential that serves the model.
 
-Inspect the relevant user, key, and credential in the console, then use the specific logged error to identify the limiting rule.
+Open the user, key and credential in the console, then use the specific error in the logs to find the rule that refused the request.

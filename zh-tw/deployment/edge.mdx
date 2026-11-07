@@ -1,38 +1,39 @@
 ---
-title: "託管平台部署"
-description: "在 Cloudflare Workers、Netlify 或 Vercel 上部署 GPROXY，選擇資料庫並完成首次登入。"
+title: "Cloudflare Workers、Netlify 與 Vercel"
+description: "在 Cloudflare Workers、Netlify 或 Vercel 上部署 GPROXY，連線資料庫並登入。"
+sidebarTitle: "Workers 與函式平台"
 ---
 
-Render 與 Heroku 的部署卡片及容器範本，請參閱[容器託管部署](/zh-tw/deployment/containers)。
+GPROXY 為 Cloudflare Workers、Netlify Functions 和 Vercel Functions 提供部署範本，適合不想自行維護伺服器的情境。Docker、Render 和 Heroku 請參閱 [Docker、Render 與 Heroku](/zh-tw/deployment/containers)。
 
-GPROXY 提供 Cloudflare Workers、Netlify 和 Vercel 的部署模板。模板下載預編譯的釋出包，不需要安裝 Rust。部署後，控制台和 API 使用同一個域名，控制台入口為 `/console/`。
+範本在建置時下載預先編譯的發行套件，不需要 Rust 工具鏈。控制台和 API 使用部署的同一個網域，控制台入口為 `/console/`。
 
 ## 選擇平台
 
-| 平台 | 使用平台資料庫 | 使用已有資料庫 | 當前模板 WebSocket / Realtime |
+| 平台 | 平台資料庫 | 既有資料庫 | WebSocket / Realtime |
 | --- | --- | --- | --- |
 | [Cloudflare Workers](#cloudflare-workers) | 部署時建立 D1 | libSQL / Turso | 支援 |
 | [Netlify Functions](#netlify) | Netlify Database | PostgreSQL | 不支援 |
 | [Vercel Functions](#vercel) | 部署時選擇 PostgreSQL 產品 | PostgreSQL | 支援（平台 Beta） |
 
-只需要 HTTP 和 SSE 串流呼叫時，可選用任一模板；需要 WebSocket 或 Realtime 時，可選擇 Cloudflare Workers、Vercel Functions（WebSocket Beta），或使用 [CLI / 容器部署](/zh-tw/download)。
+三個平台都支援 HTTP 和 SSE 串流呼叫。用戶端需要 WebSocket 或 Realtime 時，請選擇 Cloudflare Workers 或 Vercel，或者改用 [CLI 或容器部署](/zh-tw/download)。
 
-Cloudflare 使用 WASM，另外三個平台使用原生 serverless 程式。它們共用 GPROXY 的管理 API 和控制台，但資料庫型別、函式時長和請求大小限制取決於平台。
+在 Cloudflare 上，閘道以 WebAssembly 形式在 Worker 中執行；在 Netlify 和 Vercel 上，由一個小型 Node.js 函式啟動原生 `gproxy-serverless` 程式，並將請求轉送給它。三者的管理 API 和控制台相同，資料庫類型、函式時長和請求大小限制則由平台決定。
 
-## 準備密碼與主金鑰
+## 部署前的準備
 
-每個平台都需要填寫以下兩項：
+每個範本都要求填寫兩項金鑰，請先準備好並妥善保存：
 
-| 配置 | 填寫內容 |
-| --- | --- |
-| `GPROXY_ADMIN_PASSWORD` | 至少 8 個字元的登入密碼 |
-| `GPROXY_MASTER_KEY` | 用於加密上游憑證的 32 位元組主金鑰；支援 64 位十六進位制或 base64 |
+- `GPROXY_ADMIN_PASSWORD`：控制台登入密碼，至少 8 個字元。
+- `GPROXY_MASTER_KEY`：32 位元組主金鑰，用於加密資料庫中的上游憑證，寫成 64 位十六進位或 base64。可以用 `openssl rand -hex 32` 產生。
 
-可以用 `openssl rand -hex 32` 生成主金鑰。儲存好這個值，更新和重新部署時繼續使用它。
+使用者名稱預設為 `admin`，也可以另外設定 `GPROXY_ADMIN_USER`。密碼在每次啟動時生效：存在同名使用者時，只修改該使用者的密碼；沒有同名使用者時，重新啟用 0 號管理員，並改為設定的使用者名稱和密碼。完整規則請參閱設定參考中的[首次初始化](/zh-tw/reference/configuration#首次初始化)。
 
-使用者名稱預設為 `admin`，可透過 `GPROXY_ADMIN_USER` 指定。密碼配置會在啟動時應用：優先更新同名使用者的密碼；沒有同名使用者時恢復 0 號管理員並修改使用者名稱和密碼。詳見[管理員初始化與密碼覆蓋](/zh-tw/reference/configuration#首次初始化)。
+<Warning>
+每次更新和重新部署都要使用同一個 `GPROXY_MASTER_KEY`。以一把金鑰加密的憑證無法用另一把金鑰解開，一旦更換金鑰，資料庫中所有上游憑證都將無法讀取。
+</Warning>
 
-使用已有資料庫時，還需要資料庫連線資訊。各平台的填寫方式如下。
+如果連線既有資料庫而非平台資料庫，還要準備好連線資訊。各平台需要填寫哪些值，請參閱下文對應小節。
 
 ## Cloudflare Workers
 
@@ -40,80 +41,95 @@ Cloudflare 使用 WASM，另外三個平台使用原生 serverless 程式。它�
 
 [使用外部 libSQL / Turso 資料庫][cloudflare-external]
 
-使用 D1 點部署按鈕，已有 libSQL/Turso 資料庫則點外部資料庫連結。
+部署按鈕會建立 D1 資料庫。第二個連結部署的版本會連線既有的 libSQL 或 Turso 資料庫，不建立 D1。
 
-1. 進入所選部署入口，連線 GitHub 或 GitLab 帳戶。
-2. 使用 D1 時，填寫資料庫名稱，Cloudflare 會建立並繫結它。使用外部資料庫時，填寫 `GPROXY_DATABASE_URL` 和 `GPROXY_LIBSQL_TOKEN`；這個入口不會建立 D1。
-3. 填寫管理員密碼和主金鑰，保留 `npm run build`、`npm run deploy` 命令，然後部署。
+1. 開啟所選入口，連結 GitHub 或 GitLab 帳戶。
+2. 使用 D1 時填寫資料庫名稱，Cloudflare 會建立資料庫並以 `DB` 繫結。使用外部資料庫時，填寫 `GPROXY_DATABASE_URL` 和 `GPROXY_LIBSQL_TOKEN`。
+3. 填寫管理員密碼和主金鑰。建置指令保持 `npm run build`，部署指令保持 `npm run deploy`，然後開始部署。
 
-Turso 地址可使用 `libsql://your-db.turso.io` 或對應的 HTTPS 地址。這裡使用 libSQL 的 HTTP 介面，不能填寫 PostgreSQL 連線串。
+Turso 位址可以寫成 `libsql://your-db.turso.io`，也可以寫成對應的 HTTPS 位址。Worker 透過 libSQL 的 HTTP 介面存取資料庫，因此不能填寫 PostgreSQL 連線字串。
 
-已有 D1 部署也可以透過上述兩個變數改用 libSQL。設定 `GPROXY_DATABASE_URL` 後，它優先於 D1；更改連線只切換資料庫，不會搬遷原有資料。
+使用 D1 的部署之後也可以透過這兩個變數改用 libSQL，`GPROXY_DATABASE_URL` 優先於 D1 繫結。切換連線只是換一個資料庫，D1 中的資料不會被複製過去。
 
-需要使用 Wrangler 或調整 Workers 配置時，見本頁的[手動部署 Cloudflare](#手動部署-cloudflare)。
+需要自行用 Wrangler 部署或修改 Worker 設定時，請參閱[手動部署到 Cloudflare](#手動部署到-cloudflare)。
 
 ## Netlify
 
 [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)][netlify-auto]
 
-[使用已有 PostgreSQL 資料庫][netlify-external]
+[使用既有 PostgreSQL 資料庫][netlify-external]
 
-使用 Netlify Database 點部署按鈕，已有 PostgreSQL 則點外部資料庫連結。
+部署按鈕使用 Netlify Database。第二個連結開啟同一個範本，並多出一個填寫外部 PostgreSQL 連線的欄位。
 
-1. 進入所選部署入口，授權倉庫，並填寫管理員密碼和主金鑰。
-2. 使用 Netlify Database 時，模板讀取平台提供的連線，無需手填連線串。使用已有資料庫時，在 `GPROXY_DATABASE_URL` 中填寫 PostgreSQL 連線串。
-3. 保留模板的構建命令和 Functions 配置，開始部署。
+1. 開啟所選入口，授權儲存庫，填寫管理員密碼和主金鑰。
+2. 使用 Netlify Database 時，函式讀取平台提供的連線字串，無需填寫。使用既有資料庫時，將 PostgreSQL 連線字串填入 `GPROXY_DATABASE_URL`。
+3. 保留範本的建置指令和 Functions 設定，開始部署。
 
-外部連線的格式例如 `postgresql://user:password@db.example.com/gproxy?sslmode=require`，請替換為資料庫服務提供的實際連線資訊。
+外部連線字串形如 `postgresql://user:password@db.example.com/gproxy?sslmode=require`，請依資料庫服務商提供的資訊填寫。
 
-兩個入口使用同一個 Netlify 模板。即使填寫外部連線，Netlify 仍可能建立平台資料庫；GPROXY 會優先使用 `GPROXY_DATABASE_URL`。
+即使填寫了外部連線，Netlify 仍可能建立平台資料庫。這不影響使用，因為程式優先讀取 `GPROXY_DATABASE_URL`。
 
 ## Vercel
 
 [![Deploy with Vercel](https://vercel.com/button)][vercel-auto]
 
-[使用已有 PostgreSQL 資料庫][vercel-external]
+[使用既有 PostgreSQL 資料庫][vercel-external]
 
-需要新資料庫時點部署按鈕，已有 PostgreSQL 則點外部資料庫連結。
+部署按鈕會要求關聯一個新的 PostgreSQL 產品；第二個連結略過這一步，改為要求填寫 `GPROXY_DATABASE_URL`。
 
-1. 進入所選部署入口。使用平台資料庫時，按頁面提示選擇並關聯 PostgreSQL 產品；外部資料庫入口不要求安裝資料庫產品。
-2. 填寫管理員密碼和主金鑰。使用已有資料庫時，再填寫 `GPROXY_DATABASE_URL`。
-3. 保留模板的構建命令和 `vercel.json`，開始部署。
+1. 開啟所選入口。使用部署按鈕時，依提示選擇並關聯 PostgreSQL 產品。
+2. 填寫管理員密碼和主金鑰；使用既有資料庫時，再填寫 `GPROXY_DATABASE_URL`。
+3. 保留範本的建置指令和 `vercel.json`，開始部署。
 
-平台資料庫連線從 `DATABASE_URL` 或 `POSTGRES_URL` 讀取。如果所選產品使用其他變數名，把連線串填入 `GPROXY_DATABASE_URL`。
+函式依序從 `GPROXY_DATABASE_URL`、`DATABASE_URL`、`POSTGRES_URL` 讀取連線字串。如果所關聯的產品使用其他變數名稱，請將它的值複製到 `GPROXY_DATABASE_URL`。
 
-這個模板使用 **Node.js Functions**，部署時不要改為 Edge Runtime。
+範本使用 Node.js Functions，不要改成 Edge Runtime：函式需要啟動一個原生程式，Edge Runtime 做不到。
 
-## 首次登入與呼叫
+## 登入
 
-部署完成後，開啟 `https://你的域名/console/`，使用 `admin`（或自定義使用者名稱）和配置的密碼登入。
+1. 開啟 `https://你的網域/console/`。直接造訪網域也會進入控制台。
+2. 以 `admin`（或 `GPROXY_ADMIN_USER` 中設定的使用者名稱）和設定的密碼登入。
+3. 新增供應商和憑證，並測試憑證。
+4. 建立模型路由和 API key，然後依[第一個請求](/zh-tw/getting-started/first-request)發出呼叫。
 
-在控制台新增供應商與憑證，測試成功後建立模型路由和閘道器 API Key，再按[第一個請求](/zh-tw/getting-started/first-request)發起呼叫。用戶端使用部署域名作為服務地址，例如 `https://gateway.example.com/v1`，使用閘道器 API Key 鑑權。
+用戶端以部署位址作為服務位址，例如 `https://gateway.example.com/v1`，並使用剛建立的 API key 驗證。
 
-如果 Netlify 或 Vercel 返回 503，先檢視函式日誌，確認資料庫已繫結、連線串有效，以及管理員密碼和主金鑰已設定。這些平台的 PostgreSQL 帳戶還需要建立 `gproxy` schema 和應用表的權限。
+在 Netlify 和 Vercel 上，如果閘道無法啟動，請求會得到 503 狀態碼和訊息 `GPROXY is unavailable. Check the deployment database and secrets in the platform console.`。此時請查看函式日誌，常見原因有：沒有關聯資料庫，連線字串不是以 `postgres://` 或 `postgresql://` 開頭，或者沒有設定密碼或主金鑰。程式必須在 45 秒內回報就緒，資料庫連不上時通常表現為啟動逾時。PostgreSQL 帳戶還需要有建立 `gproxy` schema 和應用程式資料表的權限。
 
-## 更新與執行限制
+## 更新
 
-設定、帳戶與用量儲存在資料庫中，更新時保留資料庫與主金鑰。範本預設下載最新穩定版並驗證 SHA-256；升級時清除平台建置快取後重新部署即可。只有需要固定版本時，才將建置環境變數 `GPROXY_RELEASE_VERSION` 設為發行標籤。所選版本需包含對應平台的發行附件。託管部署不使用控制台的原地二進位更新。
+設定、帳戶和用量都儲存在資料庫中，更新只替換程式。請保留資料庫和主金鑰。
 
-所有模板均支援 HTTP 與 SSE；Netlify Functions 不接受 WebSocket 升級。Vercel 使用平台的 [WebSocket Beta](https://vercel.com/docs/functions/websockets)。WebSocket 連線仍可能因函式時長限制或實例回收而斷開，用戶端需要處理重連。長時間推理、大檔案和高併發請求仍受平台限制，部署前可檢視 [Netlify Functions](https://docs.netlify.com/build/functions/overview/) 和 [Vercel Functions](https://vercel.com/docs/functions/limitations) 的當前額度。
+D1 範本以及 Netlify、Vercel 範本在建置時下載最新穩定版，並依發行版本中的 `SHA256SUMS` 驗證 SHA-256。升級時清除平台建置快取並重新部署即可。需要固定版本時，將建置環境變數 `GPROXY_RELEASE_VERSION` 設為發行標籤，該版本必須包含對應平台的發行套件。
 
-這兩個模板不配置檔案儲存。需要 S3/R2 或可公開下載的檔案時，可以使用下方的 Workers 自定義構建，或選擇 CLI 部署。Netlify 和 Vercel 可用 `GPROXY_PUBLIC_BASE_URL` 固定公開訪問地址。不設定時，Netlify 和 Vercel 使用平臺提供的生產地址；其他平臺的 OAuth 端點按每個請求的 Host 應答，釋出連結保持停用。
+外部資料庫版的 Cloudflare 範本與此不同：它的 `prepare-release.mjs` 寫死了一個發行標籤（目前為 `v4.2.0`），不讀取 `GPROXY_RELEASE_VERSION`。升級時請在部署所建立的儲存庫中修改這個檔案裡的標籤，再重新部署。
 
-## 手動部署 Cloudflare
+託管部署不使用控制台的原地二進位更新。
 
-### 使用釋出包
+## 執行限制
 
-下載 `gproxy-edge-cloudflare.zip`，解壓並進入 `cloudflare` 目錄。包內包含 Worker、控制台和 `wrangler.toml`。
+所有範本都支援 HTTP 和 SSE。Netlify Functions 不接受 WebSocket 升級，閘道會以 501 狀態碼拒絕這類請求。Vercel 透過平台的 [WebSocket Beta](https://vercel.com/docs/functions/websockets) 支援 WebSocket。無論哪個平台，函式時長限制和執行個體回收都可能中斷 WebSocket，用戶端需要自行重新連線。
 
-使用 D1 時，安裝依賴並建立資料庫：
+Vercel 範本在 `vercel.json` 中將 `maxDuration` 設為 300 秒。長時間推理、大型檔案和高並行仍受各平台限制，部署前請對照 [Netlify Functions](https://docs.netlify.com/build/functions/overview/) 和 [Vercel Functions](https://vercel.com/docs/functions/limitations) 的目前額度評估。
+
+Netlify 和 Vercel 範本不設定檔案儲存。需要 S3、R2 或可透過公開連結下載的檔案時，請依下文自行建置 Worker，或改用 CLI 部署。
+
+OAuth 端點和檔案發布連結需要知道閘道的公開位址。在 Netlify 和 Vercel 上，可以用 `GPROXY_PUBLIC_BASE_URL` 固定這個位址；不設定時，函式使用平台回報的正式環境位址。如果無從得知公開位址，OAuth 端點依每個請求本身的 `Host` 回應，發布連結保持停用。Workers 上則在 `GPROXY_CONFIG` 中設定 `public_base_url`（見下文）。
+
+## 手動部署到 Cloudflare
+
+### 使用發行套件
+
+從發行頁面下載 `gproxy-edge-cloudflare.zip`，解壓縮後進入其中的 `cloudflare` 目錄。套件內有建置好的 Worker、控制台和 `wrangler.toml`。
+
+使用 D1 時，安裝相依套件並建立資料庫：
 
 ```sh
 pnpm install
 pnpm exec wrangler d1 create gproxy
 ```
 
-把返回的資料庫 ID 填入 `wrangler.toml`，保留 binding 名 `DB`：
+將 Wrangler 輸出的資料庫 ID 填入 `wrangler.toml`，binding 名稱保持為 `DB`：
 
 ```toml
 [[d1_databases]]
@@ -122,7 +138,7 @@ database_name = "gproxy"
 database_id = "replace-with-your-database-id"
 ```
 
-設定主金鑰和管理員密碼，再部署：
+將主金鑰和管理員密碼存為 Secrets，先預檢再部署：
 
 ```sh
 pnpm exec wrangler secret put GPROXY_MASTER_KEY
@@ -131,18 +147,20 @@ pnpm exec wrangler deploy --dry-run
 pnpm exec wrangler deploy
 ```
 
-使用 libSQL 時，設定 `GPROXY_DATABASE_URL` 和 `GPROXY_LIBSQL_TOKEN`，並移除不使用的 D1 binding。釋出包已啟用 libSQL；自行構建時需保留對應 feature。資料庫表由 GPROXY 首次啟動時建立，無需單獨執行 Wrangler SQL migrations。
+改用 libSQL 時，設定 `GPROXY_DATABASE_URL` 和 `GPROXY_LIBSQL_TOKEN`，並刪除不用的 D1 binding。發行套件建置時已啟用 libSQL 支援，自行建置時要保留這個 feature。
 
-### Workers 配置與靜態資源
+GPROXY 在首次啟動時自動建立資料表，不需要執行 Wrangler SQL migrations。
 
-`GPROXY_CONFIG` 接受 JSON 配置，具名 Secrets 覆蓋對應欄位。以下為 D1 與公開訪問地址的配置示例：
+### Worker 設定
+
+`GPROXY_CONFIG` 存放 JSON 格式的設定檔，`GPROXY_MASTER_KEY` 等具名 Secrets 會覆寫其中對應的欄位。下面的範例使用 D1，並設定公開位址：
 
 ```toml
 [vars]
 GPROXY_CONFIG = '{"store":{"kind":"d1","binding":"DB"},"cache":{"kind":"store"},"public_base_url":"https://gateway.example.workers.dev"}'
 ```
 
-控制台由 Workers Assets 提供。保留模板中的路由配置，讓 `/console/` 使用靜態資源，其他請求進入閘道器：
+控制台由 Workers Assets 提供，載入控制台不會執行 Worker。請保留範本中的路由設定，讓 `/console/` 走靜態資源，其餘路徑進入閘道：
 
 ```toml
 [assets]
@@ -152,11 +170,11 @@ not_found_handling = "single-page-application"
 run_worker_first = ["/*", "!/", "!/console", "!/console/*"]
 ```
 
-Workers 支援 D1 或 libSQL，不使用本地 SQLite、TCP 資料庫或本地檔案目錄。需要 S3/R2 時，構建時啟用 `s3` feature，並設定 `GPROXY_S3_ACCESS_KEY_ID`、`GPROXY_S3_SECRET_ACCESS_KEY` 和相應的檔案儲存配置。完整欄位見[配置參考](/zh-tw/reference/configuration)。
+Worker 可以使用 D1 或 libSQL，沒有本機 SQLite、TCP 資料庫連線和本機檔案目錄。需要 S3 或 R2 檔案儲存時，建置時啟用 `s3` feature，設定 `GPROXY_S3_ACCESS_KEY_ID` 和 `GPROXY_S3_SECRET_ACCESS_KEY`，並在設定中加入檔案儲存欄位。欄位說明請參閱[設定參考](/zh-tw/reference/configuration)。
 
-### 從原始碼構建
+### 從原始碼建置
 
-從倉庫根目錄執行：
+在儲存庫根目錄執行：
 
 ```sh
 rustup target add wasm32-unknown-unknown
@@ -167,7 +185,7 @@ pnpm --dir deploy/cloudflare build
 pnpm --dir deploy/cloudflare check
 ```
 
-構建與打包選項見[從原始碼構建](/zh-tw/deployment/release-build)。
+`build` 將 Worker 編譯到 `deploy/cloudflare/build/`，將控制台放到 `deploy/cloudflare/public/`；`check` 是 Wrangler 的預檢部署。其他建置與打包選項請參閱[從原始碼建置](/zh-tw/development/building)。
 
 [cloudflare-auto]: https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fcloudflare-button
 [cloudflare-external]: https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fcloudflare-external

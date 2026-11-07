@@ -6,31 +6,42 @@ sidebarTitle: "Usage, Logs & Audit"
 
 import { VideoTutorial } from "/snippets/video-tutorial.jsx";
 
-Usage and logs video tutorial.
+This page explains the records GPROXY keeps about traffic and administration, how to turn body capture on, and how to query the records through the API.
 
 <VideoTutorial topic="logs" locale="en" title="Usage and logs video tutorial" />
 
-The console separates usage, downstream requests, upstream calls, and audit records. These show cost, client traffic, actual upstream attempts, and configuration changes respectively.
+GPROXY keeps four kinds of record, and the console shows them separately because they answer different questions:
+
+- Usage records: what each upstream call consumed and cost.
+- Downstream logs: what clients sent to the gateway.
+- Upstream logs: which upstream calls the gateway actually made.
+- Audit records: who changed the configuration.
+
+Administrators find the first three under **Usage and logs** (**Global usage**, **Downstream logs**, **Upstream logs**), and audit records under **Access control → Audit**. Every user sees their own **Usage** and **Recent requests** in the **Personal** view.
 
 ## Usage and costs
 
-A usage record represents one physical upstream call. Retries or failover can produce several records for one client request. Provider and credential attribution, tokens, media/tool quantities, and costs are stored independently of capture logs.
+A usage record represents one physical upstream call. If a client request is retried or fails over to another credential, it produces several records. Each record stores the provider and credential it was attributed to, token counts, media and tool quantities, and the cost. Usage records are kept independently of the request logs, so turning logging or capture off does not remove them.
 
-A missing token field may be `null`, not zero. `completeness` describes usage completeness, while `metrics` retains dynamic dimensions and protocol details. Costs come from configured pricing rules, not the upstream account balance.
+A token field the upstream did not report is `null`, which is different from zero. `completeness` says how complete the record's usage is, and `metrics` holds the remaining dynamic dimensions and protocol details.
 
-Aggregates can filter by time, model, provider, credential, and other dimensions. Check `scanned` and `truncated`: a truncated scan is not a complete bill.
+Costs are computed from the pricing rules configured in GPROXY, not read from the upstream account balance. Missing prices affect cost totals and budget consumption; see [Pricing](/reference/pricing).
+
+Two switches under **Global settings** control this part: **Store usage records** decides whether usage records are written, and **Settle costs and quotas** whether costs are computed and charged to budgets. With settlement off, budgets are not checked.
+
+Usage summaries can be filtered by time, model, provider, credential and other dimensions. Each result reports `scanned`, the number of records read, and `truncated`, whether the scan hit its limit. A truncated result is not a complete bill; narrow the filter and query again.
 
 ## Request logs
 
-- **Downstream logs** describe client-to-gateway requests.
-- **Upstream logs** describe physical upstream calls. One downstream request may have multiple attempts.
-- **Captures** retain selected requests, responses, or stream events, subject to body-retention settings.
+Downstream logs describe requests from clients to the gateway. Upstream logs describe the physical calls the gateway made, so one downstream request can link to several upstream attempts.
 
-HTTP / SSE and WebSocket traffic have corresponding records. WebSocket frames are connection events; frame counts are not necessarily model-call counts.
+A capture keeps the request, response or stream events of a selected request, depending on the body-recording settings below.
 
-## Enable body recording
+HTTP, SSE and WebSocket traffic are all recorded. On a WebSocket connection each frame is an event on the connection, so the number of frames is not the number of model calls.
 
-Instance logging settings control upstream and downstream logs and bodies separately. For example:
+## Recording bodies
+
+Logging is configured under **Global settings**, with separate switches for the upstream and downstream sides: **Capture downstream requests**, **Capture downstream bodies**, **Capture upstream requests** and **Capture upstream bodies**. Through the API:
 
 ```sh
 curl -sS -X PATCH http://127.0.0.1:8787/admin/api/settings \
@@ -39,13 +50,24 @@ curl -sS -X PATCH http://127.0.0.1:8787/admin/api/settings \
   -d '{"logging":{"enableUpstreamLogBody":true}}'
 ```
 
-Body recording adds storage and processing overhead. Log states distinguish uncaptured, truncated, and complete content. A missing body does not mean a request was never sent. Disabling capture does not disable usage settlement.
+Recording bodies costs storage and processing time. Each log entry states whether its content was not captured, truncated or complete. A missing body does not mean the request was not sent. Capture and usage settlement are independent: turning capture off does not stop settlement.
 
-Default redaction masks recognized secret, Cookie, and token fields, but does not identify all personal or business information in a body. `disableLogRedaction` disables log redaction; configure it according to your needs.
+### Redaction
+
+By default, recognized secrets, Cookies and token fields are masked before a log is stored. Redaction does not detect personal or business information in bodies. **Disable log redaction** (`disableLogRedaction`) turns masking off entirely; only use it where the stored logs are protected accordingly.
+
+## Retention
+
+Records are pruned by settings under **Global settings**:
+
+- **Request history retention (days)** deletes completed request records and captures older than the given age. Usage records are kept.
+- **Usage retention (days)** deletes usage records older than the given age. Usage statistics and totals are computed from these records; leave it blank to keep them all.
+- **Capture payload retention (days)** and **Capture payload size limit (MiB)** bound the stored capture bodies.
+- **SQLite database size limit (MiB)**: when it is exceeded, the oldest completed request records are deleted first. Usage records are kept.
 
 ## Query APIs
 
-CLI / container HTTP management endpoints include:
+The CLI and container host serve these management endpoints over HTTP:
 
 | Path | Content |
 | --- | --- |
@@ -57,14 +79,20 @@ CLI / container HTTP management endpoints include:
 | `/admin/api/logs/captures/{id}` | Capture details |
 | `/admin/api/audit` | Audit records |
 
-Each endpoint enforces management scope and capabilities. Personal endpoints `/portal/api/usage`, `/portal/api/quota`, and `/portal/api/requests` restrict results to caller-visible data. Application queries through in-app IPC and does not expose these management endpoints over HTTP.
+Each endpoint checks the caller's management scope and capabilities. The personal endpoints `/portal/api/usage`, `/portal/api/quota` and `/portal/api/requests` return only data the caller is allowed to see.
+
+Application does not expose these endpoints over HTTP; its console queries the same data through in-app IPC.
 
 ## Audit
 
-Audit records cover management and OAuth actions, including actor, action, outcome, and time. `GPROXY_AUDIT_ENABLED=false` disables new audit entries while keeping history queryable. It does not disable request logs or usage settlement.
+Audit records cover management and OAuth actions. Each records the actor, the action, the outcome and the time.
+
+Setting `GPROXY_AUDIT_ENABLED=false` stops new audit entries from being written; existing entries remain queryable. It does not affect request logs or usage settlement.
 
 ## Process logs
 
-The CLI uses `GPROXY_LOG_FILTER` and `GPROXY_LOG_FORMAT` for log level and format, and writes process logs to stderr. Initial generated administrator credentials go to stdout. Service managers and containers may collect both streams, so protect the first startup log.
+The CLI writes its process logs to stderr. `GPROXY_LOG_FILTER` sets the level and `GPROXY_LOG_FORMAT` the format.
 
-See [Pricing](/reference/pricing) for cost rules and [Permissions, rate limits, and budgets](/guides/permissions) for budgets.
+The administrator credentials generated on first startup are printed to stdout. Service managers and container runtimes often collect both streams into the same log, so protect the log of the first start.
+
+Budgets, which are charged from the usage records, are described in [Permissions, rate limits and budgets](/guides/permissions).

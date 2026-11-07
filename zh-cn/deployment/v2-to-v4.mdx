@@ -1,17 +1,37 @@
 ---
-title: "从 v2 迁移到 v4"
-description: "用一个脚本将 v2 数据迁移到 v4，支持 SQLite、PostgreSQL 和 MySQL。"
+title: "从 v2 升级到 v4"
+description: "用一个脚本离线迁移 v2 数据到 v4，源库和目标库均可为 SQLite、PostgreSQL 或 MySQL。"
+sidebarTitle: "v2 升级到 v4"
 ---
 
-使用统一的 [migrate-v2-to-v4.py](https://github.com/LeenHawk/gproxy/blob/main/scripts/migrate-v2-to-v4.py)。源库和目标库都支持 SQLite、PostgreSQL、MySQL，可以跨数据库迁移。
+本文供管理员把 v2 部署直接升级到 v4 时参考。与 [v3 升级到 v4](/zh-cn/deployment/v3-to-v4) 不同，这次升级是离线进行的：脚本 [migrate-v2-to-v4.py](https://github.com/LeenHawk/gproxy/blob/main/scripts/migrate-v2-to-v4.py) 读取 v2 数据库，写出一个新的 v4 数据库，原库不做任何修改。
 
-脚本一次完成：**v2 源库 → SQLite 快照 → v3 SQLite → v4 SQLite → 目标库**。原库只读，账号、凭据、API key 和用量先交给现有升级器转换，再把完整的 v4 数据搬到目标库。
+## 变化内容
 
-## 准备
+脚本一次运行四个阶段：
 
-停止旧实例并保留数据库备份。目标必须是**新的 SQLite 文件或空的 PostgreSQL/MySQL 数据库**；不要填写原库地址。加密实例继续使用原来的 `GPROXY_MASTER_KEY`。
+1. 把 v2 源库做成 SQLite 快照。
+2. 用 v3.0.22 程序把快照升级到 v3。
+3. 用 v4 程序把 v3 文件导入 v4 SQLite 数据库。
+4. 把 v4 数据库复制到目标库。
 
-准备 Python 3.10+、[v3.0.22](https://github.com/LeenHawk/gproxy/releases/tag/v3.0.22) 和 [v4](https://github.com/LeenHawk/gproxy/releases/latest) 可执行文件。v4 需要包含目标数据库驱动。纯 SQLite 不需要额外 Python 包；使用 PostgreSQL 或 MySQL 时安装对应驱动：
+第 2、3 阶段使用的就是 v3 和 v4 程序自身的转换逻辑，因此两者的边界在这里同样适用（参见 [v2 升级到 v3](/zh-cn/deployment/v2-to-v3) 和 [v3 升级到 v4](/zh-cn/deployment/v3-to-v4)）：
+
+- 账号、凭证、API key 和历史用量会被转换。
+- 部分 v2 权限和规则无法映射，需要重新配置。
+- v2 中仍保留的用量明细会迁移；已被 v2 保留策略删除的明细无法从汇总数据重建。
+- 旧的请求日志、会话、审计记录和缓存不会变成 v4 的记录。
+- v4 金额保留 9 位小数，精确的历史费用保存在 `metrics.v3.cost` 中。
+
+源库和目标库各自可以是 SQLite、PostgreSQL 或 MySQL，两端类型可以不同。
+
+## 准备工作
+
+1. 停止 v2 实例并备份数据库。脚本以只读方式读取源库，但仍请先做备份。
+2. 准备目标库：一个尚不存在的 SQLite 文件路径，或一个空的 PostgreSQL 或 MySQL 数据库。目标不能是 v2 原库，脚本会拒绝已经有表的目标。PostgreSQL 目标必须使用 `public` schema。
+3. 如果 v2 数据库已加密，准备好它的 `GPROXY_MASTER_KEY`。脚本要求 v2 的格式，即 32 字节的 base64，其他格式会直接报错。v4 也接受同一个值。
+4. 安装 Python 3.10 或更高版本，并下载两个程序：[v3.0.22](https://github.com/LeenHawk/gproxy/releases/tag/v3.0.22) 和 [v4](https://github.com/LeenHawk/gproxy/releases/latest)。脚本会检查它们的版本。v4 构建必须包含目标数据库的驱动。
+5. 任一端使用 PostgreSQL 或 MySQL 时，安装对应的 Python 驱动（只用 SQLite 则无需额外安装），然后下载脚本：
 
 ```sh
 python3 -m pip install 'psycopg[binary]>=3,<4'  # PostgreSQL
@@ -19,9 +39,11 @@ python3 -m pip install 'PyMySQL[rsa]>=1,<2'     # MySQL
 curl -fL https://raw.githubusercontent.com/LeenHawk/gproxy/main/scripts/migrate-v2-to-v4.py -o migrate-v2-to-v4.py
 ```
 
-## 执行一次迁移
+MySQL 源库的表必须使用 InnoDB，脚本依靠它取得一致的快照。PostgreSQL 源表不在 `public` schema 中时，使用 `--source-schema` 指定。
 
-SQLite 示例：
+## 执行迁移
+
+两端都是 SQLite 时：
 
 ```sh
 python3 migrate-v2-to-v4.py \
@@ -31,7 +53,9 @@ python3 migrate-v2-to-v4.py \
   --v4-bin ./v4/gproxy
 ```
 
-把 `--source`、`--target` 换成 `postgresql://user:password@host/database` 或 `mysql://user:password@host/database` 即可使用远程数据库；两端可以不同。含密码的连接串可通过 `GPROXY_SOURCE_DSN`、`GPROXY_TARGET_DSN` 环境变量提供，并省略对应参数。需要加密密钥时也通过环境变量设置：
+使用数据库服务器时，把任一端的路径换成 `postgresql://user:password@host/database` 或 `mysql://user:password@host/database` 这样的连接串。MySQL 连接串可用 `ssl-mode`、`ssl-ca`、`ssl-cert`、`ssl-key` 配置 TLS。
+
+为了不让密码出现在进程列表和 shell 历史中，可以把连接串放进 `GPROXY_SOURCE_DSN` 和 `GPROXY_TARGET_DSN`，并省略 `--source` 和 `--target`。主密钥从 `GPROXY_MASTER_KEY` 读取：
 
 ```sh
 read -rsp '源数据库连接串：' GPROXY_SOURCE_DSN; echo; export GPROXY_SOURCE_DSN
@@ -40,12 +64,44 @@ read -rsp '原主密钥（明文源库留空）：' GPROXY_MASTER_KEY; echo; exp
 python3 migrate-v2-to-v4.py --v3-bin ./v3/gproxy --v4-bin ./v4/gproxy
 ```
 
-脚本自动创建工作目录并打印位置；可用 `--work-dir` 指定一个尚不存在的目录。默认在 PATH 中查找 `gproxy-v3` 和 `gproxy`，找到时可省略二进制路径参数。PostgreSQL 源表不在 `public` 中时使用 `--source-schema`；目标 PostgreSQL 使用 `public`。MySQL 源表需要 InnoDB，可在 DSN 中使用 `ssl-mode`、`ssl-ca`、`ssl-cert`、`ssl-key` 设置 TLS。
+不指定 `--v3-bin` 和 `--v4-bin` 时，脚本在 `PATH` 中查找 `gproxy-v3` 和 `gproxy`。脚本会在当前目录下创建名为 `gproxy-v2-to-v4-*` 的私有工作目录；也可以用 `--work-dir` 指定一个尚不存在的目录。每个阶段开始时，脚本都会打印一行：
 
-## 完成后
+```text
+1/4 Snapshot v2 -> SQLite. Work directory: /srv/gproxy-v2-to-v4-k3j2x1
+2/4 Upgrade SQLite -> v3
+3/4 Upgrade SQLite -> v4
+4/4 Copy v4 SQLite -> sqlite
+Migration complete. Review reports in /srv/gproxy-v2-to-v4-k3j2x1; start v4 against the target with the same master key.
+```
 
-中间库和每阶段报告全部保留在工作目录。脚本检查账号、API key 摘要、历史费用，并对最终 PostgreSQL/MySQL 搬运逐表核对行数和行内容校验和。检查 `v3-import.log`、`v4-import.log` 和 `*-verification.json` 后，让 v4 使用目标库及原主密钥，再恢复流量。
+## 检查迁移结果
 
-升级边界沿用现有转换规则：部分旧权限和规则需要重配；历史用量明细保留，已删除的明细不能从汇总重建；旧请求日志、会话、审计和缓存不会变为 v4 对应记录。v4 金额保留 9 位小数，精确历史费用仍保存在 `metrics.v3.cost`。参见 [v2 → v3](/zh-cn/deployment/v2-to-v3)和 [v3 → v4](/zh-cn/deployment/v3-to-v4)。
+所有中间数据库（`v2.db`、`v3/gproxy.db`、`v4/gproxy.db`）和报告都保留在工作目录中：
 
-失败会停止并保留现场，不删除原库或自动清空目标库。排查后使用新的工作目录和空目标重试。工作目录包含数据库和秘密，应保持私有；v3.0.22 的密钥参数会短暂出现在进程参数中，不要使用 shell 跟踪。
+| 文件 | 内容 |
+| --- | --- |
+| `snapshot-report.json` | 第 1 阶段快照的源库类型、各表行数和所做的调整 |
+| `v3-preflight.log`、`v3-import.log` | v3.0.22 预检和导入的输出 |
+| `v3-verification.json` | v3 与 v2 之间行数、密码哈希和已结算用量费用的比对 |
+| `v4-import.log` | v4 导入的输出，含其迁移报告 |
+| `v4-verification.json` | 对 v4 数据库的检查 |
+| `target-schema.log` | 在 PostgreSQL 或 MySQL 目标上创建 schema 的输出 |
+| `target-verification.json` | 对目标库的检查 |
+
+这些检查在各阶段之间比对账号身份、API key 摘要和历史费用。目标为 PostgreSQL 或 MySQL 时，最后的复制还会逐表核对行数和行内容校验和。
+
+1. 阅读 `v3-import.log`、`v4-import.log` 和各个 `*-verification.json`，重点看跳过的行和权限变化。
+2. 用同一个主密钥让 v4 连接目标库启动。以上面的 SQLite 示例为例是 `gproxy --data-dir ./new-data`；数据库服务器则把 `GPROXY_DSN` 设为目标库的连接串。
+3. 登录控制台，检查供应商、用户和历史用量，发送一个测试请求，再把客户端切换过来。
+
+工作目录中有数据库和密钥，请保持其私有，不再需要时删除。
+
+## 迁移失败时
+
+脚本遇到第一个错误就停止，打印 `Migration failed:` 及原因，其中的密码和主密钥会被遮盖。脚本不会改动源库，也不会清理目标库。根据工作目录中的日志排查后，换一个新的工作目录和空目标库重新运行。
+
+第 2 阶段运行期间，v3.0.22 通过命令行参数接收主密钥，因此密钥会短暂出现在进程列表中。不要在开启 shell 跟踪（`set -x`）的情况下运行脚本。
+
+## 回退
+
+v2 数据库始终没有被写入。回退时丢弃目标库，用原来的参数让 v2 在原库上重新启动即可。

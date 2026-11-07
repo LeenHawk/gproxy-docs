@@ -3,25 +3,33 @@ title: "Routing & Endpoints"
 description: "The complete v4 ingress table, the mount grammar, the OAuth and management routes, WebSocket surfaces, resolution and the failover budget."
 ---
 
-Everything below is the native host's route table, and the Workers host mounts
-the same one. `gproxy-protocol` deliberately declares no paths — which URL
-serves an operation is an HTTP convention owned by the ingress layer — so this
-page is that layer's table.
+This page lists every HTTP route an instance serves and the order in which a
+request path is interpreted. Use it when you need to know which URL reaches
+which operation, how a provider or namespace prefix changes that, and how a
+request fails over between providers. The native host and the Workers host
+mount the same table. `gproxy-protocol` itself declares no paths; which URL
+serves an operation is decided by the ingress layer described here.
 
-## The Gateway's Own Routes
+For the full request and response schemas of each route, see the
+[HTTP API reference](/reference/http-api).
 
-Four, and everything else falls through to the data plane. That is the opposite
-of the usual arrangement and it is deliberate: the gateway's own routes are a
-short, known list, and everything else is somebody else's API that this
-instance forwards. A new upstream surface must not require a new route here.
+## Gateway routes
 
-| Method | Path | What it is |
+The gateway has only a few routes of its own. Every other path falls through
+to the data plane. This is the reverse of the usual arrangement: the gateway's
+own routes are a short, fixed list, and everything else is an upstream API that
+the instance forwards, so supporting a new upstream surface does not require a
+new route here.
+
+| Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/healthz` | liveness and the published config revision; **unauthenticated** |
-| `GET` | `/publications/{id}` | a published body. The id **is** the credential, so no key is asked for |
-| — | `/admin/api/…` | the operator surface |
-| — | `/portal/api/…` | the end user's own surface |
-| — | everything else | the ingress fallback |
+| `GET` | `/healthz` | liveness and the published configuration revision; no authentication |
+| `GET` | `/info` | instance name, version and build hash |
+| `GET` | `/robots.txt` | disallows all crawlers |
+| `GET` | `/publications/{id}` | a published body. The id is the credential, so no key is required |
+| — | `/admin/api/…` | the management API |
+| — | `/portal/api/…` | the end user's own API |
+| — | everything else | ingress (OAuth issuer, vendor services, data plane, console) |
 
 ```sh
 curl -s http://127.0.0.1:8787/healthz
@@ -32,32 +40,36 @@ curl -s http://127.0.0.1:8787/healthz
 ```
 
 `/healthz` reads the published snapshot and touches neither the database nor
-the cache, so a load balancer polling it cannot itself become the load that
-fails it.
+the cache, so a load balancer polling it does not add load to either.
 
-## The Order of Ingress
+Every response carries `x-robots-tag: noindex, nofollow`.
 
-1. **CORS and the client address.** A preflight is answered here and never
-   forwarded — it asks this instance what it will accept, and the upstream has
-   no opinion about that. The client address is resolved under the
-   [trusted-proxy rule](/reference/configuration#the-trusted-proxy-rule)
-   before anything can log it.
-2. **The mount** — which slice of the path is this gateway's.
-3. **The OAuth issuer**, at `{mount}/v1/oauth/…`, before the data plane because
-   these paths are *this* instance's and answer in a different error envelope.
-4. **A channel's vendor service route** — Codex's `/backend-api/…`, Claude
-   Code's `/api/…`. Only on a provider or namespace mount: matching one needs a
-   channel, and the aggregated mount names none.
-5. **The data plane**, below.
-6. **The console**, with an SPA fallback, behind the configuration switch.
+## Request processing order
 
-Anything that reaches the end is a 404.
+A request that is not one of the gateway routes is interpreted in this order:
 
-## The Data Plane
+1. CORS and the client address. A CORS preflight is answered here and never
+   forwarded, because it asks what this instance accepts. The client address is
+   resolved under the [trusted-proxy rule](/reference/configuration#trusted-proxies)
+   before anything logs it.
+2. The mount: which leading part of the path belongs to this gateway (see
+   [Mounts](#mounts)).
+3. The OAuth issuer, at `{mount}/v1/oauth/…`. These paths belong to this
+   instance rather than to an upstream, and they answer in the OAuth error
+   format, so they are matched before the data plane.
+4. A channel's vendor service route, such as Codex's `/backend-api/…` or Claude
+   Code's `/api/…`. Only on a provider or namespace mount, because matching one
+   needs a channel and the aggregated mount names none.
+5. The [data plane](#data-plane-endpoints).
+6. The console, with an SPA fallback, if it is enabled.
 
-A request body is held to `settings.maxRequestBodyBytes` (128 MiB by default;
-`maxUploadBodyBytes`, 512 MiB, for a file upload) before anything else happens,
-authentication included.
+A request that matches none of these gets a 404.
+
+## Data plane endpoints
+
+Before anything else happens, including authentication, a request body is
+limited to `settings.maxRequestBodyBytes` (128 MiB by default), or
+`maxUploadBodyBytes` (512 MiB) for a file upload.
 
 ### Content generation
 
@@ -67,17 +79,26 @@ authentication included.
 | `POST` | `/v1/chat/completions` | `generate_content` / `openai_chat` |
 | `POST` | `/v1/messages` | `generate_content` / `claude` |
 | `POST` | `/v1/messages/count_tokens` | `count_tokens` / `claude` |
+| `POST` | `/v1/responses/input_tokens` | `count_tokens` / `openai` |
 | `POST` | `/v1beta/models/{model}:generateContent` | `generate_content` / `gemini` |
 | `POST` | `/v1beta/models/{model}:streamGenerateContent` | `stream_generate_content` / `gemini` |
 | `POST` | `/v1beta/models/{model}:countTokens` | `count_tokens` / `gemini` |
 | `POST` | `/v1beta/models/{model}:embedContent` | `create_embedding` / `gemini` |
 | `POST` | `/v1beta/models/{model}:batchEmbedContents` | `batch_create_embedding` / `gemini` |
+| `POST` | `/v1beta/interactions`, `/v1/interactions` | `generate_content` / `gemini_interactions` |
+| `GET` | `/v1beta/interactions/{id}`, `/v1/interactions/{id}` | `retrieve_interaction` / `gemini_interactions` |
+| `POST` | `/v1beta/interactions/{id}/cancel`, `/v1/interactions/{id}/cancel` | `cancel_interaction` / `gemini_interactions` |
+| `DELETE` | `/v1beta/interactions/{id}`, `/v1/interactions/{id}` | `delete_interaction` / `gemini_interactions` |
 
-The first three become `stream_generate_content` when the body says
-`"stream": true`. They are **separate operations** — separate rules, separate
-settlement — so the flag is read at ingress rather than left for a channel to
-notice. Gemini says it in the path instead, which is why that dialect has two
-rows.
+`/v1/responses`, `/v1/chat/completions`, `/v1/messages` and the Interactions
+create route become `stream_generate_content` when the body contains
+`"stream": true`. Streaming and non-streaming generation are separate
+operations, with separate routing rules and separate settlement, so the flag is
+read at ingress rather than left to the channel. Gemini's GenerateContent API
+puts streaming in the path instead, which is why it has two rows.
+
+A Gemini model name in the path may contain slashes, raw or percent-encoded
+(`acme%2Ffast`).
 
 ### Models
 
@@ -88,15 +109,21 @@ rows.
 | `GET` | `/v1beta/models` | `list_models` / `gemini` |
 | `GET` | `/v1beta/models/{id}` | `get_model` / `gemini` |
 
-### Everything else
+On a provider or namespace mount, a model list contains only the names reachable
+through that mount, with the mount prefix removed so they can be used unchanged
+at that base URL.
+
+### Other operations
 
 | Method | Path | Operation / dialect |
 | --- | --- | --- |
 | `POST` | `/v1/responses/compact` | `compact_content` / `openai` |
 | `POST` | `/v1/embeddings` | `create_embedding` / `openai` |
 | `POST` | `/v1/moderations` | `create_moderation` / `openai` |
+| `POST` | `/v1/decisions` | `create_decision` / `openai` |
 | `POST` | `/v1/rerank` | `rerank` / `openai` |
 | `POST` | `/v1/conversations` | `create_conversation` / `openai` |
+| `POST` | `/v1/search`, `/v1/alpha/search`, `/alpha/search` | `web_search` / `openai` |
 | `POST` | `/v1/images/generations` | `create_image` / `openai` |
 | `POST` | `/v1/images/edits` | `edit_image` / `openai` |
 | `POST` | `/v1/audio/speech` | `create_speech` / `openai` |
@@ -123,53 +150,10 @@ rows.
 | `GET` `DELETE` | `/v1/videos/{id}` | `retrieve_video` / `delete_video` |
 | `GET` | `/v1/videos/{id}/content` | `download_video_content` |
 
-Sora-only operations — remix, edit, extend, characters — are **deliberately
-absent**. No other vendor offers them, and they come back when a second one
-does.
+Operations that only Sora offers (remix, edit, extend, characters) are not
+supported. They will be added if a second vendor offers them.
 
-### Who can reach a file or video
-
-File and video ids are the upstream's own, and one upstream credential is
-usually shared by many callers, so the gateway keeps its own record of who
-created what. A successful upload or video creation is recorded against the
-caller (every key and console session of one user counts as one caller; each
-OAuth grant is a caller of its own) and the credential that served it.
-
-- Retrieving, downloading, polling or deleting an id answers **404** unless
-  that caller created it through the gateway — the same answer whether the id
-  belongs to someone else or does not exist. The request is sent on the
-  credential that holds the resource.
-- A list shows only the caller's own items. Paging cursors (`has_more`,
-  `last_id`, `nextPageToken`) are passed through unchanged, so a page can hold
-  fewer items than `limit`, or none while more pages remain; keep paging until
-  the upstream says there are no more.
-- Files and videos created before this check existed, or directly at the
-  upstream, are not reachable through the gateway.
-- A Gemini *resumable* upload (what the google-genai SDKs use by default)
-  works as usual: the `x-goog-upload-url` the start answers with is a gateway
-  URL bound to the caller, the bytes are relayed to the upstream session on
-  the same credential, and the finished file is the caller's. Another caller
-  presenting that URL gets **404**. Behind a proxy, set `public_base_url` (or
-  forward `Host` and a trusted `X-Forwarded-Proto`) so the URL names the
-  address clients reach.
-- The same rule covers files referenced inside other requests: a `file_id` in
-  a chat, Responses or Claude message (including a code-interpreter
-  container's `file_ids`), a Gemini `fileData.fileUri` naming a Files API
-  file, a video `input_reference`. A file the caller did not upload answers
-  **404** before anything is sent, and the request runs on the credential
-  holding the files; files uploaded on two different credentials cannot be
-  used in one request (**400**). Multipart forms are checked the same way
-  (`file_id`, `file_ids[]`, `input_reference[file_id]` fields).
-- On a Responses WebSocket, a new response opens its upstream connection on
-  the credential holding the files it references; a continuation
-  (`previous_response_id`) stays on its account, so files uploaded elsewhere
-  are refused with an `error` event — start a new response to use them.
-- On a Realtime or Gemini Live socket, a client message naming a file the
-  caller does not own on the socket's credential is not forwarded: Realtime
-  answers with an `error` event (`file_not_found`), Gemini Live closes with
-  code `1008`.
-
-### Realtime and sockets
+### Realtime and WebSocket
 
 | Method | Path | Operation / dialect |
 | --- | --- | --- |
@@ -183,123 +167,178 @@ OAuth grant is a caller of its own) and the credential that served it.
 | `POST` | `/v1/realtime/calls` | `create_realtime_call` / `openai` |
 | `POST` | `/v1/live` | `create_realtime_call` / `openai` |
 | `GET` | `/v1/realtime` | `connect_realtime` / `openai` — upgrade |
-| `GET` | `/v1/live` | legacy GPT-Live/AVAS WebSocket |
-| `GET` | `/v1/live/{call_id}` | legacy Live sideband continuation |
+| `GET` | `/v1/live` | `connect_realtime` / `openai` — legacy GPT-Live/AVAS WebSocket |
+| `GET` | `/v1/live/{call_id}` | `connect_realtime` / `openai` — legacy Live sideband continuation |
 | `GET` | `/v1/responses` | `generate_content` / `openai_responses_websocket` |
 | `GET` | `/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent` | `connect_realtime` / `gemini` — Gemini Live |
 
-Standard Realtime and GPT-Live use different protocols and account entitlements. The legacy
-`/v1/live` routes remain for compatibility. New Live routes and custom voice creation are
-OpenAI API Key capabilities; Codex supports standard Realtime, client secrets and explicit
-hangup. A 201 session bootstrap alone does not prove that the session can run.
-Client secrets are upstream bearer credentials for direct connections. Their bodies are
-never captured, and requests made directly upstream bypass gateway admission and metering.
-Explicit hangup and sidebands use the creating caller's scope and original credential.
-Their bound model is recovered before admission, including current model permission checks.
+See [Realtime and WebSocket sessions](#realtime-and-websocket-sessions) below
+for how these behave.
+
+### Dialect selection on shared paths
+
+`/v1/models`, `/v1/models/{id}` and `/v1/files` are spelled the same by OpenAI,
+Claude and Gemini's v1 API. The dialect decides which wire types a conversion
+produces, so a wrong guess gives the client a body it cannot parse.
+
+The gateway decides from the client's own authentication headers:
+`x-goog-api-key` selects Gemini, and `anthropic-version` or `x-api-key` selects
+Claude. These are headers the vendor's SDK always sends. With neither present,
+the first row in the table wins, which is OpenAI.
+
+### File and video ownership
+
+File and video ids are the upstream's own, and one upstream credential is
+usually shared by many callers, so the gateway records who created what. A
+successful upload or video creation is recorded against the caller and against
+the credential that served it. All keys and console sessions of one user count
+as one caller; each OAuth grant is a caller of its own.
+
+- Retrieving, downloading, polling or deleting an id returns 404 unless that
+  caller created it through the gateway. The answer is the same whether the id
+  belongs to someone else or does not exist. The request is sent on the
+  credential that holds the resource.
+- A list shows only the caller's own items. Paging cursors (`has_more`,
+  `last_id`, `nextPageToken`) are passed through unchanged, so a page can hold
+  fewer items than `limit`, or none while more pages remain. Keep paging until
+  the upstream says there are no more.
+- Files and videos created before this check existed, or created directly at
+  the upstream, are not reachable through the gateway.
+- A Gemini resumable upload (the default in the google-genai SDKs) works as
+  usual. The `x-goog-upload-url` returned by the start request is a gateway URL
+  bound to the caller; the bytes are relayed to the upstream session on the
+  same credential, and the finished file belongs to the caller. Another caller
+  presenting that URL gets 404. Behind a proxy, set `public_base_url` (or
+  forward `Host` and a trusted `X-Forwarded-Proto`) so the URL names the address
+  clients reach.
+- The same rule covers files referenced inside other requests: a `file_id` in a
+  Chat, Responses or Claude message (including a code-interpreter container's
+  `file_ids`), a Gemini `fileData.fileUri` naming a Files API file, and a video
+  `input_reference`. A file the caller did not upload returns 404 before
+  anything is sent, and the request runs on the credential holding the files.
+  Files uploaded on two different credentials cannot be used in one request
+  (400). Multipart forms are checked the same way (`file_id`, `file_ids[]` and
+  `input_reference[file_id]` fields).
+- On a Responses WebSocket, a new response opens its upstream connection on the
+  credential holding the files it references. A continuation
+  (`previous_response_id`) stays on its account, so files uploaded elsewhere are
+  refused with an `error` event; start a new response to use them.
+- On a Realtime or Gemini Live socket, a client message naming a file the
+  caller does not own on the socket's credential is not forwarded. Realtime
+  answers with an `error` event (`file_not_found`); Gemini Live closes with
+  code `1008`.
+
+### Realtime and WebSocket sessions
+
+Standard Realtime and GPT-Live use different protocols and different account
+entitlements. The legacy `/v1/live` routes remain for compatibility. The new
+Live routes and custom voice creation are available with an OpenAI API key;
+the Codex channel supports standard Realtime, client secrets and explicit
+hangup. A 201 from session creation only means the request was accepted, not
+that the session can run.
+
+Client secrets are upstream bearer credentials for direct connections. Their
+bodies are never captured, and requests a client then makes directly to the
+upstream bypass gateway admission and metering. Explicit hangup and sidebands
+use the scope of the caller that created the call and its original credential.
+Their bound model is recovered before admission, and current model permissions
+are checked again.
+
+`POST /v1/realtime/calls` is an HTTP multipart request carrying an SDP offer.
+The WebSocket handshake that continues it carries no body. What links the two
+is the call id, in the path or in `?call_id=`. The engine looks it up to pin the
+socket to the credential that answered the offer, which is why the query string
+is forwarded unchanged.
+
+A realtime session is never converted between dialects; only same-dialect
+passthrough is supported. A client that can keep talking while a response is in
+progress has no equivalent in a half-duplex dialect.
+
+A realtime request is admitted before the connection is upgraded. The order is
+authentication, handshake validation, admission, the upstream handshake, and
+only then the `101` response. Every refusal is therefore an ordinary HTTP
+response the client can read; a socket that is accepted and then closed
+immediately would carry no status, body or code. If the upstream refuses the
+handshake, its answer is relayed as it is: a vendor's
+`429 {"error":{"code":"insufficient_quota"}}` tells the client more than a
+gateway 502 would.
+
+A realtime socket holds its concurrency slot until it closes, not just until
+the `101` is sent. A session that runs for an hour holds its slot for that hour.
 
 Responses uses the same `/v1/responses` path for HTTP POST and WebSocket GET.
-Its handshake authenticates the caller; each `response.create` then supplies
-the model for permissions, routing and generation limits. Independent
+The handshake authenticates the caller; each `response.create` then supplies
+the model used for permissions, routing and generation limits. Independent
 `stream_id` lanes can run concurrently. A new response chain can choose a new
-target; `previous_response_id` continuations retain their original target.
+target, while `previous_response_id` continuations keep their original target.
 Idle Responses connections do not hold generation concurrency permits.
 
-Native Responses sockets forward upstream controls. HTTP bridges to Responses,
-Chat, Claude and Gemini support local context warmup, interruption, steering
-successors and injected inputs between HTTP generation segments. Local warmup
-does not prefill an upstream cache. `store:false` history lasts only for the
-client connection; stored continuations retain scoped history and target
-bindings. Started or uncertain generations are not replayed on another target.
+Native Responses sockets forward upstream control events. Bridges from the
+socket to HTTP Responses, Chat, Claude and Gemini support local context
+warmup, interruption, steering successors, and injected inputs between HTTP
+generation segments. Local warmup does not prefill an upstream cache.
+`store:false` history lasts only as long as the client connection; stored
+continuations keep scoped history and target bindings. A generation that has
+started, or whose outcome is uncertain, is not replayed on another target.
 
-`POST /v1/realtime/calls` is an HTTP multipart request carrying an SDP offer,
-and the handshake that continues it carries **no body at all**. What survives
-the upgrade is the call id — in the path, or in `?call_id=` — which the engine
-looks up to pin the socket to the credential that answered the offer. The query
-is forwarded intact for exactly that reason.
+### Codex routes
 
-A realtime session is **never converted**: only same-dialect passthrough,
-because a client that can keep talking mid-response has no equivalent in a
-half-duplex dialect.
-
-**Realtime is admitted before upgrading.** Authentication, then the
-handshake shape, then admission, then the upstream handshake; the `101` is
-written last. Every refusal is therefore an HTTP answer a client can read — a
-socket that is accepted and immediately closed carries no status, no body and
-no code. A **refused upstream handshake is relayed verbatim**: a vendor's
-`429 {"error":{"code":"insufficient_quota"}}` is worth more than any 502 this
-gateway could invent.
-
-A realtime socket holds its concurrency lease until it **closes**, not until the `101`
-was written. A session that runs for an hour holds its slot for that hour.
-
-### Codex-only routes
-
-Private Codex operations require a provider mount using the Codex channel.
-For a provider named `codex`, use `POST /codex/v1/memories/trace_summarize`.
-These use normal operation admission, model routing and settlement; the
-aggregate `/v1` surface does not expose them. Standard `/v1/moderations` uses
-its own `create_moderation` JSON contract.
+Private Codex operations are available only on the mount of a provider that
+uses the Codex channel. For a provider named `codex`, use
+`POST /codex/v1/memories/trace_summarize`. These routes go through normal
+operation admission, model routing and settlement; the aggregated `/v1` surface
+does not expose them. The standard `/v1/moderations` route keeps its own
+`create_moderation` JSON contract.
 
 Account services are also available under `/codex/v1`, including
 `usage/thread_usage/query_v2` (POST), `usage/plan_limit_history`, and daily
-Token, credit, workspace, plugin and skill reports (GET). Native aliases under
-`/codex/api/codex/**`, `/codex/backend-api/**`, and `/codex/ps/**` remain available.
-Admins can read a selected account's upstream reports with
-`x-gproxy-view: credential:<id>`. Caller and Pool views explicitly mark missing
-historical allowances and vendor-credit accounting as unavailable, with null
-amounts, rather than borrowing account data or reporting fabricated zeros.
+token, credit, workspace, plugin and skill reports (GET). The native spellings
+under `/codex/api/codex/**`, `/codex/backend-api/**` and `/codex/ps/**` also
+work. An administrator can read a specific account's upstream reports with
+`x-gproxy-view: credential:<id>`. In the default caller and pool views,
+historical allowances and vendor credits that cannot be rebuilt from local
+records are marked unavailable, with null amounts, rather than borrowed from
+another account or reported as zero.
 
-### The ambiguous paths
+## Mounts
 
-`/v1/models`, `/v1/models/{id}` and `/v1/files` are spelled identically by
-OpenAI, Claude and Gemini's v1 surface, and the dialect decides which wire
-types a conversion is asked for — so guessing it wrong is a converted body the
-client cannot parse.
+One instance serves the same upstream API at three kinds of mount:
 
-The tiebreak is **the client's own authentication header** —
-`x-goog-api-key` is Gemini's, `anthropic-version` is Claude's — which is
-evidence the client supplied about itself rather than a default this gateway
-invented. With no evidence the first row wins, and the table is ordered so that
-is OpenAI.
-
-## The Mount Grammar
-
-| Path | Mount | Narrows to |
+| Path | Mount | Narrows resolution to |
 | --- | --- | --- |
 | `/v1/messages` | aggregated | nothing |
 | `/acme/v1/messages` | namespace `acme` | the exposed names under `acme/` |
 | `/openai-prod/v1/messages` | provider `openai-prod` | that provider |
 
-A **namespace** is the first segment of a slash-bearing exposed model name. A
-**provider** mount names a provider's `name` — the operator's label, not the
-row id, because nobody types a machine-minted id into a client's base URL. A
-namespace wins over a provider of the same name.
+A namespace is the first segment of an exposed model name that contains a
+slash: exposing `acme/fast` creates the namespace `acme`. A provider mount uses
+the provider's `name`, the label you chose, not the row id, because nobody
+types a generated id into a client's base URL. If a namespace and a provider
+have the same name, the namespace wins.
 
-**A prefix is only stripped when what is left is also a declared surface.**
-Every simplification of that rule is wrong: a provider named `backend-api`
-would otherwise eat `/backend-api/codex/responses`, which is a real Codex path,
-and turn a data-plane call into a mount that does not exist.
+A prefix is stripped only when the rest of the path is also a route the gateway
+serves. Without this check, a provider named `backend-api` would swallow
+`/backend-api/codex/responses`, which is a real Codex path, and turn a
+data-plane call into a mount that does not exist. When the first segment names
+a namespace or provider but the rest is not a known route, the path is left
+whole and treated as aggregated. A missed mount produces a 404 you can see; a
+wrongly taken mount would send the request to the wrong upstream.
 
-**An ambiguous path therefore resolves towards the aggregated mount.** When the
-first segment names something but the remainder is not a surface this gateway
-serves, the path is left whole. Losing a mount is a 404 an operator can see;
-taking one that was not meant is a request sent to the wrong upstream.
+A mount narrows resolution by prefixing the model name, which is the resolver's
+own syntax for a provider or route: `/acme/v1/messages` with
+`{"model":"fast"}` resolves `acme/fast`. A name that already carries the prefix
+is left alone, so clients may write it either way. A provider mount also
+restricts operations that name no model, such as file operations, to that
+provider.
 
-A mount narrows by **prefixing the model name**, which is the resolver's own
-grammar rather than a second rule. A name that already carries the prefix is
-left alone.
+A vendor service route on a namespace mount is served by the one provider in
+that namespace whose channel offers the route. If more than one does, the
+request is refused with 409; call it on that provider's own mount instead.
 
-<Note>
-**One known gap**
+## OAuth issuer
 
-A **model-less** operation on a provider mount is narrowed to that provider's
-*channel*, not to the provider. `GET /p1/v1/models` lists the models of every
-provider on `p1`'s channel that the caller may reach. Closing it needs a field
-the request shape does not have yet.
-</Note>
-## The OAuth Issuer
-
-Relative to a mount prefix (`""`, `/acme`, `/openai-prod`):
+The issuer endpoints are relative to a mount prefix (`""`, `/acme`,
+`/openai-prod`):
 
 ```text
 GET  {prefix}/v1/oauth/authorize    consent handoff (302 to `/console/authorize` for a browser)
@@ -311,21 +350,24 @@ GET  {prefix}/v1/.well-known/oauth-authorization-server
 GET  /.well-known/oauth-authorization-server{prefix}/v1   (RFC 8414 §3.1)
 ```
 
-The issuer identifier is `{origin}{prefix}/v1`, which is why the aggregated
-mount is `https://host/v1` and not `https://host`: one rule then produces all
-three mounts. RFC 8414 requires the identifier to be exactly the one a client
-fetched the document from, and only the host knows which mount a request
-arrived on, so it is passed in rather than computed.
+The issuer identifier is `{origin}{prefix}/v1`, so the aggregated issuer is
+`https://host/v1`, not `https://host`. This way one rule covers all three
+kinds of mount. RFC 8414 requires the identifier to match the location the
+client fetched the metadata from, and only the host knows which mount a request
+arrived on, so the host passes it in.
 
-v3 served these at the root. Moving them under `/v1` made the prefix rule the
-same one `/v1/messages` follows, and the move was cheap because v3 never
-implemented the discovery endpoint at all — clients were hard-coding the
-address anyway.
+These endpoints answer errors in the OAuth format (RFC 6749 §5.2, `error` as a
+string), not in the gateway's usual error envelope. The device approval page
+itself is a portal operation, `/portal/api/oauth/device`, used by the console's
+`/console/device` page.
 
-## Management Routes
+v3 served these endpoints at the root. Moving them under `/v1` lets them follow
+the same prefix rule as `/v1/messages`. v3 never implemented the discovery
+endpoint, so clients were hard-coding the addresses anyway.
 
-Every family has the same six routes, generated from one declaration so a
-family cannot accidentally have five of them:
+## Management API
+
+Every management family has the same six routes:
 
 ```text
 GET    /admin/api/{family}           list      (page and filters in the query)
@@ -337,39 +379,71 @@ POST   /admin/api/{family}/batch     batch
        [{"create": …}, {"update": {"id": …, "patch": …}}, {"delete": "id"}]
 ```
 
-A batch is one revision commit however many rows it names: either every item
-is durable or none is.
+The routes are generated from one declaration, so no family can be missing one
+of them. A batch is one revision commit however many rows it names: either
+every item is stored or none is.
 
-**Identity** families: `users`, `api-keys`, `organizations`, `teams`,
-`permissions`, `rate-limits`. Organization and team memberships have their own endpoints. `oauth-clients` has
-`POST …/{id}/retire` instead of a delete — the grants a client issued still
-name it. In its batch a delete retires, and a batch that retires carries only
-deletes: retirement is its own transaction, so it cannot share a commit with
-creates or patches. A retired `client_id` can be
-registered again; the new registration reuses the row, and the grants
-retirement revoked stay revoked. The `api-keys` batch refuses a create,
-because a mint answers with a plaintext a batch has nowhere to return. A
-`users` batch that would leave no enabled administrator is refused as a whole.
+Identity families: `users`, `api-keys`, `organizations`, `teams`,
+`permissions`, `rate-limits` and `oauth-clients`. Organization and team
+memberships have their own endpoints
+(`organizations/{id}/members`, `teams/{id}/members`). Some families differ
+from the six routes:
 
-**Configuration** families:
+- `oauth-clients` has `POST …/{id}/retire` instead of a delete, because the
+  grants a client issued still refer to it. In its batch, a delete item
+  retires the client, and a batch that retires may contain only deletes:
+  retirement runs in its own transaction, so it cannot share a commit with
+  creates or updates. A retired `client_id` can be registered again; the new
+  registration reuses the row, and grants revoked at retirement stay revoked.
+- The `api-keys` batch refuses creates, because creating a key returns its
+  plaintext and a batch has no way to return it.
+- A `users` batch that would leave no enabled administrator is refused as a
+  whole.
 
-`providers`, `credentials`, `models`, `provider-models`, `routes`,
-`route-members`, `connection-profiles`, `rule-sets`, `rules`,
-`provider-rule-sets`, `operation-rules`, `operation-endpoints`, `quotas`,
-`price-rules`, `price-rates`, `price-tiers`.
+Configuration families: `providers`, `credentials`, `models`,
+`provider-models`, `routes`, `route-members`, `connection-profiles`,
+`rule-sets`, `rules`, `provider-rule-sets`, `operation-rules`,
+`operation-endpoints`, `quotas`, `price-rules`, `price-rates`, `price-tiers`.
 
-Beyond the six: `settings`, the credential operations (`reveal`, `status`,
-`refresh`, `quota`, `quota-probe`, `quota-reset`, `health-reset`, `limits`),
-`models/{discover,discover/apply,test}`, `rule-sets/{id}/rules`,
-`rule-sets/{id}/rule-presets/{preset}`,
-`providers/{id}/routing-defaults/reset`, `quotas/status`,
-`quotas/{id}/{reset,limit-reset}`, `export`, `import`, `connectivity/test`,
-`channels`, `tls-presets`, `rule-presets`, `default-model-catalog`,
-`tokenizer-vocabs`, `tokenizer-auth`, `session`, `sessions` and `audit`.
+Other management endpoints:
 
-Management payloads and behavior have changed in v4; check older scripts against the current API. See [Usage, logs, and audit](/guides/observability) for instance-wide history endpoints.
+- Instance: `settings`, `export`, `import`, `connectivity/test`, `audit`,
+  `session`, `sessions`, `context`, and `update` (where the host supports
+  self-update).
+- Credentials: `credentials/{id}/…` with `reveal`, `status`, `refresh`,
+  `quota`, `quota-probe`, `quota-reset`, `quota-reset-credits`,
+  `quota-diagnostics`, `quota-observations`, `health-reset`, `limits`,
+  `models/discover` and `models/test`; `credentials/owners`,
+  `credentials/providers`, and the `credential-login/…` authorization-code and
+  device flows.
+- Models and routing: `models/discover`, `models/discover/apply`,
+  `models/test`, `model-names`, `operation-keys`,
+  `providers/{id}/routing`, `providers/{id}/routing-defaults/reset`,
+  `providers/{id}/default-rule-set`.
+- Rules: `rule-sets/{id}/rules`, `rule-sets/{id}/rule-presets/{preset}`,
+  `rule-presets`.
+- Quotas: `quotas/status`, `quotas/{id}/reset`, `quotas/{id}/limit-reset`.
+- Catalogues: `channels`, `tls-presets`, `default-model-catalog`,
+  `default-model-catalog/apply-prices`.
+- Tokenizer: `tokenizer-vocabs`, `tokenizer-auth`.
+- Users: `users/{id}/password`, `users/{id}/sessions`, `users/{id}/allowlist`;
+  API keys: `api-keys/{id}/rotate`, `api-keys/{id}/secret`.
+- History: `usage`, `usage/records`, `logs/downstream`, `logs/upstream`,
+  `logs/captures/{id}`; see [Usage, logs, and audit](/guides/observability).
 
-## Portal Routes
+The [HTTP API reference](/reference/http-api) has the full list with
+parameters. Management payloads changed in v4, so check older scripts against
+it.
+
+Each management request goes through one middleware: authentication (an unsafe
+method authenticated by a cookie is also checked for same origin), then
+resolution of the caller's management scope, then the operation, then an audit
+entry. Every request is audited, including refused ones. The middleware is a
+route layer, so an unknown `/admin/api/…` path is a 404 that never touches the
+database. A management request body is limited to 50 MiB, which is enough for
+a configuration import.
+
+## Portal API
 
 ```text
 POST   /portal/api/login             name + password → session cookie and token
@@ -387,32 +461,35 @@ GET    /portal/api/oauth/device      a pending device code (?userCode=), for `/c
 POST   /portal/api/oauth/device      approve or deny it; a session or a management key
 ```
 
-The guard requires an authenticated caller and **nothing more**. There is no
-role check because there is nothing to check against: every portal operation is
-scoped to the caller it was built from and none of them takes a user id. A
-check can be forgotten; a missing parameter cannot.
+The portal routes require an authenticated caller and nothing else. There is no
+role check because every portal operation is scoped to the caller who made the
+request, and none of them takes a user id. A missing role check could be a
+bug; a parameter that does not exist cannot be misused.
 
-`login` and `logout` sit outside the guard — the first runs before there is a
-caller, and the second has to work for a session that has already expired, or a
-browser is left holding a cookie it can never discard.
+`login` and `logout` are outside that check. `login` runs before there is a
+caller, and `logout` has to work for a session that has already expired;
+otherwise the browser would keep a cookie it could never clear.
 
-## Resolution and the Failover Budget
+## Resolution and failover
 
-See [Models, Routes & Exposed Names](/guides/models) for the four name forms
-and the ordering. The budget:
+The four forms of model name and the order in which they are tried are
+described in [Models, Routes & Exposed Names](/guides/models). The failover
+budget works as follows:
 
-- it is the route's own `maxAttempts`, capped by `settings.maxAttempts`;
-- it is **shared across targets**: each target is granted at most as many
+- The budget is the route's own `maxAttempts`, capped by
+  `settings.maxAttempts`.
+- The budget is shared across targets. Each target gets at most as many
   attempts as it has credentials, and never more than what is left, so a plan
-  cannot cost more upstream calls than its budget;
-- a failure moves to the next provider **only if another provider could serve
-  it** — no usable credential, a dead credential, a continuation pinned
-  elsewhere, any channel or transport error, or a 401, 403, 429 or 5xx answer;
-- a spent budget, a forbidden request, a cancellation, a bad conversion and a
-  store or cache failure stop the call where they are;
-- with no target left, **the last answer is returned as it stands**. A 429 from
-  the final provider is the caller's 429, not a synthesized error.
+  cannot make more upstream calls than its budget.
+- A failure moves on to the next provider only if another provider could serve
+  the request: no usable credential, a dead credential, a continuation pinned
+  elsewhere, any channel or transport error, or a 401, 403, 429 or 5xx answer.
+- A spent budget, a forbidden request, a cancellation, a failed conversion, and
+  a store or cache failure stop the call where it is.
+- When no target is left, the last answer is returned unchanged. A 429 from the
+  final provider reaches the caller as that 429, not as a synthesized error.
 
-The request body is buffered once so it can be replayed. A streaming body over
-`maxRequestBodyBytes` stays a stream and the plan is cut to a single target:
-a large upload is not worth reading into memory for the sake of failover.
+The request body is buffered once so it can be replayed on another target. A
+streaming body larger than `maxRequestBodyBytes` is kept as a stream, and the
+plan is cut to a single target: reading a large upload into memory is not worth
+it for the sake of failover.

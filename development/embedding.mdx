@@ -1,0 +1,371 @@
+---
+title: "Embedding the SDK"
+description: "Using the gproxy-sdk crate to run the GPROXY gateway inside a Rust program: assembly, features, calls, login, management writes, queries, synchronization and TypeScript type export."
+---
+
+`gproxy-sdk` is the crate the GPROXY gateway itself is built on. Link it
+directly when you want a Rust program to send requests through a credential
+pool, with automatic refresh, failover between providers and metered
+settlement, without running the HTTP server.
+
+The handle needs a database. Credential state cannot live only in memory:
+Claude, for example, rotates its refresh token on every refresh, so a handle
+that kept credentials in memory would lose a working credential at the first
+refresh after a restart.
+
+## What the crate contains
+
+The sdk contains assembly, configuration writes, login, model resolution,
+calls, queries and synchronization. It does not contain:
+
+- Identity. Users, API keys, organizations, teams, permissions, subscriptions,
+  rate limits and the OAuth issuer belong to `gproxy-app`, which reads the same
+  durable revision from the same batch.
+- Downstream authentication. Nothing in the sdk decides who a caller is; the
+  caller's permissions are passed in.
+- A server: no listener, router, middleware or CLI.
+- A console. The crate generates the TypeScript types a UI is written against;
+  the UI is the application's.
+- Execution. Attempts, conversion, rewriting, observation, budgets and
+  settlement are done by the engine (`gproxy-core`); the sdk decides what to
+  hand it.
+
+See [Architecture](/development/architecture) for how the sdk fits between the
+engine and the app.
+
+## Adding the dependency
+
+Depend on `gproxy-sdk` through a Git tag or a path dependency:
+
+```toml
+[dependencies]
+gproxy-sdk = { git = "https://github.com/LeenHawk/gproxy", tag = "v4.0.0" }
+```
+
+The example pins the `v4.0.0` tag; use the tag of the release you build
+against. The workspace uses Rust edition 2024. The v4 Rust and management APIs
+differ from v3.
+
+`gproxy-sdk` is AGPL-3.0-or-later. The MIT support libraries
+(`gproxy-protocol`, `gproxy-client`, `gproxy-cache`, `gproxy-seaorm`,
+`gproxy-tokenizer`, `gproxy-file` and others) are also published separately to
+crates.io.
+
+## Building a handle
+
+```rust
+use gproxy_sdk::{GproxyBuilder, SyncMode};
+
+let gproxy = GproxyBuilder::sqlite("gproxy.db")
+    .await?
+    .master_key([0u8; 32])
+    .sync_mode(SyncMode::Background)
+    .build()
+    .await?;
+
+for channel in gproxy.channels() {
+    println!("{} ({})", channel.display_name, channel.id);
+}
+println!("serving revision {}", gproxy.revision().0);
+```
+
+A builder starts from `GproxyBuilder::sqlite(path)`,
+`GproxyBuilder::sqlite_memory()`, `GproxyBuilder::database_url(url)`, or
+`GproxyBuilder::connection(connection)` for a connection you opened yourself.
+
+`build()` opens nothing it was not given. It synchronizes the entity schema
+(unless `.sync_schema(false)` was set), creates the settings row, assembles the
+engine, loads the first snapshot (unless `.initial_reload(false)` was set) and,
+in background mode, starts the subscription and poll loops.
+`build_unsynced()` assembles without any schema work, for a replica or a host
+that has already synchronized the schema; nothing checks that the schema
+matches.
+
+You must choose how secrets are stored. `.master_key(key)` seals credential
+secrets with AES-256-GCM, and `.plaintext_secrets()` stores them unencrypted.
+A build with neither is refused, so a handle never ends up storing plaintext by
+default.
+
+Other builder methods:
+
+| Method | Default | Purpose |
+| --- | --- | --- |
+| `.cache(cache)` | `MemoryCache` natively, `StoreCache` on wasm | Shared transient state and invalidation transport. More than one instance needs a shared cache: Redis natively, `StoreCache` over D1 or libSQL at the edge. |
+| `.channel(channel)` | | Register an extra channel. It wins over a compiled-in channel with the same id. |
+| `.without_default_channels()` | | Register only the channels passed with `.channel(...)`. |
+| `.client_pool(pool)` | `ClientPool::default()` | The outbound client cache. |
+| `.file_storage(operator)` | | Object storage for published bodies and downloaded vocabularies. |
+| `.publication_url(builder)` | | The host's link builder for URL publications. |
+| `.fetch_policy(policy)` | `DefaultFetchPolicy` | Which URLs the engine may fetch on a caller's behalf. See [Calling](#calling). |
+| `.observer(observer)` | `StoreObserver` | Replace database persistence of usage and captures with your own. |
+| `.instance_id(id)` | random | A stable identity recorded with continuations that hold a live upstream connection. |
+| `.sync_mode(mode)` | `SyncMode::Background` | Who drives synchronization. See [Synchronization](#synchronization). |
+| `.poll_interval(interval)` | 30 s | How often the background loop checks the durable revision. |
+| `.login_ttl(ttl)` | 600 s / 900 s | How long an authorization-code / device-code login stays resumable. |
+
+## Cargo features
+
+| Feature | Effect |
+| --- | --- |
+| a channel id (`codex`, `kiro`, `openai`, …) | Compile that channel in. The builder registers it unless `without_default_channels()` is called. |
+| `channels` | Every channel the workspace ships |
+| `postgres` / `mysql` | Extra database drivers, native only. SQLite is always available natively. |
+| `libsql` | libSQL/Turso over the Hrana HTTP pipeline, on every target |
+| `d1` | Marker for a Cloudflare D1 binding (the binding is always available on wasm) |
+| `memory` (default) | The process-local cache |
+| `redis` | Redis cache, for more than one instance |
+| `fs` (default) | Local file storage, native only |
+| `s3` | S3/R2 storage |
+| `bundled-vocabulary` (default) | DeepSeek's vocabulary for token estimation on models without their own vocabulary file |
+| `ts` | `ts-rs` declarations for every DTO and every channel descriptor |
+
+The default feature set compiles for `wasm32-unknown-unknown`, and so does
+`libsql`.
+
+Native builds use the `reqwest` transport. Channels that need another backend
+turn it on themselves: `claudecode`, `kiro`, `antigravity` and others enable
+`wreq` for TLS emulation, and `codex` enables the native `reqwest` stack that
+matches the Codex CLI's fingerprint. A host can also enable a backend feature
+on `gproxy-client` directly, or pass its own client pool with `.client_pool`.
+
+## Calling
+
+```rust
+let execution = gproxy
+    .call(
+        OperationKey { operation: Operation::GenerateContent, dialect: Dialect::OpenAi },
+        request,
+    )
+    .scope("user:u-1")
+    .attribution(UsageAttribution { user_id: Some("u-1".into()), ..Default::default() })
+    .budgets(vec![BudgetOwner::new("user", "u-1")])
+    .credentials(["cred-1".to_owned()].into())
+    .send()
+    .await?;
+
+let (response, usage) = execution.into_parts();
+```
+
+`call` takes an operation key and a `WireRequest` and returns a builder; `send`
+resolves the model name and walks the resulting plan, failing over between
+credentials and providers as described in
+[Architecture](/development/architecture#failover). `connect` is the same
+builder for a WebSocket handshake.
+
+`.scope(...)` is required and has no default. The scope is the isolation
+boundary within which the engine keeps a caller's credential affinity and
+continuations. A default scope would let unrelated callers share them.
+
+The other builder methods pass in what an application layer has already
+decided:
+
+- `.attribution(...)`: who the usage is recorded against.
+- `.budgets(...)`: the budget owner chain to charge.
+- `.providers(...)` and `.credentials(...)`: the provider and credential ids
+  the caller may use. `None` means no restriction; an empty set means nothing
+  is allowed.
+- `.session(...)`, `.session_id(...)`, `.agent_session_id(...)`: the session
+  identity used for affinity.
+- `.model(...)`: the model name, when it is not in the body.
+- `.max_attempts(...)`, `.deadline(...)`, `.cancellation(...)`,
+  `.request_id(...)`.
+
+`.channel("claudecode")` narrows the candidates to one channel. Use it when the
+channel matters to the caller: `claudecode` spends an OAuth subscription
+allowance, while `claudeapi` spends an API key billed per token, and they have
+separate quota pools and billing. A provider, by contrast, is a configuration
+row that callers outside the instance should not need to know about. With a
+channel pinned, the handle still chooses among that channel's providers and
+their credentials, and fails over within the channel.
+
+### Resource fetch policy
+
+When a request refers to a resource by URL, the engine fetches it under a
+`FetchPolicy`. The default, `DefaultFetchPolicy`, allows http and https to
+public addresses only; native direct connections pin vetted public IP
+addresses. Domain URLs are refused when a proxy would resolve them
+independently. An embedding host can set `AllowlistFetchPolicy` through
+`.fetch_policy(...)` for hostnames it controls, which leaves destination
+enforcement to its proxy. On wasm, hostname destinations still depend on the
+platform's egress controls.
+
+## Login
+
+`gproxy.login()` turns an upstream OAuth login into a credential row. There
+are two flows, each a pair of calls:
+
+- Authorization code: `authcode_start` returns the URL to open;
+  `authcode_complete` takes the callback and creates the credential.
+- Device code: `device_start` returns the code for the user to enter;
+  `device_poll` performs one poll and returns what the upstream said, including
+  how long to wait before polling again. The sdk does not sleep or loop; the
+  caller owns the polling cadence.
+
+The sdk generates and checks the PKCE verifier and the CSRF state. A callback
+whose state does not match is refused and the session destroyed. The pending
+session lives in the shared cache under the login TTL, so any instance of a
+deployment can complete a login another instance started. Nothing is persisted
+until the exchange succeeds, and the secret is sealed with the configured codec
+before it is inserted.
+
+## Management
+
+`gproxy.manage()` is the write side. It has one accessor per configuration
+family, and all of them write through the same commit primitive (see
+[Configuration writes and reload](/development/architecture#configuration-writes-and-reload)).
+
+| Family | Rows | Beyond CRUD |
+| --- | --- | --- |
+| `providers()` | `providers` | `reset_routing_defaults` |
+| `credentials()` | `credentials` | `reveal_secret`, `set_status`, `refresh`, `quota_probe`, `quota_diagnostics`, `quota_read`, `quota_observations`, `quota_reset`, `quota_reset_with`, `quota_reset_credits`, `health_reset`, `limit_status` |
+| `models()` / `provider_models()` | the catalogue | |
+| `routes()` / `route_members()` | routing | |
+| `connection_profiles()` | outbound stacks | |
+| `settings()` | the one settings row | `get` / `update` only |
+| `rewrite()` | rule sets, rules, attachments | `replace_rules` |
+| `endpoints()` | `operation_rules`, `operation_endpoints` | `effective`, `set_mapping`, `reset_mapping` |
+| `quotas()` | `quotas` | `budget_status`, `reset_budget`, `limit_status`, `reset_limit` |
+| `pricing()` | rules, rates, tiers | |
+| `transfer()` | everything configured | `export`, `import` |
+| `catalog()` | nothing, until applied | `channels`, `default_models`, `apply_default_prices`, `tls_presets`, `rule_presets`, `apply_rule_preset` |
+| `connectivity()` | `provider_models` | `test`, `model_test`, `discover_models`, `refresh_models`, `apply_discovered` |
+| `tokenizer()` | vocabulary files | `vocabularies`, `fetch`, `import`, `progress`, `delete`, `auth`, `set_auth`, `reveal_auth` |
+| `history()` | captured logs and usage records | `delete_logs`, `delete_usage` |
+
+The CRUD families have `list`, `get`, `create`, `update`, `delete` and `batch`.
+Ids are used as given and generated when absent, timestamps are Unix
+milliseconds, decimals travel as strings, and a credential's secret never
+appears in a DTO; use `reveal_secret` to read it.
+
+Lists take a `ListQuery` and return a `Page`. Pages are 1-based; `page_size`
+defaults to 50 and is clamped to 1–500.
+
+A write names its scopes, which decide the reload that follows. The
+credential-state scope takes the cheaper reload path and is valid only for a
+write limited to a credential's secret, its expiry and its lifecycle status.
+Anything else about a credential is fixed into the execution snapshot at
+assembly and needs a full reload; using the cheap scope for it would leave the
+change in the database but invisible to this instance until the next unrelated
+reload.
+
+`history()` is not configuration. Its deletions do not bump the revision or
+reload, and they leave settled quota counters, billing entries and subscription
+windows untouched. A capture that is still being written is never deleted. One
+deletion names at most 500 ids.
+
+## Queries
+
+`gproxy.query()` is the read side. Nothing in it writes, so nothing in it
+moves the revision.
+
+| Family | Methods |
+| --- | --- |
+| `usage()` | `records`, `summary`, `group`, `trend`, `aggregate` |
+| `quota()` | `windows`, `settlements`, `credential_cycles`, `credential_observations`, `counted_windows`, `budget_status` |
+| `logs()` | `list`, `upstream`, `capture`, `detail(request_id)` |
+
+### Usage aggregates
+
+Fixed usage fields are stored in dedicated columns, one row per physical
+upstream call, with no downstream summary rows. Provider and credential filters
+run in SQL; `summary`, `group` and `trend` then fold the matching rows and
+custom quantities in Rust, in key-ordered chunks.
+
+Without `max_scan_rows`, an aggregate reads the whole matching range in
+batches. With it, the scan stops after that many rows (clamped to
+1–50,000), and the result comes back with `truncated: true` and the number of
+rows `scanned`, so a partial figure is never presented as the total.
+
+A trend is also bounded by its buckets: a zero or negative bucket width, a
+range that ends before it starts, and a range that would produce more than
+5,000 buckets are refused.
+
+Cost is read from dedicated USD columns. `currency` is `None` when no record
+was priced. `quantities` carries media, tool and custom counters as decimal
+strings.
+
+### Paging
+
+Usage records, quota windows and management lists page by offset. The request
+log pages by cursor, because it is an append-only stream whose head moves while
+someone reads it; offset pages over it would repeat or skip rows. The cursor
+has two halves, `next_cursor` (a timestamp) and `next_cursor_id` (the row id),
+and you pass both back unchanged. A timestamp alone is not enough because two
+requests can start in the same millisecond.
+
+### Redaction
+
+`logs()` does not redact. The observer applied the deployment's capture policy
+when it wrote the rows, so what is stored is what may be shown. A host should
+not expect a second filtering pass on read: if a secret is in the database, the
+policy allowed it there.
+
+## Synchronization
+
+Instances of one deployment stay on the same configuration through
+invalidation notifications on the shared cache and a poll of
+`settings.config_revision` (every 30 seconds by default). The mechanism is
+described in
+[Architecture](/development/architecture#multi-instance-sync).
+
+The handle's synchronization methods:
+
+- `reload()`: re-read the configuration and publish a new snapshot.
+- `reload_credentials(ids)`: re-read credential material only.
+- `sync_now()`: one revision poll; reload if the durable revision is ahead.
+- `drain_notifications()`: apply notifications already waiting, without
+  touching the database. Does nothing in `SyncMode::Background`.
+- `tick()`: `drain_notifications()` followed by `sync_now()`.
+
+With `SyncMode::Background` the handle runs both loops itself; this needs a
+Tokio runtime and a process that outlives requests. With `SyncMode::Manual`
+nothing happens unless the host calls the methods above.
+
+On wasm, the cache defaults to the database-backed `StoreCache` and
+synchronization is always manual, because an isolate does not outlive its
+request. Call `tick()` at the start of each request:
+
+```rust
+// tick() = drain the delivered notifications, then poll the revision once.
+instance.tick().await;
+```
+
+Draining is cheap enough to do on every request; the poll is not, so a host
+that only wants the cheap half can call `drain_notifications()` alone. In
+manual mode the subscription is created during `build()` and its initial resync
+hint is discarded (the first load is that resync). A write that lands between
+assembly and the first `tick()` is therefore still delivered.
+
+## TypeScript type export
+
+With the `ts` feature, the sdk exports TypeScript declarations for every DTO
+and for the channel descriptors:
+
+```sh
+GPROXY_TS_OUT=console/src/generated \
+  cargo test -p gproxy-sdk --features ts export_types
+```
+
+Without `GPROXY_TS_OUT` the test returns immediately and writes nothing, so
+`cargo test --all-features` has no side effects. With it, the output directory
+is deleted first, so declarations for removed DTOs do not linger, and an
+`index.ts` re-exporting everything is written last.
+
+The channel descriptors are exported because the console renders provider
+forms from the descriptor each channel returns. Typing the form from that
+descriptor keeps it in step when a channel adds a configuration key.
+
+The export list is maintained by hand, since Rust cannot enumerate a module's
+types at run time. In v3 this list drifted: DTOs were added without being
+listed, and the console went without their types. A second test,
+`every_exported_dto_is_in_the_export_list`, reads the `dto` module's source and
+fails if a re-exported type is missing from the list.
+
+## Layers above the sdk
+
+An application that also needs identity links `gproxy-app`. It adds
+authentication, admission, the admin and portal operation families and the
+OAuth issuer, and has no transport. `gproxy-host-axum` exposes those over HTTP,
+`gproxy-host-edge` mounts the same router in a Cloudflare Worker, and
+`gproxy-host-tauri` serves the management surfaces over IPC. Each of these
+crates can be embedded at its own level.

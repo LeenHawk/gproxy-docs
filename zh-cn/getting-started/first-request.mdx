@@ -3,13 +3,17 @@ title: "发送第一个请求"
 description: "使用 OpenAI、Claude 和 Gemini API 调用网关，启用流式响应并排查常见错误。"
 ---
 
-完成[快速开始](/zh-cn/getting-started/quick-start)后，应该已有名为 `fast` 的模型路由和一把网关 API Key。下面的例子使用默认地址；修改过端口时请一起调整。
+本页演示如何用各个协议调用 GPROXY（包括流式响应），并列出常见错误码的含义。前提是已经完成[快速开始](/zh-cn/getting-started/quick-start)，有一个名为 `fast` 的模型路由和一把网关 API Key。示例使用默认地址 `http://127.0.0.1:8787`，改过端口时请相应调整。
 
 ```sh
 export GPROXY_KEY='your-gproxy-api-key'
 ```
 
-网关接受 `Authorization: Bearer <key>`、`x-api-key` 和 `x-goog-api-key`。请使用网关签发的密钥，不要填上游凭证。
+## 传递密钥
+
+GPROXY 从 `Authorization: Bearer <key>`、`x-api-key` 或 `x-goog-api-key` 中读取网关密钥，各协议惯用的请求头都可以使用。同时带有多个时，依次优先使用 `Authorization`、`x-api-key`、`x-goog-api-key`。CLI 与容器部署还接受 Gemini 风格的 `?key=` 查询参数，但请求头始终优先。
+
+这里只能填网关签发的密钥。上游凭证保存在供应商中，网关不接受。
 
 ## OpenAI Chat Completions
 
@@ -42,6 +46,8 @@ curl -sS http://127.0.0.1:8787/v1/messages \
 
 ## Gemini GenerateContent
 
+Gemini 的模型名写在路径中，而不是请求体里：
+
 ```sh
 curl -sS "http://127.0.0.1:8787/v1beta/models/fast:generateContent" \
   -H "x-goog-api-key: $GPROXY_KEY" \
@@ -51,6 +57,8 @@ curl -sS "http://127.0.0.1:8787/v1beta/models/fast:generateContent" \
 
 ## 流式响应
 
+OpenAI 和 Claude 协议在请求体中设置 `"stream":true`。curl 需要加 `-N`，事件到达时立即输出，不做缓冲：
+
 ```sh
 curl -sSN http://127.0.0.1:8787/v1/chat/completions \
   -H "Authorization: Bearer $GPROXY_KEY" \
@@ -59,7 +67,7 @@ curl -sSN http://127.0.0.1:8787/v1/chat/completions \
        "messages":[{"role":"user","content":"Count to three."}]}'
 ```
 
-## Gemini 流式响应
+Gemini 使用单独的 `streamGenerateContent` 方法，加上 `alt=sse` 以 SSE 格式返回：
 
 ```sh
 curl -sSN "http://127.0.0.1:8787/v1beta/models/fast:streamGenerateContent?alt=sse" \
@@ -68,20 +76,28 @@ curl -sSN "http://127.0.0.1:8787/v1beta/models/fast:streamGenerateContent?alt=ss
   -d '{"contents":[{"parts":[{"text":"Count to three."}]}]}'
 ```
 
-返回格式与客户端请求的协议一致。能否调用成功取决于路由成员、上游能力与转换支持；某个上游不能执行的操作，不会因为更换接口路径而自动获得支持。
+## 协议的选择
+
+上面所有示例都可以调用同一个 `fast` 路由，与上游实际使用的协议无关。GPROXY 按客户端请求的协议返回响应，中间负责与上游格式之间的转换。
+
+转换不会增加功能。请求能否成功，仍取决于路由成员、上游支持的能力，以及这一对协议之间的转换是否受支持。上游没有的功能，换一个端点调用也不会有。
 
 ## 模型列表
 
-控制台中的模型目录是配置网关模型名的入口。通过 API 查询调用方可见的网关目录：
+控制台的模型目录列出已配置的网关模型名。通过 API 查询当前调用方可见的目录：
 
 ```sh
 curl -sS http://127.0.0.1:8787/portal/api/models \
   -H "Authorization: Bearer $GPROXY_KEY"
 ```
 
-目录中的 `permitted` 表示当前调用方是否有权限。`GET /v1/models` 转发的是所选上游的模型列表，与网关目录不同。Application 不在 HTTP 端口开放 `/portal/api`，请在应用内查看目录。
+每个条目的 `permitted` 字段表示当前调用方能否使用。Application 不在 HTTP 端口提供 `/portal/api`，请在应用内查看目录。
+
+`GET /v1/models` 与此不同，它转发的是所选上游的模型列表，而不是网关目录。
 
 ## 指定供应商或命名空间
+
+地址前缀和模型名共同决定目标：
 
 | 地址 | 请求中的模型名 | 目标 |
 | --- | --- | --- |
@@ -102,4 +118,4 @@ curl -sS http://127.0.0.1:8787/portal/api/models \
 | `429` | 请求受到限流或限额约束 |
 | `5xx` | 网关或上游调用失败，需结合日志检查 |
 
-请求完成后可在控制台查看用量与请求记录。正文是否保存取决于日志设置，详见[用量、日志与审计](/zh-cn/guides/observability)。
+每次请求都会出现在控制台的用量和请求记录中。请求和响应正文是否保存取决于日志设置，详见[用量、日志与审计](/zh-cn/guides/observability)。
