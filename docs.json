@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "GPROXY",
-  "description": "Install, configure and operate GPROXY v4: one gateway in front of many LLM providers, as a native binary, a desktop shell or a Cloudflare Worker.",
+  "description": "Documentation for GPROXY, a self-hosted gateway for LLM APIs: installation, configuration, administration and internals.",
   "colors": {
     "primary": "#2563EB",
     "light": "#60A5FA",
@@ -15,23 +15,37 @@
         "language": "en",
         "groups": [
           {
-            "group": "Introduction",
+            "group": "Overview",
             "pages": [
               "index",
-              "introduction/what-is-gproxy",
-              "introduction/architecture"
+              "introduction/concepts"
             ]
           },
           {
-            "group": "Getting Started",
+            "group": "Installation and upgrades",
             "pages": [
               "download",
+              "deployment/containers",
+              "deployment/edge",
+              {
+                "group": "Upgrading",
+                "pages": [
+                  "deployment/v3-to-v4",
+                  "deployment/v2-to-v4",
+                  "deployment/v2-to-v3"
+                ]
+              }
+            ]
+          },
+          {
+            "group": "Tutorial",
+            "pages": [
               "getting-started/quick-start",
               "getting-started/first-request"
             ]
           },
           {
-            "group": "Guides",
+            "group": "Administration",
             "pages": [
               "guides/providers",
               "guides/models",
@@ -41,32 +55,28 @@
               "guides/claude-caching",
               "guides/cli-clients",
               "guides/console",
-              "guides/observability",
-              "guides/adding-a-channel"
+              "guides/observability"
             ]
           },
           {
             "group": "Reference",
             "pages": [
               "reference/configuration",
+              "reference/configuration-schema",
               "reference/routing-table",
               "reference/pricing",
               "reference/database",
-              "reference/embedding",
-              "reference/http-api",
-              "reference/configuration-schema",
-              "reference/channel-catalog"
+              "reference/channel-catalog",
+              "reference/http-api"
             ]
           },
           {
-            "group": "Deployment",
+            "group": "Development",
             "pages": [
-              "deployment/edge",
-              "deployment/containers",
-              "deployment/release-build",
-              "deployment/v2-to-v3",
-              "deployment/v2-to-v4",
-              "deployment/v3-to-v4"
+              "development/architecture",
+              "development/embedding",
+              "development/adding-a-channel",
+              "development/building"
             ]
           },
           {
@@ -79,23 +89,37 @@
         "language": "zh-CN",
         "groups": [
           {
-            "group": "介绍",
+            "group": "概述",
             "pages": [
               "zh-cn/index",
-              "zh-cn/introduction/what-is-gproxy",
-              "zh-cn/introduction/architecture"
+              "zh-cn/introduction/concepts"
             ]
           },
           {
-            "group": "快速上手",
+            "group": "安装与升级",
             "pages": [
               "zh-cn/download",
+              "zh-cn/deployment/containers",
+              "zh-cn/deployment/edge",
+              {
+                "group": "版本升级",
+                "pages": [
+                  "zh-cn/deployment/v3-to-v4",
+                  "zh-cn/deployment/v2-to-v4",
+                  "zh-cn/deployment/v2-to-v3"
+                ]
+              }
+            ]
+          },
+          {
+            "group": "入门",
+            "pages": [
               "zh-cn/getting-started/quick-start",
               "zh-cn/getting-started/first-request"
             ]
           },
           {
-            "group": "使用指南",
+            "group": "管理指南",
             "pages": [
               "zh-cn/guides/providers",
               "zh-cn/guides/models",
@@ -105,32 +129,28 @@
               "zh-cn/guides/claude-caching",
               "zh-cn/guides/cli-clients",
               "zh-cn/guides/console",
-              "zh-cn/guides/observability",
-              "zh-cn/guides/adding-a-channel"
+              "zh-cn/guides/observability"
             ]
           },
           {
-            "group": "参考手册",
+            "group": "参考",
             "pages": [
               "zh-cn/reference/configuration",
+              "zh-cn/reference/configuration-schema",
               "zh-cn/reference/routing-table",
               "zh-cn/reference/pricing",
               "zh-cn/reference/database",
-              "zh-cn/reference/embedding",
-              "zh-cn/reference/http-api",
-              "zh-cn/reference/configuration-schema",
-              "zh-cn/reference/channel-catalog"
+              "zh-cn/reference/channel-catalog",
+              "zh-cn/reference/http-api"
             ]
           },
           {
-            "group": "部署",
+            "group": "开发",
             "pages": [
-              "zh-cn/deployment/edge",
-              "zh-cn/deployment/containers",
-              "zh-cn/deployment/release-build",
-              "zh-cn/deployment/v2-to-v3",
-              "zh-cn/deployment/v2-to-v4",
-              "zh-cn/deployment/v3-to-v4"
+              "zh-cn/development/architecture",
+              "zh-cn/development/embedding",
+              "zh-cn/development/adding-a-channel",
+              "zh-cn/development/building"
             ]
           },
           {
@@ -144,23 +164,37 @@
         "language": "zh-TW",
         "groups": [
           {
-            "group": "介紹",
+            "group": "概述",
             "pages": [
               "zh-tw/index",
-              "zh-tw/introduction/what-is-gproxy",
-              "zh-tw/introduction/architecture"
+              "zh-tw/introduction/concepts"
             ]
           },
           {
-            "group": "快速上手",
+            "group": "安裝與升級",
             "pages": [
               "zh-tw/download",
+              "zh-tw/deployment/containers",
+              "zh-tw/deployment/edge",
+              {
+                "group": "版本升級",
+                "pages": [
+                  "zh-tw/deployment/v3-to-v4",
+                  "zh-tw/deployment/v2-to-v4",
+                  "zh-tw/deployment/v2-to-v3"
+                ]
+              }
+            ]
+          },
+          {
+            "group": "入門",
+            "pages": [
               "zh-tw/getting-started/quick-start",
               "zh-tw/getting-started/first-request"
             ]
           },
           {
-            "group": "使用指南",
+            "group": "管理指南",
             "pages": [
               "zh-tw/guides/providers",
               "zh-tw/guides/models",
@@ -170,32 +204,28 @@
               "zh-tw/guides/claude-caching",
               "zh-tw/guides/cli-clients",
               "zh-tw/guides/console",
-              "zh-tw/guides/observability",
-              "zh-tw/guides/adding-a-channel"
+              "zh-tw/guides/observability"
             ]
           },
           {
-            "group": "參考手冊",
+            "group": "參考",
             "pages": [
               "zh-tw/reference/configuration",
+              "zh-tw/reference/configuration-schema",
               "zh-tw/reference/routing-table",
               "zh-tw/reference/pricing",
               "zh-tw/reference/database",
-              "zh-tw/reference/embedding",
-              "zh-tw/reference/http-api",
-              "zh-tw/reference/configuration-schema",
-              "zh-tw/reference/channel-catalog"
+              "zh-tw/reference/channel-catalog",
+              "zh-tw/reference/http-api"
             ]
           },
           {
-            "group": "部署",
+            "group": "開發",
             "pages": [
-              "zh-tw/deployment/edge",
-              "zh-tw/deployment/containers",
-              "zh-tw/deployment/release-build",
-              "zh-tw/deployment/v2-to-v3",
-              "zh-tw/deployment/v2-to-v4",
-              "zh-tw/deployment/v3-to-v4"
+              "zh-tw/development/architecture",
+              "zh-tw/development/embedding",
+              "zh-tw/development/adding-a-channel",
+              "zh-tw/development/building"
             ]
           },
           {
@@ -208,23 +238,37 @@
         "language": "ru",
         "groups": [
           {
-            "group": "Введение",
+            "group": "Обзор",
             "pages": [
               "ru/index",
-              "ru/introduction/what-is-gproxy",
-              "ru/introduction/architecture"
+              "ru/introduction/concepts"
             ]
           },
           {
-            "group": "Начало работы",
+            "group": "Установка и обновление",
             "pages": [
               "ru/download",
+              "ru/deployment/containers",
+              "ru/deployment/edge",
+              {
+                "group": "Обновление версий",
+                "pages": [
+                  "ru/deployment/v3-to-v4",
+                  "ru/deployment/v2-to-v4",
+                  "ru/deployment/v2-to-v3"
+                ]
+              }
+            ]
+          },
+          {
+            "group": "Первые шаги",
+            "pages": [
               "ru/getting-started/quick-start",
               "ru/getting-started/first-request"
             ]
           },
           {
-            "group": "Руководства",
+            "group": "Администрирование",
             "pages": [
               "ru/guides/providers",
               "ru/guides/models",
@@ -234,32 +278,28 @@
               "ru/guides/claude-caching",
               "ru/guides/cli-clients",
               "ru/guides/console",
-              "ru/guides/observability",
-              "ru/guides/adding-a-channel"
+              "ru/guides/observability"
             ]
           },
           {
             "group": "Справочник",
             "pages": [
               "ru/reference/configuration",
+              "ru/reference/configuration-schema",
               "ru/reference/routing-table",
               "ru/reference/pricing",
               "ru/reference/database",
-              "ru/reference/embedding",
-              "ru/reference/http-api",
-              "ru/reference/configuration-schema",
-              "ru/reference/channel-catalog"
+              "ru/reference/channel-catalog",
+              "ru/reference/http-api"
             ]
           },
           {
-            "group": "Развёртывание",
+            "group": "Разработка",
             "pages": [
-              "ru/deployment/edge",
-              "ru/deployment/containers",
-              "ru/deployment/release-build",
-              "ru/deployment/v2-to-v3",
-              "ru/deployment/v2-to-v4",
-              "ru/deployment/v3-to-v4"
+              "ru/development/architecture",
+              "ru/development/embedding",
+              "ru/development/adding-a-channel",
+              "ru/development/building"
             ]
           },
           {
@@ -290,6 +330,86 @@
     "indexing": "navigable"
   },
   "redirects": [
+    {
+      "source": "/introduction/what-is-gproxy",
+      "destination": "/introduction/concepts"
+    },
+    {
+      "source": "/introduction/architecture",
+      "destination": "/development/architecture"
+    },
+    {
+      "source": "/reference/embedding",
+      "destination": "/development/embedding"
+    },
+    {
+      "source": "/guides/adding-a-channel",
+      "destination": "/development/adding-a-channel"
+    },
+    {
+      "source": "/deployment/release-build",
+      "destination": "/development/building"
+    },
+    {
+      "source": "/zh-cn/introduction/what-is-gproxy",
+      "destination": "/zh-cn/introduction/concepts"
+    },
+    {
+      "source": "/zh-cn/introduction/architecture",
+      "destination": "/zh-cn/development/architecture"
+    },
+    {
+      "source": "/zh-cn/reference/embedding",
+      "destination": "/zh-cn/development/embedding"
+    },
+    {
+      "source": "/zh-cn/guides/adding-a-channel",
+      "destination": "/zh-cn/development/adding-a-channel"
+    },
+    {
+      "source": "/zh-cn/deployment/release-build",
+      "destination": "/zh-cn/development/building"
+    },
+    {
+      "source": "/zh-tw/introduction/what-is-gproxy",
+      "destination": "/zh-tw/introduction/concepts"
+    },
+    {
+      "source": "/zh-tw/introduction/architecture",
+      "destination": "/zh-tw/development/architecture"
+    },
+    {
+      "source": "/zh-tw/reference/embedding",
+      "destination": "/zh-tw/development/embedding"
+    },
+    {
+      "source": "/zh-tw/guides/adding-a-channel",
+      "destination": "/zh-tw/development/adding-a-channel"
+    },
+    {
+      "source": "/zh-tw/deployment/release-build",
+      "destination": "/zh-tw/development/building"
+    },
+    {
+      "source": "/ru/introduction/what-is-gproxy",
+      "destination": "/ru/introduction/concepts"
+    },
+    {
+      "source": "/ru/introduction/architecture",
+      "destination": "/ru/development/architecture"
+    },
+    {
+      "source": "/ru/reference/embedding",
+      "destination": "/ru/development/embedding"
+    },
+    {
+      "source": "/ru/guides/adding-a-channel",
+      "destination": "/ru/development/adding-a-channel"
+    },
+    {
+      "source": "/ru/deployment/release-build",
+      "destination": "/ru/development/building"
+    },
     {
       "source": "/getting-started/installation",
       "destination": "/download"

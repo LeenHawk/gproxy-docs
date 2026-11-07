@@ -673,7 +673,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
           <h3>{copy.source}</h3>
           <p>{copy.sourceBody}</p>
           <pre className="dl-code"><code>cargo build --release -p gproxy</code></pre>
-          <a className="dl-link" href={`${prefix}/deployment/release-build`}>{copy.sourceGuide} →</a>
+          <a className="dl-link" href={`${prefix}/development/building`}>{copy.sourceGuide} →</a>
         </article>
         <article className="dl-card">
           <h3>{copy.verify}</h3>

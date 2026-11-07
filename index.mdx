@@ -1,50 +1,76 @@
 ---
 title: "GPROXY"
-description: "Manage upstream accounts, translate API requests, route models, and track usage and costs."
+description: "GPROXY is a self-hosted gateway that puts many LLM providers behind one API endpoint."
 sidebarTitle: "Overview"
-mode: "wide"
 ---
 
-One endpoint for your LLM services.
+GPROXY is a self-hosted gateway for LLM APIs. You register your upstream
+accounts with it (API keys, OAuth logins such as Codex or Claude Code, browser
+cookies), and your clients are given one base URL, a GPROXY API key and model
+names that you define.
 
-<Columns cols={3}>
-  <Card title="Download" href="/download" icon="download" horizontal />
-  <Card title="Quick start" href="/getting-started/quick-start" icon="arrow-right" horizontal />
-  <Card title="GitHub" href="https://github.com/LeenHawk/gproxy" icon="arrow-up-right-from-square" horizontal />
-</Columns>
+For every request GPROXY works out which provider and credential should serve
+the model name, converts between the OpenAI, Claude and Gemini formats when
+the client and the upstream use different ones, checks the caller's
+permissions, rate limits and budget, and records the tokens and cost. When a
+credential or provider fails, the request is retried on the next one.
 
-## Start here
+GPROXY does not run models; the upstream service does the inference. It also
+cannot add features an upstream lacks: converting a request to another format
+does not give a model tool calling or image input it does not have.
 
-<Columns cols={2}>
-  <Card title="Install and set up" href="/download">
-  Choose Application, CLI, containers, or Workers and set up your account.
-</Card>
-  <Card title="Make your first request" href="/getting-started/quick-start">
-  Add a provider and credential, create a model route, and connect your client.
-</Card>
-  <Card title="Upgrade from v3" href="/deployment/v3-to-v4">
-  Review automatic migration, retained data, and checks after upgrading.
-</Card>
-  <Card title="Connect CLI clients" href="/guides/cli-clients">
-  Configure Codex CLI, Claude Code, and other tools.
-</Card>
-</Columns>
+It runs as a native server (the CLI, or a container) with a web console, as a
+desktop or mobile application with the console built in, or on Cloudflare
+Workers, Netlify and Vercel with a hosted database. Rust programs can embed it
+as a library.
 
-## Common tasks
+## An example
 
-<Columns cols={2}>
-  <Card title="Manage accounts" icon="gear">
-  Manage API keys, OAuth, and Cookie credentials in one console, with health and upstream allowance information.
-</Card>
-  <Card title="Route models" icon="shuffle">
-  Give clients a stable model name, distribute requests by weight, and configure fallback providers.
-</Card>
-  <Card title="Connect protocols" icon="puzzle-piece">
-  Use OpenAI, Claude, and Gemini API formats with streaming. Available operations depend on the channel and upstream.
-</Card>
-  <Card title="Track usage and costs" icon="file-lines">
-  Set user and key permissions and budgets, then inspect requests and billing details.
-</Card>
-</Columns>
+Suppose a provider named `openai-main` holds an OpenAI API key, and a model
+route named `fast` points at its `gpt-4o-mini` model. A client then sends:
 
-For implementation details, see [Architecture](/introduction/architecture) and [Embedding the core](/reference/embedding).
+```sh
+curl http://127.0.0.1:8787/v1/chat/completions \
+  -H "Authorization: Bearer $GPROXY_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"fast","messages":[{"role":"user","content":"Hello"}]}'
+```
+
+The client never sees the OpenAI key. If you later add a second provider to
+`fast`, or replace the model behind it, nothing changes on the client side.
+The same route can be called in Claude format at `/v1/messages` or in Gemini
+format at `/v1beta/models/fast:generateContent`.
+
+## About this manual
+
+- [Concepts](/introduction/concepts) defines the terms used everywhere else:
+  channel, provider, credential, model route, gateway API key and rule.
+- *Installation and upgrades* covers the [packages](/download) for each
+  platform, [containers](/deployment/containers), [hosted
+  deployments](/deployment/edge) and moving from older versions, starting
+  with [v3 to v4](/deployment/v3-to-v4).
+- The *Tutorial* takes a fresh instance to a working request in the
+  [quick start](/getting-started/quick-start), then shows [the same request
+  in each protocol](/getting-started/first-request).
+- *Administration* is the day-to-day guide: [providers and
+  credentials](/guides/providers), [model routes](/guides/models),
+  [users and keys](/guides/users-and-keys), [permissions and
+  limits](/guides/permissions), [rewrite rules](/guides/rules), [prompt
+  caching](/guides/claude-caching), [CLI clients](/guides/cli-clients), the
+  [console](/guides/console) and [usage and logs](/guides/observability).
+- *Reference* lists configuration options, endpoints, pricing rules, storage
+  backends, the channel catalogue and the HTTP API.
+- *Development* is for contributors: the [architecture](/development/architecture),
+  [embedding](/development/embedding), [adding a
+  channel](/development/adding-a-channel) and [building from
+  source](/development/building).
+
+## Getting help
+
+Report bugs in [GitHub Issues](https://github.com/LeenHawk/gproxy/issues) and
+ask questions in [Discussions](https://github.com/LeenHawk/gproxy/discussions).
+Security problems should be reported privately; see
+[SECURITY.md](https://github.com/LeenHawk/gproxy/blob/main/SECURITY.md).
+
+GPROXY is free software under the AGPL-3.0-or-later. Its library crates are
+MIT-licensed.

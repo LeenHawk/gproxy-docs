@@ -1,60 +1,62 @@
 ---
 title: "供應商與憑證"
-description: "選擇渠道、新增供應商與憑證，配置登入、額度查詢和連線選項。"
+description: "選擇渠道、新增供應商與憑證，設定登入、額度查詢和連線選項。"
 ---
 
-**渠道（channel）** 是編譯進二進位制的某一族上游介面卡。**供應商** 是某個渠道上的一條已儲存連線：名字、可選 base URL、該渠道自己的 `config` JSON，以及一個憑證池。同一個渠道可以建任意多個供應商——`openai-main` 和 `openai-eu` 可以都在 `openai` 渠道上。
+本章寫給負責把 GPROXY 接到上游的管理員，內容包括選擇渠道、建立供應商、新增和維護憑證，以及對外連線的設定。
 
-供應商和憑證的配置儲存後生效，通常不需要重啟。首次接入請先測試憑證，再把它加入模型路由。
+**渠道**（channel）是編譯進二進位檔的上游轉接器，每個渠道對應一族上游。**供應商**（provider）是某個渠道上儲存的一條連線，由名稱、選填的 base URL、渠道自己的 `config` JSON 和一個憑證池組成。一個渠道下可以建立任意多個供應商，例如 `openai-main` 和 `openai-eu` 都可以使用 `openai` 渠道。
 
-## 支援的渠道
+## 選擇渠道
 
-只有編譯進你的二進位制的渠道才存在。`GET /admin/api/channels` 回答自二進位制而非資料庫，每一項帶著登入方式、能力，以及一個供應商表單該渲染的 `config` 鍵。
+二進位檔裡只有編譯進去的渠道。預設建置包含儲存庫中的全部渠道；按單一渠道 feature 建置的二進位檔只帶所選的那些。`GET /admin/api/channels` 的結果來自二進位檔本身，與資料庫無關。每一項列出該渠道的登入方式、能力，以及供應商表單需要顯示的 `config` 鍵；[渠道目錄](/zh-tw/reference/channel-catalog)按目前版本列出了同樣的資料。
 
 | 渠道 | 上游 | 憑證 |
 | --- | --- | --- |
-| `aistudio` | Google AI Studio：原生 Gemini 方法與 `/v1beta/openai` 相容層同源 | `{"api_key"}` |
-| `antigravity` | 經 Antigravity 編輯器所用的 Code Assist 主機訪問 Google 帳號 | OAuth |
-| `aws_bedrock` | AWS Bedrock：按模型選介面——Anthropic 模型走 `InvokeModel`（event-stream 翻成 Claude SSE），GPT、Grok、Qwen、DeepSeek 等走 OpenAI 相容的 Chat Completions | AWS 金鑰對，或 Bedrock API key |
+| `aistudio` | Google AI Studio：原生 Gemini 方法與 `/v1beta/openai` 相容層，同一個來源 | `{"api_key"}` |
+| `antigravity` | 透過 Antigravity 編輯器使用的 Code Assist 主機存取 Google 帳號 | OAuth |
+| `aws_bedrock` | AWS Bedrock。介面隨模型而定：Anthropic 模型走 `InvokeModel`（event-stream 轉成 Claude SSE），GPT、Grok、Qwen、DeepSeek 等走 OpenAI 相容的 Chat Completions | AWS 金鑰對，或 Bedrock API key |
 | `azure` | Azure OpenAI，以及 Azure AI Foundry 託管的 Anthropic 模型 | `{"api_key"}` |
-| `claudeapi` | Anthropic 官方 API，加上它的 OpenAI 相容層與成本報表；未限定到單一 workspace 的金鑰必須填寫 `workspace_id` | `{"api_key", "quota_api_key"?, "workspace_id"?}` |
-| `claudecode` | 經 Claude Code CLI 的請求使用 Claude.ai 訂閱 | OAuth |
-| `claudeweb` | claude.ai 瀏覽器會話，渲染成 Claude Messages SSE | 會話 cookie + 組織 |
-| `cline` | Cline 自家帳號，`api.cline.bot` | `{"api_key"}` 或 OAuth |
-| `cloudflare_ai_gateway` | 經 REST API 使用 Cloudflare AI Gateway；account 與 gateway 按憑據存放，額度餘額 | `{"api_key", "account_id", "gateway_id"?}` |
-| `codex` | 經 Codex 後端使用 ChatGPT 帳號：HTTP SSE 與 WebSocket 上的 Responses、`/wham/usage` | OAuth |
-| `commandcode` | Command Code CLI：原生生成介面、動態模型目錄、餘額、帳期消費／請求數與用量視窗 | `{"api_key"}` 或瀏覽器授權（回傳登入金鑰，支援遠端部署） |
-| `copilotcli` | 經 `copilot` CLI 使用 GitHub Copilot | GitHub OAuth 令牌 |
-| `custom` | 任何原生講 OpenAI、Claude 或 Gemini 的 API-key 端點 | `{"api_key"}` |
-| `dashscope` | 阿里 DashScope：OpenAI 模式、Anthropic 模式、rerank 與原生多模態影象 API | `{"api_key"}` |
-| `deepseek` | DeepSeek：`/v1` 下的 Chat、根路徑的 Responses、`/anthropic` 下的 Claude Messages | `{"api_key"}` |
-| `glm` | GLM 按量 API；ZCode 官方動態模型目錄 | `{"api_key"}` |
-| `glmcode` | GLM Coding Plan；獨立模型目錄、Chat／Messages／Responses、訂閱額度查詢 | `{"api_key"}` |
-| `minimax` | MiniMax 文字 API／Token Plan，以及 H3 影片建立、查詢、列表、取消／刪除、下載 | `{"api_key"}` |
-| `devin` | Devin（Windsurf），`server.codeium.com`：protobuf 上的 Connect-RPC | 會話令牌 |
-| `geminicli` | 經 Gemini CLI 所用的 Code Assist 端點訪問 Google 帳號 | OAuth |
-| `grokbuild` | 經 Grok Build CLI 使用 xAI 帳號 | OAuth |
-| `kimi` | Moonshot 平台（API key），或 Kimi Code 訂閱（裝置登入） | `{"api_key"}` 或 OAuth |
-| `kiro` | 經 Kiro 桌面應用使用 AWS CodeWhisperer | OAuth |
-| `nvidia` | NVIDIA NIM：Chat Completions、模型列表與 embeddings | `{"api_key"}` |
-| `openai` | OpenAI 官方平台：完整 surface、套接字上的 Responses 與 Realtime | `{"api_key", "quota_api_key"}` |
-| `opencodego` | OpenCode Go：訂閱制、開源模型、用量視窗 | `{"api_key"}` |
-| `opencodezen` | OpenCode Zen：從 Console 餘額按量付費 | `{"api_key"}` 或 OAuth |
-| `opendesign` | OpenDesign Go / Cloud 訂閱：同一個來源上的 Chat Completions、Responses 與 Claude Messages | `{"api_key"}` |
-| [`orcaterm`](#orcaterm) | OrcaTerm 帳號：LightAI 圖文多輪、串流思考、動態內建模型和 AI 問答額度 | 瀏覽器 OAuth（微信／騰訊雲／Google／GitHub），可選 Cookie 匯入 |
-| `openrouter` | OpenRouter：body 裡的路由偏好、應答裡報出的價格 | `{"api_key"}` |
-| `vercel` | Vercel AI Gateway：模型呼叫與團隊餘額查詢 | `{"api_key"}` |
-| `vertex` | Google Vertex AI：Google、Anthropic 與 OpenAI 相容釋出者 | 服務帳號金鑰 |
-| `vertexexpress` | Vertex AI Express：單一全球源上的 Gemini surface | `{"api_key"}` |
-| `trae` | Trae 國內／國際版：原生聊天、帳號模型目錄與額度查詢 | OAuth |
-| `workbuddy` | 經編輯器外掛使用騰訊 Copilot | OAuth |
-| `xai` | xAI（Grok）：OpenAI Chat 與 Responses，加上 xAI 自己的 TTS／STT／影片 | `{"api_key"}` |
+| `claudeapi` | Anthropic 官方 API、其 OpenAI 相容層和成本報表。未限定到單一 workspace 的金鑰必須填寫 `workspace_id` | `{"api_key", "quota_api_key"?, "workspace_id"?}` |
+| `claudecode` | Claude.ai 訂閱，按 Claude Code CLI 的請求方式存取 | OAuth |
+| `claudeweb` | claude.ai 瀏覽器工作階段，輸出為 Claude Messages SSE | 工作階段 cookie + 組織 |
+| `cline` | Cline 自己的帳號，`api.cline.bot` | `{"api_key"}` 或 OAuth |
+| `cloudflare_ai_gateway` | 透過 REST API 使用 Cloudflare AI Gateway；account 與 gateway 按憑證設定，支援餘額查詢 | `{"api_key", "account_id", "gateway_id"?}` |
+| `codex` | 透過 Codex 後端使用 ChatGPT 帳號：SSE 與 WebSocket 上的 Responses，`/wham/usage` | OAuth |
+| `commandcode` | Command Code CLI：原生生成介面、模型目錄、餘額、帳期消費與請求數、用量視窗 | `{"api_key"}`，或瀏覽器授權（貼上簽發的金鑰，支援遠端部署） |
+| `copilotcli` | 透過 `copilot` CLI 使用 GitHub Copilot | GitHub OAuth 令牌 |
+| `custom` | 任何原生支援 OpenAI、Claude 或 Gemini 協定的 API key 端點 | `{"api_key"}` |
+| `dashscope` | 阿里雲 DashScope：OpenAI 模式、Anthropic 模式、rerank 和原生影像生成 | `{"api_key"}` |
+| `deepseek` | DeepSeek：`/v1` 下的 Chat、根路徑下的 Responses、`/anthropic` 下的 Claude Messages | `{"api_key"}` |
+| `devin` | Devin（Windsurf），`server.codeium.com`：基於 protobuf 的 Connect-RPC | 工作階段令牌 |
+| `geminicli` | 透過 Gemini CLI 使用的 Code Assist 端點存取 Google 帳號 | OAuth |
+| `glm` | GLM 按量計費 API，使用 ZCode 官方動態模型目錄 | `{"api_key"}` |
+| `glmcode` | GLM Coding Plan：獨立模型目錄，Chat、Messages、Responses，訂閱額度查詢 | `{"api_key"}` |
+| `grokbuild` | 透過 Grok Build CLI 使用 xAI 帳號 | OAuth |
+| `kimi` | Moonshot 開放平台（API key），或 Kimi Code 訂閱（裝置碼登入） | `{"api_key"}` 或 OAuth |
+| `kiro` | 透過 Kiro 桌面應用程式使用 AWS CodeWhisperer | OAuth |
+| `minimax` | MiniMax 文字 API 與 Token Plan；H3 影片的建立、查詢、列表、取消或刪除和下載 | `{"api_key"}` |
+| `nvidia` | NVIDIA NIM：Chat Completions、模型列表和 embeddings | `{"api_key"}` |
+| `openai` | OpenAI 官方平台：完整介面，包括 WebSocket 上的 Responses 和 Realtime | `{"api_key", "quota_api_key"}` |
+| `opencodego` | OpenCode Go：訂閱制，開源模型，用量視窗 | `{"api_key"}` |
+| `opencodezen` | OpenCode Zen：從 Console 餘額按量扣費 | `{"api_key"}` 或 OAuth |
+| `opendesign` | OpenDesign Go / Cloud 訂閱：同一個來源（`https://amr-link.open-design.ai`）上的 Chat Completions、Responses 和 Claude Messages；不支援額度查詢 | `{"api_key"}` |
+| `openrouter` | OpenRouter：請求本文中的路由偏好，按回應中回報的價格計費 | `{"api_key"}` |
+| [`orcaterm`](#orcaterm) | OrcaTerm 帳號：LightAI 圖文多輪對話、串流思考、動態內建模型和 AI 問答額度 | 瀏覽器 OAuth（微信、騰訊雲、Google、GitHub），可選 Cookie 匯入 |
+| `trae` | Trae 國內版與國際版：原生聊天、帳號模型目錄和額度查詢 | OAuth |
+| `vercel` | Vercel AI Gateway：Chat、Responses、Claude Messages、embeddings 和團隊餘額查詢 | `{"api_key"}` |
+| `vertex` | Google Vertex AI：Google、Anthropic 和 OpenAI 相容發布者 | 服務帳號金鑰 |
+| `vertexexpress` | Vertex AI Express：單一全球來源上的 Gemini 介面 | `{"api_key"}` |
+| [`volcengine_agent`](#火山方舟) | 火山方舟 Agent Plan：Chat、Responses、Claude Messages、embeddings、影像、影片任務和 HTTP 語音合成；方案額度 | `{"api_key"}`，模型探索和額度查詢另需 IAM 金鑰對 |
+| [`volcengine_coding`](#火山方舟) | 火山方舟 Coding Plan：Chat、Responses、Claude Messages 和 embeddings；方案用量 | `{"api_key"}`，模型探索和額度查詢另需 IAM 金鑰對 |
+| `workbuddy` | 透過編輯器外掛使用騰訊 Copilot | OAuth |
+| `xai` | xAI（Grok）：OpenAI Chat 與 Responses，以及 xAI 自己的 TTS、STT 和影片 | `{"api_key"}` |
 
-每個渠道都能為原生目標**和** `wasm32-unknown-unknown` 構建，所以 Worker 部署不是一個縮水的渠道集。
+所有渠道都能同時為原生目標和 `wasm32-unknown-unknown` 建置，因此 Worker 部署可用的渠道與原生部署相同。
 
 ### 接入相容服務
 
-相容現有協議的服務可以透過 `custom` 接入，填寫服務地址和支援的協議即可：
+如果某個服務與標準 API 的差別只在服務位址和請求頭，就不需要專用渠道。用 `custom` 渠道建立供應商，填寫服務位址和它支援的協定即可：
 
 ```json
 { "name": "example-vendor", "channel": "custom",
@@ -62,82 +64,78 @@ description: "選擇渠道、新增供應商與憑證，配置登入、額度查
   "config": { "dialects": ["openai_chat"] } }
 ```
 
-NVIDIA NIM、Vercel AI Gateway 和 Cloudflare AI Gateway 提供專用渠道，優先使用對應渠道以獲得專用的認證和額度查詢功能。
+只有在一行供應商設定無法表達某個服務的需求時，才會為它撰寫專用渠道。NVIDIA NIM、Vercel AI Gateway 和 Cloudflare AI Gateway 過去都用 `custom` 接入，現在各有專用渠道，提供各自的認證和餘額查詢，應優先使用。
 
-### OrcaTerm
+## 建立供應商
 
-`orcaterm` 使用桌面端 LightAI 協定，支援圖文對話與模型專屬思考參數。新增供應商後使用瀏覽器 OAuth，或匯入 OAuth 憑證。國際站設定 `international=true`，帳號位址為 `https://orcaterm.ai`，LightAI 位址為 `https://lightai.tencentcloud.com`。
+在控制台開啟 **供應商**，點選 **新增供應商**，選擇渠道，填寫名稱和該渠道表單中的欄位，然後 **儲存**。接著新增憑證（見[憑證](#憑證)），先測試一把憑證，再把供應商加入模型路由。
 
-圖片使用 Base64 data URL（PNG、JPEG、WebP、GIF），支援歷史圖片及純圖片訊息。過大的靜態圖片在上傳前自動縮放壓縮；相同圖片在預覽連結有效期內重用同一憑證下的上傳結果。模型與思考檔位來自動態模型目錄。不支援的請求選項會忽略。token 數量使用本機字元估算，並在計量中標記為估算及非完整用量；帳號額度查詢回傳 AI 問答次數。
+也可以透過管理 API 建立：
 
-可辨識的用戶端終端、檔案與網頁擷取工具透過 OrcaTerm 原生 review/reportToolResult 協定適配，呼叫由原用戶端依其權限規則執行。工具續輪使用同一供應商、憑證與模型；不支援任意函式註冊。正文與工具參數在 Agent 完成回應修訂後輸出。Codex 獨立網路請求呼叫 OrcaTerm 伺服器端搜尋／擷取工具，並回傳實際工具結果。
+```sh
+curl -s -X POST http://127.0.0.1:8787/admin/api/providers \
+  -H "Authorization: Bearer $GPROXY_KEY" -H 'content-type: application/json' \
+  -d '{"name":"example-vendor","channel":"custom",
+       "baseUrl":"https://api.example-vendor.com",
+       "config":{"dialects":["openai_chat"]}}'
+```
 
-## 供應商配置
+修改不需要重新啟動。供應商和憑證的每次寫入都與設定版本號的遞增放在同一個交易裡提交；實例先重新載入自身設定，再通知其他實例，因此下一個請求就能用上新設定。
+
+## 供應商設定
 
 | 欄位 | 含義 |
 | --- | --- |
-| `name` | 運維者取的標籤，唯一。它同時是 **供應商掛載點**和 `provider/model` 形式的左半邊。 |
-| `channel` | 上表中的一個 id。 |
-| `baseUrl` | 渠道接受 base URL 時的源。 |
-| `config` | 該渠道自己的 JSON。每個渠道宣告它解碼哪些鍵，`GET /admin/api/channels` 就是那份清單。 |
-| `connectionProfileId` | 這個供應商的呼叫走哪套出站棧——代理、TLS 模擬。 |
-| `enabled` | 被禁用的供應商退出解析。 |
+| `name` | 管理員取的名稱，必須唯一。它同時是供應商掛載點（`/{name}/...`），也是 `provider/model` 寫法中的前半部分。 |
+| `channel` | 上表中的某個渠道 id。 |
+| `baseUrl` | 上游的來源位址，僅對接受 base URL 的渠道有效。 |
+| `config` | 渠道自己的 JSON。每個渠道宣告自己讀取哪些鍵，`GET /admin/api/channels` 會列出。 |
+| `connectionProfileId` | 該供應商對外呼叫使用的連線設定（代理、TLS 模擬），見[連線設定](#連線設定)。 |
+| `enabled` | 停用的供應商不參與解析。 |
 
-`custom` 的 `config` 帶 `dialects`（端點講哪些協議格式）、靜態 `headers`、`allowed_headers`
-和兩個 magic cache 開關。模擬廠商 CLI 的渠道宣告自己的身份 header，並且不讓用戶端偽造它們。
+`custom` 的 `config` 包含 `dialects`（端點支援的協定格式）、靜態 `headers`、`allowed_headers` 和兩個 magic cache 開關。模擬廠商 CLI 的渠道會自行設定身分請求頭，用戶端無法覆寫。
+
+以下各節說明個別渠道的專屬選項。
 
 ### Claude 模型 fallback
 
-`fallback_mode` 取 `off`（預設）、`default` 或 `models`，`fallback_models` 是按順序排列的 upstream
-模型 ID 列表。控制台按渠道描述渲染這些欄位。列表會跳過空值、重複項和主模型，最多使用三個 fallback 模型。
+`fallback_mode` 可取 `off`（預設）、`default` 或 `models`；`fallback_models` 是按順序排列的上游模型 ID 列表。控制台根據渠道描述呈現這兩個欄位。列表中的空值、重複項和主模型會被略過，最多使用三個 fallback 模型。
 
-- **Claude API、Claude Code 與自定義 Claude 端點：** 傳送 Anthropic 的 `fallbacks` 和對應的 beta 頭。
-  `default` 模式交給 Anthropic 決定。
-- **OpenRouter：** Claude Messages 傳送 `fallbacks`，Chat Completions 傳送 `models`，由 OpenRouter
-  執行模型 fallback。這不改變 `provider.allow_fallbacks`，後者控制的是同一模型的供應商路由。用戶端已帶的 `fallbacks` 或 `models` 優先。Responses 請求不會被加上未公開的 fallback 引數。
-- **Vercel、Azure、Vertex 與 AWS Bedrock：** GProxy 在同一憑證上用下一個配置的模型重試 Claude
-  `refusal`，渠道準備與簽名都重新做。`default` 模式選主模型名稱空間下的 `claude-opus-4-8`。雲廠商專用的 ID 請配置該上游接受的完整 ID。
+不同渠道的執行方式不同：
 
-閘道器 fallback 在協議轉換到 Claude 之後同樣生效，但不會重試任意 HTTP 錯誤。串流內容即時下發；已有輸出後，續接需要帶 prefill 宣告的上游 credit。沒有可兌現的 credit 時絕不重放服務端工具。每次物理嘗試單獨觀測、按其模型計價；報告零輸出的 refusal 不計費。最終回應保留最後一次嘗試的頂層 usage。
+- Claude API、Claude Code 和自訂 Claude 端點：傳送 Anthropic 的 `fallbacks` 欄位及對應的 beta 頭。`default` 模式由 Anthropic 選擇 fallback 模型。
+- OpenRouter：Claude Messages 請求傳送 `fallbacks`，Chat Completions 請求傳送 `models`，由 OpenRouter 執行 fallback。這不影響 `provider.allow_fallbacks`，後者控制的是同一模型在不同供應方之間的路由。用戶端已經帶了 `fallbacks` 或 `models` 時以用戶端的值為準。Responses 請求不加 fallback 參數，因為 OpenRouter 沒有為它提供公開參數。
+- Vercel、Azure、Vertex 和 AWS Bedrock：由 GPROXY 自己在同一憑證上用下一個設定的模型重試 Claude `refusal`，每次重新準備請求並重新簽章。`default` 模式選擇主模型命名空間下的 `claude-opus-4-8`。雲端廠商專用的模型 ID 請按該上游接受的完整 ID 設定。
+
+閘道 fallback 對從其他協定轉換為 Claude 的請求同樣生效。它只處理 refusal，不重試任意 HTTP 錯誤。串流內容到達即下發；一旦已經有輸出，只有上游簽發了帶 prefill 宣告的 credit 才能繼續，沒有可兌現的 credit 時絕不重放伺服器端工具。每次實際嘗試分別記錄，並按各自的模型計價；回報零輸出的 refusal 不計費。最終回應保留最後一次嘗試的頂層 usage。
 
 ### Claude Code 額度續用模式
 
-兩個渠道開關都預設關閉：
+`claudecode` 渠道有兩個開關，決定訂閱額度用盡時的行為，預設都是 `false`。
 
-- `low_priority: true`：5 小時額度被拒絕後，接受服務端提供的低優先級提議；後續在同一會話中傳送
-  `anthropic-usage-limit: slow`，直到視窗重置或服務端終止該模式。週額度和獨立低優先級預算仍然適用。
-- `extended_usage: true`：未確認啟用付費額外用量時，為工具結果續輪傳送
-  `anthropic-usage-limit: extended`。是否提供寬限由服務端決定，不會重置訂閱額度。
+- `low_priority: true`：5 小時額度被拒絕後，接受伺服器端給出的低優先權方案。此後同一工作階段傳送 `anthropic-usage-limit: slow`，直到該視窗重設或伺服器端結束這個模式。週額度和單獨的低優先權額度仍然有效。
+- `extended_usage: true`：在未確認已開通付費額外用量時，為工具結果續輪傳送 `anthropic-usage-limit: extended`。是否給予寬限由伺服器端決定，訂閱額度不會因此重設。
 
-即使兩個開關關閉，用戶端明確攜帶的合法 `slow` 或 `extended` 也會保留，兩者互斥。
-CountTokens 和控制介面不傳送這個請求標頭。對其他用戶端，以工具結果訊息識別續輪；閘道器無法取得官方 CLI 內部的任務深度和實驗開關。
+即使兩個開關都關閉，用戶端自己傳送的 `slow` 或 `extended` 也會保留，兩者互斥。CountTokens 和控制類請求不帶這個請求頭。對 Claude Code 以外的用戶端，以工具結果訊息判斷續輪；官方 CLI 內部的任務深度和實驗開關，閘道拿不到。
 
-傳送 `slow` 時，GProxy 對 `429 slot_busy` 和過載回應先等待，再用相同憑證重試原始緩衝請求。與 CLI 2.1.302 一樣，預設間隔 20 秒、隨機浮動 30%，預設最多等待 20 分鐘；服務端提示被限制為每次 5–600 秒、總計 1–360 分鐘。主機截止時間和取消訊號可提前結束等待。預算耗盡、週額度耗盡或資格拒絕不走這套重試；成功回應串流、不可重放的請求體和不透明 fallback credit 兌換請求不會重放。
+傳送 `slow` 期間，GPROXY 遇到 `429 slot_busy` 和過載回應時會等待，然後在同一憑證上重試緩衝好的原始請求。與 CLI 2.1.302 一致，預設間隔 20 秒，隨機浮動 30%，預設最長等待 20 分鐘；伺服器端給出的提示值被限制在每次 5–600 秒、總計 1–360 分鐘之內。宿主的截止時間或取消訊號可以提前結束等待。預算耗盡、週額度耗盡和資格拒絕直接回傳，不做這種重試；已經開始的回應串流、無法重放的請求本文和不透明的 fallback credit 兌換請求都不會重放。
 
-額度視圖也記錄服務端報告的低優先級預算和寬限額度，但它們不攔截普通請求。顯式模式只對當前請求放行適用的已耗盡訂閱視窗；本地預算、模型專屬額度和上游失敗／限流冷卻繼續生效。
+額度檢視還會記錄伺服器端回報的低優先權額度和寬限額度，這些額度不會攔截一般請求。顯式模式只對當前請求放行它所適用的訂閱視窗；本機預算、模型專屬額度以及上游失敗或限流的冷卻仍然生效。
 
 ### Claude Code 用戶端身分
 
-`client_identity` 決定 `claudecode` 渠道以哪個官方用戶端的身分發送請求。兩者都是同一個 CLI
-二進位檔、同一個 OAuth 權杖：
+`client_identity` 決定 `claudecode` 渠道以哪個官方用戶端的身分發出請求。兩種身分都是同一個 CLI 二進位檔、同一個 OAuth 令牌。
 
-- `cli`（預設）：互動式 CLI，`claude-cli/2.1.316 (external, cli)`。用戶端自帶的合法 CLI
-  User-Agent 和計費區塊中的 `cc_entrypoint` 會保留。
-- `agent_sdk`：Claude Agent SDK 0.3.316，`claude-cli/2.1.316 (external, sdk-ts, agent-sdk/0.3.316)`。只保留用戶端自帶的 Agent SDK User-Agent（`sdk-ts`/`sdk-py` 且帶 `agent-sdk/…`），其他一律替換。計費區塊的 `cc_entrypoint` 跟隨 User-Agent，回合按 SDK 填寫（`cc_turn_origin=sdk`、`cc_prompt_index=0`）。
+- `cli`（預設）：互動式 CLI，`claude-cli/2.1.318 (external, cli)`。用戶端自帶的合法 CLI User-Agent 和計費區塊中的 `cc_entrypoint` 會保留。
+- `agent_sdk`：Claude Agent SDK 0.3.318，`claude-cli/2.1.318 (external, sdk-ts, agent-sdk/0.3.318)`。只保留用戶端自帶的 Agent SDK User-Agent（`sdk-ts` 或 `sdk-py` 且帶 `agent-sdk/…`），其他一律替換。計費區塊的 `cc_entrypoint` 跟隨 User-Agent，回合按 SDK 回合填寫（`cc_turn_origin=sdk`、`cc_prompt_index=0`）。
 
-`identity_system_block: true`（預設 `false`）會在計費區塊後放置與計費 `cc_entrypoint` 對應的身分 system 區塊：
-`cli` 為 `You are Claude Code, Anthropic's official CLI for Claude.`，`sdk-*` 為
-`You are a Claude agent, built on Anthropic's Claude Agent SDK.`（用戶端自帶的 SDK 身分，包括
-`running within the Claude Agent SDK` 變體，會保留）。另一類身分區塊會被改寫，用戶端沒發則插入。關閉時不改動用戶端的 system 區塊。
+`identity_system_block: true`（預設 `false`）會在計費區塊之後緊接著放入與計費 `cc_entrypoint` 對應的身分 system 區塊：`cli` 使用 `You are Claude Code, Anthropic's official CLI for Claude.`，`sdk-*` 使用 `You are a Claude agent, built on Anthropic's Claude Agent SDK.`。用戶端自帶的 SDK 身分（包括 `running within the Claude Agent SDK` 變體）會保留；另一類身分區塊會被改寫；用戶端沒有傳送時則插入一個。關閉此開關時，用戶端的 system 區塊原樣保留。
 
-計費校驗和（`cch`）、`cc_version` 後綴和 `metadata.user_id` 在兩種身分下計算方式相同。
+計費校驗和（`cch`）、`cc_version` 後綴和 `metadata.user_id` 在兩種身分下的計算方式相同。Anthropic 可能對訂閱下的 Agent SDK 流量與互動式使用分開計量，區分依據就是 entrypoint。
 
-Anthropic 可能對訂閱下的 Agent SDK 流量單獨計量，依據的正是 entrypoint。
+### 按操作覆寫 URL
 
-### 按操作覆蓋 URL
-
-`operation_endpoints` 對某個供應商的某個 `(操作, 方言, 传输)` 整體替換方法 URL。它
-**不是**一個再拼預設路徑的 base URL；渠道自己的路徑引數由那個方法解析：
+`operation_endpoints` 為某個供應商的某個 `(操作, 方言, 傳輸)` 整體替換方法 URL。URL 按原樣使用，不會在後面再拼接渠道的預設路徑；渠道自己的路徑參數由該方法解析：
 
 ```sh
 curl -s -X POST http://127.0.0.1:8787/admin/api/operation-endpoints \
@@ -146,183 +144,44 @@ curl -s -X POST http://127.0.0.1:8787/admin/api/operation-endpoints \
        "url":"https://elsewhere.example/v1/chat/completions"}'
 ```
 
-URL 裡的 `{model}` 會被替換成 upstream 模型名（按一個路徑段做百分號編碼），用於把模型寫在路徑裡的介面：
-`https://relay.example/v1beta/models/{model}:generateContent`。
+對於把模型名寫在路徑裡的介面，URL 中的 `{model}` 會被替換成上游模型名，並作為單一路徑段做百分號編碼，例如 `https://relay.example/v1beta/models/{model}:generateContent`。
 
-`operation_rules` 是另一半：對某個操作上渠道行為的按供應商覆蓋。渠道預設值留在程式碼裡，不會被拷進每個新建的供應商。
-`POST /admin/api/providers/{id}/routing-defaults/reset` 在一次提交裡把兩者都清掉。
+`operation_rules` 則按供應商覆寫渠道對某個操作的處理方式。渠道預設值保留在程式碼裡，不會複製到每個新建立的供應商中，所以沒有覆寫項的供應商會跟隨預設值的後續變化。`POST /admin/api/providers/{id}/routing-defaults/reset` 在一次提交中清除這兩類覆寫。
 
-## 一行憑證
+### Gemini Interactions
 
-| 欄位 | 含義 |
-| --- | --- |
-| `label` | 可選。登入建立時會從渠道和帳號推導一個。 |
-| `authKind` | `api_key`, `oauth`, `cookie` — 儲存的憑證類型，與取得方式無關。 |
-| `secret` | 該渠道宣告的欄位。從不返回；列表裡只有 `hasSecret`。 |
-| `organizationId` / `teamId` / `userId` | 歸屬。恰好一個，或都沒有（共享憑證）。 |
-| `connectionProfileId` | 覆蓋供應商的出站棧。 |
-| `expiresAtMs` | 金鑰該重新整理的時間。 |
-| `status` | `active` 或 `dead`。死掉的憑證退出計劃。 |
-| `version` | 重新整理寫回時所用的 CAS 守衛。 |
+`aistudio` 渠道支援兩種 Gemini 協定：`gemini`（GenerateContent）和 `gemini_interactions`（Interactions API）。兩者都對應 `generate_content` 和 `stream_generate_content` 操作，但 Interactions 有自己的請求格式、步驟事件和回應類型。
 
-金鑰用主金鑰以 AES-256-GCM 密封，而且**密封繫結到該行自己的 id**，所以一份密文被拷到另一行上打不開。讀回它是一次單獨的、被審計的呼叫：
+用戶端請求 `POST /v1beta/interactions` 或 `POST /v1/interactions`，前面可以加上供應商掛載前綴。設定 `stream: true` 即為原生 SSE。`GET /interactions/{id}`、`POST /interactions/{id}/cancel` 和 `DELETE /interactions/{id}` 使用相同的版本前綴；`stream`、`last_event_id` 等查詢參數會原樣轉送，用戶端可以據此讀取或續傳。Interaction 的 id 以及引用它的 `previous_interaction_id` 只對建立它的閘道呼叫方有效，並且一直使用建立時的那份憑證。`agent` 目標和模型名稱一樣經過路由與權限檢查，轉送給上游時保留 `agent` 欄位。
 
-```sh
-curl -s -X POST http://127.0.0.1:8787/admin/api/credentials/{id}/reveal \
-  -H "Authorization: Bearer $GPROXY_KEY"
-```
-
-沒有主金鑰時金鑰以**明文**存放。這是一種受支援的部署，二進位制在啟動時會說一次。
-
-### 誰能觸達它
-
-一把憑證對某個呼叫方可見，當它**無歸屬**，或者它的歸屬與呼叫方所用 key 的繫結一致——
-key 自己的使用者、團隊，或它的有效組織。
-
-是 *key 的*繫結而不是持有人的成員關係，因為一個使用者可以屬於兩個組織而一把 key 只屬於一個。如果由成員關係決定，一個多組織使用者的每把 key 都會觸達每個組織的訂閱，而且沒有一把
-key 能比它的持有人更窄。
-
-可見性只收窄憑證集合，從不擴大它。
-
-## 透過登入獲取憑證
-
-持有帳號而非 key 的渠道提供兩種流程中的一種或多種。
-`GET /admin/api/channels` 報告每個渠道的 `loginModes`，要一個它不提供的方式會被拒絕。
-
-| 流程 | 步驟 | 適用 |
-| --- | --- | --- |
-| 授權碼 | start → complete | 帶 PKCE 的瀏覽器跳轉 |
-| 裝置碼 | start → 反覆 poll | 在另一臺裝置上敲碼 |
-
-已有憑證透過 `POST /admin/api/credentials`（或批次介面）匯入，再透過 `POST /admin/api/credentials/{id}/refresh` 初始化。控制台儲存後自動重新整理待初始化的記錄；失敗後保留已儲存記錄，可在詳情中重試。Claude Web 使用 `authKind: "cookie"`；Claude Code 和 OrcaTerm 使用 `authKind: "oauth"`，也可提交 `secret: {"cookie": "..."}`。歷史類型標籤繼續相容讀取。初始化和重新整理將 secret、到期時間及可選公開 metadata 一起按版本 CAS 儲存，無需資料庫遷移或歷史回填。
-
-在控制台開啟供應商的憑證標籤，選擇“登入新增憑證”。瀏覽器授權使用完整回撥 URL 完成，裝置碼流程由頁面自動輪詢。四個 POST 操作位於 `/admin/api/credential-login`，待完成會話繫結發起使用者和管理範圍。參見[控制台管理](/zh-tw/guides/console#憑證與上游登入)。
-
-GPROXY 擁有一切不屬於上游的部分。**PKCE verifier** 是本地生成的 32 個隨機位元組，永不外發，只有它的 S256 摘要會到達授權 URL，因此被截獲的授權碼沒有它也沒用。**CSRF state** 本地生成、本地比對，不匹配不僅拒絕，還順手銷燬會話，重放因此沒有第二次機會。
-
-待完成的會話存在**共享 cache** 裡，不在本程序。這正是 A 實例開始的登入 B 實例能收尾的原因——負載均衡後面收尾的通常就是另一個實例——也是被放棄的登入不留痕跡的原因：key 自己過期，而過期的 key 與從未簽發過的 id 無從區分。
-
-**輪詢是呼叫方的事。** 一次裝置輪詢只走一步就返回，這裡既不 sleep 也不迴圈。應答帶著該等多久，上游的 `slow_down` 會改寫這個間隔並對之後每次輪詢生效。
-
-一次成功的登入就是一次普通的憑證插入，走管理寫入用的同一個提交原語。金鑰在語句構造
-**之前**就密封好，因此渠道與資料庫之間沒有任何東西見過明文，返回的只有憑證 id。
-
-### 重新整理
-
-持有 OAuth 令牌的渠道宣告金鑰何時到期，重新整理返回的是一份**完整替換**——絕不是合併。宿主以 `version` 上的 CAS 寫回併發出憑證變更通知。
-
-```sh
-curl -s -X POST 'http://127.0.0.1:8787/admin/api/credentials/{id}/refresh?force=true' \
-  -H "Authorization: Bearer $GPROXY_KEY"
-```
-
-上游*確定性*拒絕憑證（`invalid_grant`、已撤銷）會把它標記為死。短暫的傳輸失敗或 5xx
-絕不能：它必須以傳輸錯誤的形式浮現，好讓宿主稍後重試。
-
-這條路徑絕不能丟寫入。Claude 每次重新整理都輪換 refresh token，這正是寫回是帶版本守衛的 CAS
-而不是盡力而為更新的原因。
-
-## 健康、封禁與計劃
-
-解析直接去掉禁用、已退役和已死的憑證。**被封禁**的憑證——被上游限流的那種——在該供應商還有別的可用憑證時被去掉；若**全部**被封禁則保留該供應商並排在所有健康供應商之後。限流是最後手段，不是故障。
-
-```sh
-# 上游怎么说这把凭证的窗口
-curl -s http://127.0.0.1:8787/admin/api/credentials/{id}/quota -H "Authorization: Bearer $GPROXY_KEY"
-# 现在就问上游
-curl -s -X POST http://127.0.0.1:8787/admin/api/credentials/{id}/quota-probe -H "Authorization: Bearer $GPROXY_KEY"
-# 兑换一次重置额度（厂商卖这个的话）
-curl -s -X POST http://127.0.0.1:8787/admin/api/credentials/{id}/quota-reset -H "Authorization: Bearer $GPROXY_KEY"
-# 忘掉记录的健康状态
-curl -s -X POST http://127.0.0.1:8787/admin/api/credentials/{id}/health-reset -H "Authorization: Bearer $GPROXY_KEY"
-# 覆盖它的运维限额
-curl -s http://127.0.0.1:8787/admin/api/credentials/{id}/limits -H "Authorization: Bearer $GPROXY_KEY"
-```
-
-`POST …/status` 手動設為 `active` 或 `dead`，帶一個原因。
-
-## 連線配置
-
-一份連線配置就是一次呼叫走的出站棧：代理，以及它呈現的 TLS 與 HTTP/2 身份。選擇順序是憑證優先，然後供應商，然後渠道自己的預設，最後實例預設。
-
-內建六種身份預設，可直接存成一份連線配置的 `emulation`：
-
-```sh
-curl -s http://127.0.0.1:8787/admin/api/tls-presets -H "Authorization: Bearer $GPROXY_KEY"
-```
-
-```text
-claude / Claude CLI    codex / Codex CLI       gemini / Gemini CLI
-antigravity            kiro / Kiro CLI         copilot / GitHub Copilot CLI
-```
-
-只有 `wreq` 傳輸會呈現指紋。模擬 CLI 的渠道返回自己的預設；憑證或供應商上的顯式配置依然勝出。
-
-## 兩個探針
-
-這是本層唯一會離開程序的管理呼叫。
-
-**連通性**透過 scope 指定的那條 client 鏈，問 Cloudflare 的 trace 端點這套部署從外面看是什麼樣：
-
-```sh
-curl -s -X POST http://127.0.0.1:8787/admin/api/connectivity/test \
-  -H "Authorization: Bearer $GPROXY_KEY" -H 'content-type: application/json' \
-  -d '{"scope":"global"}'
-```
+Responses、Chat Completions 和 Claude Messages 都可以與 Interactions 直接互相轉換，不依賴保存的狀態。使用方式是在供應商的操作對應裡把目標協定設為 `gemini_interactions`，或者建立一個只支援 Interactions 的 `custom` 供應商：
 
 ```json
-{"ok":true,"latencyMs":803,"ip":"223.166.167.192","colo":"LAX","error":null}
+{ "channel": "custom", "baseUrl": "https://generativelanguage.googleapis.com",
+  "config": { "dialects": ["gemini_interactions"] } }
 ```
 
-scope 可以是 `global`、`{"scope":"provider","provider_id":"…"}`、
-`{"scope":"credential","credential_id":"…"}`——它的呼叫所用的那條傳輸——或
-`{"scope":"proxy","url":"…"}`，用來測一個還沒配置到任何地方的代理。
-**網路失敗是 `ok: false` 加一個原因，不是錯誤**："上游不可達"正是問題要的答案。
+轉換涵蓋函式呼叫與結果、帶簽章的思考歷史、內嵌圖片，以及文字和 JSON 輸出 schema。Interactions 的步驟簽章與 GenerateContent 的簽章分開保存。無法轉換的選用欄位會記入轉換診斷。檔案 id 需要事先換成內嵌資料或 URL。
 
-**模型測試與發現**像呼叫方的請求一樣走完引擎：
+以下功能需要原生支援 Interactions 的上游：agent、背景執行、續接保存在其他協定中的對話，以及明確的 `store: true`。把 Interactions 用戶端轉換到其他協定的上游時，請送出完整歷史並設定 `store: false`；這時取得的回應 id 並不對應上游保存的 Interaction。
 
-```sh
-curl -s -X POST http://127.0.0.1:8787/admin/api/models/test \
-  -H "Authorization: Bearer $GPROXY_KEY" -H 'content-type: application/json' \
-  -d '{"providerId":"…","model":"gpt-4o-mini"}'
+原生串流是增量回傳的。跨協定的串流請求會先從上游收齊完整結果，再依用戶端協定重新產生事件，因此不會縮短第一個 token 的等待時間。輪詢和續傳讀取不會重複計費累計用量；建立回應中沒有用量資訊的背景工作，閘道不會回報其用量。
 
-curl -s -X POST http://127.0.0.1:8787/admin/api/models/discover \
-  -H "Authorization: Bearer $GPROXY_KEY" -H 'content-type: application/json' \
-  -d '{"providerId":"…"}'
-```
+### GLM
 
-它們**花的是真憑證、消耗真上游配額、對該憑證適用的任何預算真結算，並寫一行用量**。沒有 dry run：一個沒有真正呼叫上游的測試什麼也沒測到。
+`glm` 使用按量計費 API，`glmcode` 使用 GLM Coding Plan，兩者都填寫 `api_key` 憑證。預設位址是中國大陸的 `https://open.bigmodel.cn`；國際帳號把 `baseUrl` 設為 `https://api.z.ai`。`glmcode` 使用 Coding Plan 專用的 Chat、Claude Messages 和 Responses 入口，額度用盡後不會改用一般付費 API。
 
-發現用供應商自己的方言提問，因此名字就是上游的。每一個回來時都帶著"這個供應商是否已有這一行"和"內建目錄能不能給它定價"；
-`POST /admin/api/models/discover/apply` 插入你點名的那些，已有的跳過。
+兩個渠道的模型列表都取自 ZCode 官方動態目錄：先請求 `/api/v1/client/configs`，下載回傳的 `builtin_provider_config_json`，再選取對應地區的一般 API 或 Coding Plan 範本。沒有內建的固定模型名單，下載失敗時也不會退回舊名單。這份目錄是官方的產品列表，不代表某個 Key 對其中每個模型都有權限。
 
-## 搬運一份配置
+`glmcode` 透過 `/api/monitor/usage/quota/limit` 讀取伺服器端回報的用量百分比、各個獨立視窗及其重設時間。一般 `glm` 尚未接入帳戶餘額查詢。
 
-```sh
-gproxy export --out config.json --include-secrets
-gproxy import --in  config.json --mode merge --source-master-key '…'
-```
+### MiniMax
 
-會走的是一套部署*本身*的配置：連線配置、供應商、憑證、模型目錄、路由、操作覆蓋、改寫規則、配額、價格和 settings 行。**身份不走**——使用者、key、組織、團隊、權限和訂閱屬於產品層——用量和 capture 也不走，因為複製它們等於偽造目的端從未有過的歷史。主金鑰規則見
-[配置](/zh-tw/reference/configuration#搬運一份配置)。
+`minimax` 預設位址為 `https://api.minimax.io`；中國大陸平台的帳號按平台文件填寫對應的 API 位址。OpenAI Chat 和 Claude Messages 均可使用 Subscription Key（Coding Plan / Token Plan）或按量計費 API Key，都填入 `api_key`。模型列表和模型詳情使用官方的 `/v1/models` 與 `/v1/models/{id}`。兩類 Key 可以放在不同的供應商中，分別為訂閱文字和付費影片設定路由。
 
-## 請求頭白名單
+額度查詢沿用官方 CLI 的做法，按 Key 類型讀取 `/v1/token_plan/remains` 或 `/account/query_balance`。這些讀數（以及 `glmcode` 的讀數）目前只用於顯示，憑證是否耗盡仍以上游的請求結果為準。
 
-在“設定 → 網路”配置全域性請求頭白名單，每個供應商透過 `config.allowed_headers`
-補充允許項。最終集合為 **全域性白名單 ∪ 供應商白名單 ∪ 渠道預設頭**，並保留
-`content-type`。未配置或空列表不增加允許項，其他用戶端頭預設丟棄。原始鑑權頭和逐跳頭即使列入名單也會移除；渠道注入的鑑權和靜態 `headers` 配置獨立於此規則。配置熱更新後生效，不會把合併結果寫回供應商儲存的列表。
-
-### GLM 與 MiniMax
-
-`glm` 使用按量 API，`glmcode` 使用 GLM Coding Plan，兩者都填 `api_key`。預設地址是國內 `https://open.bigmodel.cn`；國際帳號將 `baseUrl` 設為 `https://api.z.ai`。`glmcode` 支援官方 Chat、Claude Messages 和 Responses 訂閱入口，不會在額度耗盡後切換到普通 API。
-
-兩個渠道的模型列表均沿用 ZCode 官方動態目錄：查詢 `/api/v1/client/configs`，下載返回的 `builtin_provider_config_json`，再選擇對應地區的普通 API 或 Coding Plan 模板。沒有內建固定模型名單，也不在下載失敗時回退到舊名單。目錄是官方產品列表，不代表該 Key 對每個模型都有權限。
-
-`minimax` 預設地址為 `https://api.minimax.io`；國內帳號按其平台文件填寫國內 API origin。文字支援 OpenAI Chat 和 Claude Messages，Subscription Key（Coding Plan／Token Plan）與按量 API Key 都填入 `api_key`。模型列表和詳情使用官方 `/v1/models` 與 `/v1/models/{id}`。兩類 Key 可以放在不同供應商中，分別配置文字與影片模型路由。
-
-額度查詢：`glmcode` 讀取官方 `/api/monitor/usage/quota/limit`，顯示服務端提供的用量百分比、獨立視窗和重置時間；普通 `glm` 尚未接入帳戶餘額查詢。MiniMax 按官方 CLI 的 Key 型別判斷讀取 `/v1/token_plan/remains` 或 `/account/query_balance`。當前這些查詢結果用於展示，是否耗盡仍由上游請求結果判定。
-
-MiniMax 影片接入 **H3 V2**（`MiniMax-H3`、`MiniMax-H3-Max`），需要按量 API Key。使用 GPROXY 的 OpenAI 影片擴充套件 JSON：
+影片支援 H3 V2（`MiniMax-H3`、`MiniMax-H3-Max`），需要按量計費 API Key。向 `/v1/videos` 提交 GPROXY 的 OpenAI 影片擴充 JSON：
 
 ```json
 {
@@ -334,8 +193,199 @@ MiniMax 影片接入 **H3 V2**（`MiniMax-H3`、`MiniMax-H3-Max`），需要按�
 }
 ```
 
-向 `/v1/videos` 提交後，使用返回的 `id` 查詢 `/v1/videos/{id}`，完成後從 `/v1/videos/{id}/content` 下載。支援 `frame_images` 首尾幀及 `input_references` 影象、影片、音訊參考，也可傳 MiniMax 原生 `content`。不支援 Sora multipart、`seconds` 或 `size` 引數；舊版 Hailuo 2.x V1 介面不在本渠道覆蓋範圍內。
+用回傳的 `id` 查詢 `/v1/videos/{id}`，完成後從 `/v1/videos/{id}/content` 下載。`frame_images` 用於指定首尾影格，`input_references` 用於提供影像、影片和音訊參考；也可以直接傳 MiniMax 原生的 `content`。不支援 Sora multipart、`seconds` 和 `size` 參數，也不支援舊版 Hailuo 2.x V1 介面。
 
-列表使用 `page_num`／`page_size`（`limit` 會對映成 `page_size`），不支援遊標 `after`／`order`。刪除介面保留上游的 `action`：`cancelled` 表示取消待執行任務，`deleted` 才表示刪除任務記錄。渠道不會自動輪詢，也不會儲存影片檔案。
+列表使用 `page_num` 和 `page_size`（`limit` 對應到 `page_size`），不支援 `after`、`order` 游標。刪除介面回傳上游的 `action`：`cancelled` 表示取消了排隊中的任務，`deleted` 表示刪除了任務記錄。渠道不會自動輪詢，也不儲存影片檔案。
 
-介面依據：[ZCode 動態目錄實現](https://github.com/zai-org/ZCode/blob/29628c9acdb81b703bbd4080c207a0e7ce5e276e/packages/provider-node/src/zcode-builtin-download.ts)、[MiniMax 官方 CLI](https://github.com/MiniMax-AI/cli)、[GLM Coding Plan](https://docs.bigmodel.cn/cn/coding-plan/tool/others)、[MiniMax 文字](https://platform.minimax.io/docs/api-reference/text-anthropic-api)、[MiniMax H3 V2](https://platform.minimax.io/docs/api-reference/video-generation-v2-create)。
+介面依據：[ZCode 動態目錄實作](https://github.com/zai-org/ZCode/blob/29628c9acdb81b703bbd4080c207a0e7ce5e276e/packages/provider-node/src/zcode-builtin-download.ts)、[MiniMax 官方 CLI](https://github.com/MiniMax-AI/cli)、[GLM Coding Plan](https://docs.bigmodel.cn/cn/coding-plan/tool/others)、[MiniMax 文字](https://platform.minimax.io/docs/api-reference/text-anthropic-api)、[MiniMax H3 V2](https://platform.minimax.io/docs/api-reference/video-generation-v2-create)。
+
+### OrcaTerm
+
+`orcaterm` 使用桌面端的 LightAI 協定，支援圖文對話和模型專屬的思考參數。建立供應商後，透過瀏覽器 OAuth 登入或匯入 OAuth 憑證。國際站設定 `international=true`，帳號位址為 `https://orcaterm.ai`，LightAI 位址為 `https://lightai.tencentcloud.com`。
+
+圖片以 Base64 data URL 傳送（PNG、JPEG、WebP 或 GIF），歷史訊息中的圖片和只含圖片的使用者訊息都支援。過大的靜態圖片在上傳前自動縮放和壓縮；同一張圖片在預覽連結有效期內重複使用該憑證下已有的上傳結果。可用模型和思考檔位來自動態模型目錄。上游不支援的請求選項會被忽略。token 數量是本機按字元估算的，在計量中標記為估算值和不完整用量；帳號額度回傳的是 AI 問答次數。
+
+GPROXY 能辨識的用戶端終端機、檔案和網頁擷取工具會對應到 OrcaTerm 原生的 review/reportToolResult 協定，每次呼叫仍由原用戶端按自己的權限規則執行。工具續輪使用同一個供應商、憑證和模型；不支援註冊任意函式。正文和工具參數在 Agent 完成回應修訂後才輸出。Codex 的獨立網路請求使用 OrcaTerm 伺服器端的搜尋和擷取工具，回傳的是真實結果。
+
+### 火山方舟
+
+`volcengine_agent`（Agent Plan）和 `volcengine_coding`（Coding Plan）共用一套實作，分別走各自產品的路徑（`/api/plan` 和 `/api/coding`），不會退回按量計費的 `/api/v3` 介面。Agent Plan 需要其專用 API Key；Coding Plan 個人版使用已開通 Coding Plan 的平台 API Key，企業版使用席位專用 API Key。
+
+只做推論時，憑證只需要 `{"api_key"}`。模型探索、額度和方案資訊還需要在同一份 secret 中填寫 IAM 金鑰對（`access_key_id`、`secret_access_key`，臨時憑證可加 `session_token`）。金鑰對只送往控制面，API Key 只送往推論介面。沒有金鑰對時，推論照常可用，模型需手動設定。
+
+`config.edition` 取 `personal`（預設）或 `enterprise`；企業版額度需要在憑證 metadata 中設定 `seat_id`。各個來源位址可以覆寫：供應商的 base URL（預設 `https://ark.cn-beijing.volces.com`）、`config.control_base_url`（預設 `https://ark.cn-beijing.volcengineapi.com`），以及 Agent Plan 語音使用的 `config.speech_base_url`（預設 `https://openspeech.bytedance.com`）。帳號在上游開通了後付費用量時，Agent 憑證可以在 metadata 中設定 `allow_paid_usage: true`，讓訂閱視窗用盡後繼續路由到該憑證。
+
+## 憑證
+
+憑證是供應商憑證池中的一份密鑰：API key、一組 OAuth 令牌或一個瀏覽器工作階段。在控制台中開啟供應商，進入 **憑證** 分頁管理；透過 API 時，`POST /admin/api/credentials` 建立一條，批次介面可一次建立多條。
+
+| 欄位 | 含義 |
+| --- | --- |
+| `label` | 選填。透過登入建立時，根據渠道和帳號自動產生。 |
+| `authKind` | `api_key`、`oauth` 或 `cookie`，表示儲存的憑證類型，與取得方式無關。 |
+| `secret` | 渠道宣告的欄位。永遠不會回傳；列表中只顯示 `hasSecret`。 |
+| `organizationId` / `teamId` / `userId` | 歸屬者：三者恰好填一個，或都不填（共享憑證）。 |
+| `connectionProfileId` | 覆寫供應商的連線設定。 |
+| `expiresAtMs` | 密鑰需要重新整理的時間。 |
+| `status` | `active` 或 `dead`。`dead` 的憑證不再被使用。 |
+| `version` | 重新整理寫回時使用的 CAS 版本號。 |
+
+密鑰用主金鑰以 AES-256-GCM 加密封裝，並且封裝與該行自己的 id 綁定，所以把密文複製到另一行上是解不開的。讀取明文需要單獨呼叫，並會記入稽核：
+
+```sh
+curl -s -X POST http://127.0.0.1:8787/admin/api/credentials/{id}/reveal \
+  -H "Authorization: Bearer $GPROXY_KEY"
+```
+
+沒有設定主金鑰時，密鑰以明文儲存。這是受支援的部署方式，程式會在啟動時提示一次。
+
+### 憑證可見性
+
+憑證在以下情況對呼叫方可見：憑證沒有歸屬者，或者歸屬者與呼叫方所用 key 的綁定一致，即該 key 的使用者、團隊或有效組織。
+
+判斷依據是 key 的綁定，而不是使用者的成員關係，因為一個使用者可以屬於兩個組織，而一把 key 只屬於一個。如果按成員關係判斷，多組織使用者的每一把 key 都能用到所有這些組織的訂閱，也就不可能有比持有人權限更窄的 key。
+
+可見性只會從可用憑證中排除一部分，不會增加憑證。
+
+## 透過登入取得憑證
+
+持有帳號而不是 key 的渠道，可以透過登入上游來建立憑證。
+
+1. 開啟供應商的 **憑證** 分頁，選擇 **登入新增憑證**。
+2. 瀏覽器授權（授權碼）方式：開啟授權連結並登入，然後把瀏覽器網址列中完整的回呼 URL 貼回對話框。
+3. 裝置碼方式：在廠商頁面輸入顯示的驗證碼，控制台會自動輪詢，直到登入完成。
+
+完成後新憑證會出現在列表中。另見[控制台管理](/zh-tw/guides/console#憑證與上游登入)。
+
+每個渠道提供下面一種或兩種流程，在 `GET /admin/api/channels` 中以 `loginModes` 列出。請求渠道未提供的方式會被拒絕。
+
+| 流程 | 步驟 | 適用情境 |
+| --- | --- | --- |
+| 授權碼 | start → complete | 帶 PKCE 的瀏覽器跳轉 |
+| 裝置碼 | start → 反覆 poll | 在另一台裝置上輸入驗證碼 |
+
+四個 POST 操作位於 `/admin/api/credential-login` 下。待完成的登入工作階段與發起它的使用者及其管理範圍綁定。
+
+### 匯入既有憑證
+
+已經有令牌或 cookie 時，用 `POST /admin/api/credentials`（或批次介面）匯入，再呼叫 `POST /admin/api/credentials/{id}/refresh` 完成初始化。控制台儲存後會自動重新整理待初始化的記錄；初始化失敗時已儲存的記錄仍然保留，可以在詳情中重試。Claude Web 使用 `authKind: "cookie"`；Claude Code 和 OrcaTerm 使用 `authKind: "oauth"`，以 `secret: {"cookie": "..."}` 形式匯入時也一樣。舊的類型標籤仍可讀取。初始化和重新整理會把 secret、到期時間和選填的公開 metadata 一起按版本號 CAS 儲存，不需要資料庫遷移或歷史資料回填。
+
+### 登入的安全措施
+
+凡是不屬於上游的環節都由 GPROXY 自己產生和校驗。PKCE verifier 是本機產生的 32 個隨機位元組，從不外傳，只有它的 S256 摘要會寫進授權 URL，因此授權碼即使被截取也無法使用。CSRF state 同樣在本機產生和比對；state 不符時請求被拒絕，同時銷毀該登入工作階段，攻擊者無法反覆重放直到成功。
+
+待完成的工作階段儲存在共享快取中，而不是行程記憶體裡。因此一個實例發起的登入可以由另一個實例完成（在負載平衡後面這是常態）；放棄的登入也不會留下任何東西：快取鍵到期後，與從未簽發過的 id 沒有差別。
+
+裝置碼輪詢每次只執行一步就回傳，伺服器端不會休眠或迴圈，輪詢由呼叫方負責。每次回應都帶有下次輪詢前應等待的間隔，上游回傳 `slow_down` 時會調大這個間隔，並對之後的所有輪詢生效。
+
+登入成功後，憑證的寫入與一般管理寫入走同一條提交路徑。密鑰在建構 SQL 陳述式之前就已加密封裝，渠道到資料庫之間的任何環節都看不到明文，回應中也只有新憑證的 id。
+
+### 重新整理憑證
+
+持有 OAuth 令牌的渠道會宣告密鑰何時到期。重新整理回傳一份完整的新密鑰，而不是需要合併的部分更新。宿主以 `version` 做 CAS 寫回，並發布憑證變更通知。手動重新整理：
+
+```sh
+curl -s -X POST 'http://127.0.0.1:8787/admin/api/credentials/{id}/refresh?force=true' \
+  -H "Authorization: Bearer $GPROXY_KEY"
+```
+
+上游明確拒絕憑證時（`invalid_grant`、令牌已撤銷），憑證被標記為 `dead`。暫時的傳輸錯誤或 5xx 不會讓憑證失效，只作為傳輸錯誤回報，宿主稍後重試。
+
+使用版本號校驗是因為 Claude 每次重新整理都會輪換 refresh token。如果兩次重新整理並行而遺失了其中一次寫入，資料庫裡儲存的 refresh token 就已經失效了。
+
+## 憑證健康與額度視窗
+
+解析請求時，已停用、已退役和 `dead` 的憑證直接排除。被上游限流的憑證處於封鎖狀態：只要該供應商還有未封鎖的憑證，它就被排除；如果供應商的憑證全部被封鎖，則保留這些憑證，但該供應商排在所有健康供應商之後，只在沒有其他選擇時才會被使用。
+
+管理 API 可以按憑證查詢和重設這些狀態：
+
+```sh
+# 檢視上游記錄的這份憑證的額度視窗
+curl -s http://127.0.0.1:8787/admin/api/credentials/{id}/quota -H "Authorization: Bearer $GPROXY_KEY"
+# 立即向上游查詢
+curl -s -X POST http://127.0.0.1:8787/admin/api/credentials/{id}/quota-probe -H "Authorization: Bearer $GPROXY_KEY"
+# 兌換一次額度重置（僅限提供此服務的廠商）
+curl -s -X POST http://127.0.0.1:8787/admin/api/credentials/{id}/quota-reset -H "Authorization: Bearer $GPROXY_KEY"
+# 清除已記錄的健康狀態
+curl -s -X POST http://127.0.0.1:8787/admin/api/credentials/{id}/health-reset -H "Authorization: Bearer $GPROXY_KEY"
+# 檢視適用於這份憑證的維運限額
+curl -s http://127.0.0.1:8787/admin/api/credentials/{id}/limits -H "Authorization: Bearer $GPROXY_KEY"
+```
+
+`POST /admin/api/credentials/{id}/status` 可以手動設為 `active` 或 `dead`，需附上原因。
+
+## 連線設定
+
+連線設定是一次呼叫使用的對外連線堆疊：代理，以及對外呈現的 TLS 和 HTTP/2 指紋。選擇順序依次是憑證、供應商、渠道自己的預設值，最後是實例預設值。
+
+身分預設集可以直接儲存為連線設定的 `emulation`：
+
+```sh
+curl -s http://127.0.0.1:8787/admin/api/tls-presets -H "Authorization: Bearer $GPROXY_KEY"
+```
+
+其中六個預設集模擬廠商 CLI：
+
+```text
+claude / Claude CLI    codex / Codex CLI       gemini / Gemini CLI
+antigravity            kiro / Kiro CLI         copilot / GitHub Copilot CLI
+```
+
+列表中還包含模擬函式庫自帶的每個瀏覽器和 HTTP 用戶端指紋（Chrome、Edge、Firefox、Safari、Opera、OkHttp），id 形如 `wreq:{profile}`。
+
+只有 `wreq` 傳輸會呈現模擬指紋。模擬 CLI 的渠道會提供自己的預設連線設定；憑證或供應商上明確指定的設定仍然優先。
+
+## 測試供應商
+
+管理呼叫中只有兩類會存取行程外部：連通性測試，以及模型測試與探索。
+
+### 連通性測試
+
+連通性測試經由 scope 指定的用戶端鏈路存取 Cloudflare 的 trace 端點，查看本部署從外部看起來是什麼樣子：
+
+```sh
+curl -s -X POST http://127.0.0.1:8787/admin/api/connectivity/test \
+  -H "Authorization: Bearer $GPROXY_KEY" -H 'content-type: application/json' \
+  -d '{"scope":"global"}'
+```
+
+```json
+{"ok":true,"latencyMs":803,"ip":"223.166.167.192","colo":"LAX","error":null}
+```
+
+scope 可以是 `global`、`{"scope":"provider","provider_id":"…"}`、`{"scope":"credential","credential_id":"…"}`（與該憑證的呼叫使用同一條傳輸），或 `{"scope":"proxy","url":"…"}`，用於測試尚未設定到任何地方的代理。網路不通時回傳 `ok: false` 和原因，而不是 HTTP 錯誤，因為「上游無法連線」本身就是測試的有效結果。
+
+### 模型測試與探索
+
+模型測試和模型探索與呼叫方的請求一樣完整地經過引擎：
+
+```sh
+curl -s -X POST http://127.0.0.1:8787/admin/api/models/test \
+  -H "Authorization: Bearer $GPROXY_KEY" -H 'content-type: application/json' \
+  -d '{"providerId":"…","model":"gpt-4o-mini"}'
+
+curl -s -X POST http://127.0.0.1:8787/admin/api/models/discover \
+  -H "Authorization: Bearer $GPROXY_KEY" -H 'content-type: application/json' \
+  -d '{"providerId":"…"}'
+```
+
+<Warning>
+這兩個呼叫使用真實憑證：會消耗上游額度，計入該憑證適用的預算，並寫入一條用量記錄。沒有 dry run 模式，因為不真正呼叫上游的測試什麼也測不出來。
+</Warning>
+
+模型探索使用供應商自己的協定查詢，所以回傳的是上游的模型名。每個結果都會標明該供應商是否已有這個模型，以及內建目錄能否為它定價。`POST /admin/api/models/discover/apply` 插入你選中的模型，已存在的會略過。
+
+## 請求頭白名單
+
+預設情況下，用戶端的請求頭不會轉發給上游。全域請求頭白名單在「設定 → 網路」中設定，每個供應商還可以透過 `config.allowed_headers` 追加。最終生效的集合是全域白名單、供應商白名單和渠道預設頭的聯集，另外始終保留 `content-type`。未設定或為空的列表不增加任何項目。
+
+原始鑑權頭和逐跳頭即使列入白名單也會被移除。渠道注入的鑑權資訊和 `config` 中的靜態 `headers` 不受此規則影響。修改在下一次設定重新載入時生效，合併結果不會寫回供應商儲存的列表。
+
+## 遷移設定
+
+```sh
+gproxy export --out config.json --include-secrets
+gproxy import --in  config.json --mode merge --source-master-key '…'
+```
+
+匯出內容是部署本身的設定：連線設定、供應商、憑證、模型目錄、路由、操作覆寫、改寫規則、配額、價格和 settings 行。身分資料不匯出（使用者、key、組織、團隊、權限和訂閱屬於產品層），用量和 capture 也不匯出，否則目標實例上會出現它從未產生過的歷史。主金鑰相關規則見[設定](/zh-tw/reference/configuration#匯出與匯入設定)。

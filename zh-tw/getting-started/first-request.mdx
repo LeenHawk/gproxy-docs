@@ -1,15 +1,19 @@
 ---
 title: "傳送第一個請求"
-description: "使用 OpenAI、Claude 和 Gemini API 呼叫閘道器，啟用串流回應並排查常見錯誤。"
+description: "使用 OpenAI、Claude 和 Gemini API 呼叫閘道，啟用串流回應並排查常見錯誤。"
 ---
 
-完成[快速開始](/zh-tw/getting-started/quick-start)後，應該已有名為 `fast` 的模型路由和一把閘道器 API Key。下面的例子使用預設地址；修改過連接埠時請一起調整。
+本頁示範如何用各種協定呼叫 GPROXY（包括串流回應），並列出常見錯誤碼的意義。前提是已經完成[快速開始](/zh-tw/getting-started/quick-start)，有一個名為 `fast` 的模型路由和一把閘道 API Key。範例使用預設位址 `http://127.0.0.1:8787`，改過連接埠時請自行調整。
 
 ```sh
 export GPROXY_KEY='your-gproxy-api-key'
 ```
 
-閘道器接受 `Authorization: Bearer <key>`、`x-api-key` 和 `x-goog-api-key`。請使用閘道器簽發的金鑰，不要填上游憑證。
+## 傳遞金鑰
+
+GPROXY 從 `Authorization: Bearer <key>`、`x-api-key` 或 `x-goog-api-key` 讀取閘道金鑰，各協定慣用的請求標頭都可以使用。同時帶有多個時，依序優先使用 `Authorization`、`x-api-key`、`x-goog-api-key`。CLI 與容器部署也接受 Gemini 風格的 `?key=` 查詢參數，但請求標頭一律優先。
+
+這裡只能填入閘道簽發的金鑰。上游憑證儲存在供應商中，閘道不會接受。
 
 ## OpenAI Chat Completions
 
@@ -42,6 +46,8 @@ curl -sS http://127.0.0.1:8787/v1/messages \
 
 ## Gemini GenerateContent
 
+Gemini 的模型名稱寫在路徑中，而不是請求本文裡：
+
 ```sh
 curl -sS "http://127.0.0.1:8787/v1beta/models/fast:generateContent" \
   -H "x-goog-api-key: $GPROXY_KEY" \
@@ -51,6 +57,8 @@ curl -sS "http://127.0.0.1:8787/v1beta/models/fast:generateContent" \
 
 ## 串流回應
 
+OpenAI 和 Claude 協定在請求本文中設定 `"stream":true`。curl 需要加上 `-N`，事件一到就立即輸出，不做緩衝：
+
 ```sh
 curl -sSN http://127.0.0.1:8787/v1/chat/completions \
   -H "Authorization: Bearer $GPROXY_KEY" \
@@ -59,7 +67,7 @@ curl -sSN http://127.0.0.1:8787/v1/chat/completions \
        "messages":[{"role":"user","content":"Count to three."}]}'
 ```
 
-## Gemini 串流回應
+Gemini 使用獨立的 `streamGenerateContent` 方法，加上 `alt=sse` 以 SSE 格式回傳：
 
 ```sh
 curl -sSN "http://127.0.0.1:8787/v1beta/models/fast:streamGenerateContent?alt=sse" \
@@ -68,22 +76,30 @@ curl -sSN "http://127.0.0.1:8787/v1beta/models/fast:streamGenerateContent?alt=ss
   -d '{"contents":[{"parts":[{"text":"Count to three."}]}]}'
 ```
 
-返回格式與用戶端請求的協議一致。能否呼叫成功取決於路由成員、上游能力與轉換支援；某個上游不能執行的操作，不會因為更換介面路徑而自動獲得支援。
+## 協定的選擇
 
-## 模型列表
+上面所有範例都能呼叫同一個 `fast` 路由，與上游實際使用的協定無關。GPROXY 依用戶端請求的協定回傳回應，並在中間負責和上游格式之間的轉換。
 
-控制台中的模型目錄是配置閘道器模型名的入口。透過 API 查詢呼叫方可見的閘道器目錄：
+轉換不會增加功能。請求能否成功，仍取決於路由成員、上游支援的能力，以及這兩種協定之間的轉換是否受支援。上游沒有的功能，換一個端點呼叫也不會出現。
+
+## 模型清單
+
+控制台的模型目錄列出已設定的閘道模型名稱。透過 API 查詢目前呼叫方可見的目錄：
 
 ```sh
 curl -sS http://127.0.0.1:8787/portal/api/models \
   -H "Authorization: Bearer $GPROXY_KEY"
 ```
 
-目錄中的 `permitted` 表示當前呼叫方是否有權限。`GET /v1/models` 轉發的是所選上游的模型列表，與閘道器目錄不同。Application 不在 HTTP 連接埠開放 `/portal/api`，請在應用內檢視目錄。
+每個項目的 `permitted` 欄位表示目前呼叫方能否使用。Application 不在 HTTP 連接埠提供 `/portal/api`，請在應用程式內查看目錄。
 
-## 指定供應商或名稱空間
+`GET /v1/models` 則不同，它轉送的是所選上游的模型清單，而不是閘道目錄。
 
-| 地址 | 請求中的模型名 | 目標 |
+## 指定供應商或命名空間
+
+位址前綴和模型名稱共同決定目標：
+
+| 位址 | 請求中的模型名稱 | 目標 |
 | --- | --- | --- |
 | `/v1/chat/completions` | `fast` | 名為 `fast` 的路由 |
 | `/openai-main/v1/chat/completions` | 上游模型 ID | `openai-main` 供應商 |
@@ -93,13 +109,13 @@ curl -sS http://127.0.0.1:8787/portal/api/models \
 
 ## 常見錯誤
 
-| 狀態碼 | 含義 |
+| 狀態碼 | 意義 |
 | --- | --- |
-| `400` | 引數格式或配置值無效 |
-| `401` | 金鑰缺失、無效、停用或過期 |
+| `400` | 參數格式或設定值無效 |
+| `401` | 金鑰缺少、無效、已停用或已過期 |
 | `403` | 權限或 OAuth 授權範圍不足 |
 | `404` | 模型、路由或資源不存在 |
-| `429` | 請求受到限流或限額約束 |
-| `5xx` | 閘道器或上游呼叫失敗，需結合日誌檢查 |
+| `429` | 請求受到限流或額度限制 |
+| `5xx` | 閘道或上游呼叫失敗，需搭配日誌檢查 |
 
-請求完成後可在控制台檢視用量與請求記錄。正文是否儲存取決於日誌設定，詳見[用量、日誌與審計](/zh-tw/guides/observability)。
+每次請求都會出現在控制台的用量和請求記錄中。請求和回應本文是否儲存取決於日誌設定，詳見[用量、日誌與稽核](/zh-tw/guides/observability)。

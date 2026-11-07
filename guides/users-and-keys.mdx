@@ -6,15 +6,17 @@ sidebarTitle: "Users & API Keys"
 
 import { VideoTutorial } from "/snippets/video-tutorial.jsx";
 
-Users and API keys video tutorial.
+This page covers the accounts that use GPROXY and the gateway API keys they call models with: the first administrator, users, organizations and teams, and how keys are created, sent, rotated and revoked.
 
 <VideoTutorial topic="users" locale="en" title="Users and API keys video tutorial" />
 
-Use a username and password to sign in to the console, and a gateway API key to call models. Upstream credentials belong to providers and cannot sign you in to GPROXY.
+GPROXY has two kinds of sign-in. People sign in to the console with a username and password. Clients call models with a gateway API key. Upstream credentials belong to providers; they are used only towards the upstream and cannot sign anyone in to GPROXY.
 
-## First administrator
+## The first administrator
 
-Application creates the administrator in its first-run wizard. The CLI creates an administrator on an empty instance and prints a generated password and API key. You may supply initial values instead:
+Application creates the administrator in its first-run wizard.
+
+The CLI creates an administrator when it starts on an empty instance and prints the generated password and API key. To choose them yourself, set these variables before the first start:
 
 ```sh
 export GPROXY_ADMIN_USER='admin'
@@ -23,50 +25,42 @@ export GPROXY_BOOTSTRAP_ADMIN_API_KEY='your-initial-gateway-key'
 ./gproxy serve
 ```
 
-On a new instance, the password and key are generated if omitted. **An explicit `GPROXY_ADMIN_PASSWORD` also updates a same-name user’s password, or recovers and renames administrator `0` if no name matches on restart; the API key option is first-run only.** `GPROXY_BOOTSTRAP_CHANNELS` no longer creates providers; add providers in the console.
+Any of the password and key variables can be left out on a new instance; the missing values are generated. `GPROXY_BOOTSTRAP_ADMIN_API_KEY` is read only on first initialization.
 
-CLI / container users sign in at `/console/`. Personal and management pages share the `gproxy_session` HTTP session cookie, whose lifetime is configured by `session_ttl_secs`. Application uses its in-app console.
+<Warning>
+`GPROXY_ADMIN_PASSWORD` is applied on every start, not only the first. If a user named `GPROXY_ADMIN_USER` exists, its password is set to this value. If no user has that name, the built-in administrator `0` is recovered: it is renamed, re-enabled with the `admin` role, given this password, and its existing console sessions are ended. Remove the variable once you no longer need it, or a restart will undo a password change made in the console.
+</Warning>
 
-## Users, organizations, and teams
+Providers are added in the console. The old `GPROXY_BOOTSTRAP_CHANNELS` variable no longer creates them.
 
-Instance administrators create users under access control. A user's role is `admin` or `user`. A user without a password cannot sign in, but may use issued API keys with the appropriate permissions.
+CLI and container users sign in at `/console/`. The personal and management pages share one session, kept in the `gproxy_session` HTTP cookie; its lifetime is set by `session_ttl_secs`. Application uses its in-app console instead.
 
-Organization and team memberships assign users and scoped management roles. An API key may be bound to an organization or team; this binding determines credential visibility and applicable budgets. Request headers cannot override the binding.
+## Users, organizations and teams
 
-Organization and team administrators manage only the features available in their scope. They are not instance administrators. See [Console and scoped administration](/guides/console).
+Instance administrators create users under **People & teams → Users**. Each user has the role `admin` or `user`. A user without a password cannot sign in to the console, but can still use API keys issued to them, within their permissions.
 
-## Create a key
+Organizations and teams assign users to groups through memberships, and each membership carries a role within that group. Organization and team administrators manage only what is available in their own scope; they are not instance administrators. [Console and scoped administration](/guides/console) describes what each scope can reach.
 
-Manage personal keys under **My account → Keys**. Instance administrators can also use **Access control → User keys**.
+A key can be bound to an organization or a team. The binding decides which shared credentials the key can use and which group budgets it is charged against. It is stored on the key: a client cannot change it by sending organization or team headers.
 
-| Setting | Meaning |
-| --- | --- |
-| Name | Identify the app or device using the key |
-| Ownership | User and optional organization or team |
-| Expiry and enabled state | Expired or disabled keys cannot make new requests |
-| Management | Permit management operations, subject to user and scope permissions; off by default |
-| Retain secret | Allow the full value to be revealed later; off by default |
-| Cost budget | Administrators can set an amount, period, and model filter |
+## Creating a key
 
-Copy the full key when it is created. A key without retained secret material, including a digest-only import, cannot be revealed later. Revealing retained keys still requires permission.
+Users manage their own keys under **Your keys** in the console's **Personal** view. Instance administrators can manage any user's keys under **Access control → User keys**.
 
-An initial budget and key can be saved together. A failed budget validation does not create the key separately.
+A key has these settings:
 
-## Rotate or revoke
+- **Name**: identifies the application or device using the key.
+- Owner: the user, and optionally an organization or team the key is bound to.
+- **Expires** and **Enabled**: an expired or disabled key cannot make new requests.
+- **Management access**: lets the key call the management API, within the permissions of its user and scope. Off by default, and set by an administrator under **User keys**.
+- **Retain the secret**: keeps the full key so it can be revealed again later. Off by default, and chosen only when the key is created.
+- **Cost budget**: administrators can set an amount, a period and a model filter for the key.
 
-Keys support rotation. The old value becomes invalid, so update the client configuration. To migrate clients gradually, create a second key and disable or delete the old one after all clients have switched.
+Copy the full key when it is shown after creation. A key whose secret was not retained cannot be revealed again; this includes keys imported from another instance as digests only. Revealing a retained key also requires permission to do so.
 
-Management API operations:
+A new key and its initial budget are saved together. If the budget fails validation, the key is not created either.
 
-- `POST /admin/api/api-keys/{id}/rotate`: rotate a key.
-- `GET /admin/api/api-keys/{id}/secret`: reveal a retained secret.
-- Personal API equivalents are `/portal/api/keys/{id}/rotate` and `/portal/api/keys/{id}/secret`.
-
-Revocation takes effect immediately on the instance that wrote it. Other instances of a multi-instance deployment answer authentication from their in-memory snapshot and stop accepting the key when they reload: within milliseconds through the shared-cache invalidation, and at the latest after the 30-second revision poll if that message is lost. See [Architecture](/introduction/architecture).
-
-Removing a member from an organization or team disables that user's keys bound to it, including OAuth internal keys, in the same transaction.
-
-## Send a key
+## Sending a key
 
 ```text
 Authorization: Bearer <gateway-key>
@@ -74,10 +68,28 @@ x-api-key: <gateway-key>
 x-goog-api-key: <gateway-key>
 ```
 
-Use the header customary for the client protocol, without supplying conflicting keys. Management API access requires the key's management flag; an administrator's ordinary inference key does not automatically gain management access.
+Use the header your client's protocol normally uses, and send only one key. When several of these headers are present, `Authorization` is read first, then `x-api-key`, then `x-goog-api-key`.
+
+Management API calls require a key with management access. An ordinary inference key does not gain management access because its user is an administrator.
+
+## Rotating and revoking a key
+
+Rotating a key replaces its value. The old value stops working immediately, so every client using it must be updated. To move clients over one at a time, create a second key instead, switch the clients, then disable or delete the old key.
+
+The management API has the same operations:
+
+- `POST /admin/api/api-keys/{id}/rotate`: rotate a key.
+- `GET /admin/api/api-keys/{id}/secret`: reveal a retained secret.
+- Personal API equivalents are `/portal/api/keys/{id}/rotate` and `/portal/api/keys/{id}/secret`.
+
+Revocation takes effect immediately on the instance that wrote it. Other instances of a multi-instance deployment answer authentication from their in-memory snapshot and stop accepting the key when they reload: within milliseconds through the shared-cache invalidation, and at the latest after the 30-second revision poll if that message is lost. See [Architecture](/development/architecture).
+
+Removing a member from an organization or team disables that user's keys bound to it, including OAuth internal keys, in the same transaction.
 
 ## OAuth sessions
 
-GPROXY can issue access tokens after user authorization. OAuth internal keys differ from ordinary user keys and cannot be created or revealed as ordinary Bearer keys. Authorized sessions can be revoked in the console.
+GPROXY can act as an OAuth authorization server: a client asks the user to authorize it and receives an access token. Each grant is backed by an internal key. Internal keys are not ordinary user keys; they cannot be created by hand, revealed, or used as a Bearer key.
 
-See [CLI clients](/guides/cli-clients) for client configuration and authorization flows.
+Users see and revoke the programs they have authorized under **Account → Authorized programs**. Retiring a client under **Access control → OAuth clients** revokes its grants and tokens.
+
+Client setup and the authorization flow are described in [CLI clients](/guides/cli-clients). The scopes and operations an OAuth token may use are in [Permissions, rate limits and budgets](/guides/permissions#oauth-access-tokens).

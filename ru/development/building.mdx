@@ -1,0 +1,404 @@
+---
+title: "Сборка из исходного кода"
+description: "Сборка всех целей GPROXY v4 из исходного кода (CLI с консолью и без неё, настольное и мобильное приложение, Worker), проверки CI и публикация релиза."
+---
+
+Здесь описано, как собрать GPROXY самостоятельно, что содержит каждый
+опубликованный пакет, какие проверки CI выполняет для каждого изменения и как
+публикуются и подписываются релизы. Если нужно только запустить GPROXY, проще
+скачать готовый пакет из [Releases](https://github.com/LeenHawk/gproxy/releases);
+какой выбрать, подскажет таблица в разделе [Пакеты релиза](#release-packages).
+
+<a id="release-packages"></a>
+
+## Пакеты релиза
+
+Каждый релиз содержит три программы, у каждой свои переносимые архивы и
+установщики:
+
+- `gproxy-*`: CLI со встроенной веб-консолью.
+- `gproxy-headless-*`: тот же CLI без консоли, для CI и небольших серверов.
+  См. [CLI без консоли](#headless-cli).
+- `gproxy-tauri-*`: настольное и мобильное приложение, которое тоже содержит
+  консоль.
+
+| Платформа | CLI | Приложение |
+| --- | --- | --- |
+| Linux GNU (x86_64, aarch64, riscv64) | ZIP, DEB | ZIP, DEB |
+| Linux musl (x86_64, aarch64, riscv64) | ZIP, Alpine APK | ZIP, Alpine APK |
+| Windows (x86_64, aarch64) | ZIP, MSIX | ZIP, MSIX |
+| macOS (x86_64, aarch64) | ZIP, DMG | ZIP, DMG |
+| Android (x86_64, aarch64) | ZIP, Termux DEB | только APK |
+| OpenHarmony / HarmonyOS NEXT | ARM64 / x86_64 ZIP | неподписанный ARM64 HAP |
+
+Рабочий процесс выпуска также публикует исполняемый файл для serverless
+(`gproxy-serverless-linux-<arch>-musl` для x86_64 и aarch64), пакет для
+Cloudflare Workers (`gproxy-edge-cloudflare.zip`) и контейнерные образы GNU и
+musl. Для пакетов приложения создаются аттестации происхождения сборки,
+размещённые на GitHub. Публичные вложения релиза ограничены пакетами,
+`manifest.json` и `SHA256SUMS`; отдельные файлы контрольных сумм и данные о
+происхождении сборки остаются внутренними входными данными CI.
+
+Особенности платформ:
+
+- Linux: DEB с CLI устанавливает `gproxy` в `/usr/bin`. Приложению для GNU
+  Linux нужны пакеты GTK 3 и WebKitGTK 4.1 из дистрибутива. Сборки musl
+  предназначены для Alpine и выпускаются как APK, а не DEB.
+- Android CLI: DEB для Termux устанавливается в
+  `/data/data/com.termux/files/usr`. Сборки Android CLI используют рецепт из
+  `distribution/termux/` и закреплённую версию официального сборщика Termux.
+  И DEB, и ZIP используют `libc++`, OpenSSL и сертификаты CA из Termux; ZIP
+  содержит скрипт запуска, исполняемый файл и `TERMUX.txt` с инструкциями по
+  установке и обновлению. Самообновление в этих сборках отключено: установите
+  новый DEB через APT или используйте `pkg upgrade gproxy`, когда пакет
+  появится в подключённом репозитории.
+- Android-приложение: APK подписывается и проверяется секретами
+  `ANDROID_SIGNING_*`. Запись `<target-triple>-tauri-apk` каждого приложения
+  входит в подписанный Ed25519 манифест обновлений отдельно от обновлений CLI
+  ZIP. Старый APK-обёртка сервера больше не собирается.
+- Windows: MSIX с CLI имеет собственную идентичность в Partner Center,
+  `LeenHawk.GPROXYCLI`, и псевдоним для запуска из консоли. Приложению нужен
+  системный WebView2 Runtime.
+- macOS: DMG с CLI содержит исполняемый файл и инструкции по установке из
+  Терминала. ZIP приложения сохраняет ресурсы приложения, а на macOS —
+  полный `.app`. Сборки подписываются ad-hoc; подпись Developer ID и
+  нотаризация не настроены.
+- OpenHarmony: сборки используют кешированный образ инструментов и
+  закреплённую экспериментальную ветку Tauri; остальные платформы используют
+  стабильный Tauri. HAP перед установкой нужно подписать. Он проверен на
+  эмуляторе. Непрерывная работа в фоне реализована, но её доступность зависит
+  от устройства, версии ОС и выданных разрешений; прокси останавливается вместе
+  с процессом приложения.
+
+Имена файлов nightly между сборками не меняются; SHA коммита записывается в
+манифест.
+
+<a id="build-environment"></a>
+
+## Окружение сборки
+
+Установите stable Rust (edition 2024), Go, Clang, Node.js 22.12+ (рекомендуется
+24 LTS) и pnpm. Для настольных сборок под Linux также нужны пакеты разработки
+`webkit2gtk-4.1`, `gtk+-3.0` и `libsoup-3.0`. Инструменты для остальных
+платформ настраивает рабочий процесс выпуска.
+
+<a id="cli-and-console"></a>
+
+## CLI и консоль
+
+Из корня репозитория:
+
+```sh
+pnpm --dir console install --frozen-lockfile
+pnpm --dir console build
+cargo build -p gproxy --release
+./target/release/gproxy serve --data-dir ./data
+```
+
+`pnpm --dir console build` копирует собранную консоль в каталоги встраивания
+HTTP-хоста и хоста Tauri, и следующая сборка Rust её включает. Порядок важен:
+в свежей рабочей копии, собранной только средствами Rust, ресурсов консоли нет,
+и `/console` возвращает 404. Чтобы отдавать отдельно собранную консоль,
+передайте `--console-path console/dist`.
+
+<a id="cargo-features"></a>
+
+### Фичи Cargo
+
+Набор фич крейта `gproxy` по умолчанию:
+`channels,memory,fs,bundled-vocabulary,embedded-console,postgres,mysql`.
+
+| Фича | Что даёт |
+| --- | --- |
+| `channels` | Все каналы этого репозитория. Вместо неё можно перечислить каналы по одному (`codex`, `claudecode`, `openai`, ...), чтобы взять только нужные развёртыванию |
+| `embedded-console` | Встроить веб-консоль в бинарник |
+| `memory` | Кеш внутри процесса |
+| `redis` | Кеш Redis; обязателен, когда одно развёртывание обслуживают несколько экземпляров |
+| `fs` | Локальное файловое хранилище для опубликованных тел и загруженных словарей |
+| `s3` | Объектное хранилище S3 |
+| `bundled-vocabulary` | Встроенный словарь токенизатора DeepSeek для моделей, у которых в каталоге нет файла словаря |
+| `postgres`, `mysql` | Драйверы PostgreSQL и MySQL. SQLite компилируется всегда; без этих фич `GPROXY_PERSISTENCE`/`GPROXY_DSN`, указывающие на другую базу, отклоняются при запуске |
+
+Уменьшенная сборка с четырьмя каналами и без драйверов внешних баз данных:
+
+```sh
+cargo build -p gproxy --release --no-default-features \
+  --features embedded-console,memory,fs,codex,claudecode,openai,custom
+```
+
+В крейте есть также бинарник `gproxy-serverless` для serverless-платформ; ему
+нужна фича `postgres`.
+
+<a id="headless-cli"></a>
+
+## CLI без консоли
+
+CLI без консоли (headless) — это бинарник `gproxy`, собранный без
+`embedded-console`. В нём остаются маршруты прокси, API управления, все
+каналы, SQLite, драйверы PostgreSQL и MySQL, кеш в памяти, локальное файловое
+хранилище и встроенный словарь. Настраивается он через CLI или API
+управления. Для сборки не нужны Node.js, pnpm и настольные библиотеки:
+
+```sh
+cargo build --locked --release -p gproxy --bin gproxy \
+  --no-default-features --features channels,memory,fs,bundled-vocabulary,postgres,mysql
+./target/release/gproxy serve --console=false
+```
+
+Без `embedded-console` ресурсы фронтенда не попадают в бинарник, даже если в
+рабочей копии уже есть собранная консоль. `--console=false` также запрещает
+отдавать внешний каталог консоли. Чтобы собрать собственный набор фич с
+консолью, добавьте `embedded-console`.
+
+Рабочий процесс выпуска собирает пакеты без консоли независимо от сборки
+консоли:
+
+| Платформа | Архитектуры | Пакет |
+| --- | --- | --- |
+| Linux GNU | x86_64, aarch64, riscv64 | `gproxy-headless-linux-<arch>.zip` |
+| Linux musl | x86_64, aarch64, riscv64 | `gproxy-headless-linux-<arch>-musl.zip`, `gproxy-headless-linux-<arch>-musl.apk` |
+| Windows | x86_64, aarch64 | `gproxy-headless-windows-<arch>.zip`, `gproxy-headless-windows-<arch>.msix` |
+| macOS | x86_64, aarch64 | `gproxy-headless-macos-<arch>.zip` |
+| Android (Termux) | x86_64, aarch64 | `gproxy-headless-android-<arch>.zip`, `gproxy-headless-android-<arch>.deb` |
+
+Скачать их можно в [Releases](https://github.com/LeenHawk/gproxy/releases):
+`nightly` для канала разработки, `staging` для беты или стабильную версию.
+Самообновление установки без консоли выбирает соответствующий пакет без
+консоли.
+
+На Android установите пакет в Termux и запустите сервер:
+
+```sh
+pkg install ./gproxy-headless-android-<arch>.deb
+gproxy serve --console=false
+```
+
+Пакет без консоли заменяет полный пакет `gproxy`, поскольку оба предоставляют
+команду `gproxy`. Чтобы использовать ZIP, установите библиотеки времени
+выполнения, распакуйте ZIP в каталог внутри домашнего каталога Termux (файлы в
+общем хранилище Android запускать нельзя) и запустите оттуда:
+
+```sh
+pkg install libc++ openssl ca-certificates
+./gproxy serve --console=false
+```
+
+В Windows используйте `gproxy.exe` вместо `gproxy`. MSIX для Windows имеет
+идентичность `LeenHawk.GPROXYHeadless` и псевдоним `gproxy-headless.exe`,
+поэтому не заменяет `gproxy.exe` из CLI. GPROXY Headless также доступен в
+Microsoft Store (`9ND7FQQMV566`).
+
+<a id="desktop-and-mobile-application"></a>
+
+## Настольное и мобильное приложение
+
+После сборки консоли:
+
+```sh
+cargo run -p gproxy-host-tauri --bin gproxy-desktop
+```
+
+Новый экземпляр открывает мастер настройки. Окно управляет экземпляром через
+IPC, а HTTP-слушатель обслуживает клиентов шлюза. Для мобильных сборок
+используйте инструменты платформ и скрипты упаковки из рабочего процесса
+выпуска.
+
+Участники workspace по умолчанию не включают хост Tauri, поэтому для сборки
+бэкенда настольные зависимости не нужны. `--workspace` его включает.
+
+Чтобы собрать пакеты релиза локально, соберите консоль и запустите скрипт
+упаковки. `pnpm --dir console build` уже выполняет `sync-to-embed.mjs`;
+повторный запуск ничему не вредит.
+
+```sh
+pnpm --dir console build
+node console/scripts/sync-to-embed.mjs
+pnpm --dir crates/gproxy-host-tauri install --frozen-lockfile
+TARGET_OS=linux TARGET_TRIPLE=x86_64-unknown-linux-gnu \
+  ARTIFACT_NAME=gproxy-tauri-linux-x86_64 \
+  GPROXY_BUILD_VERSION=$(scripts/release-metadata.sh version) \
+  scripts/package-tauri-release.sh
+```
+
+Пакеты записываются в `dist/release/`.
+
+<a id="cloudflare-workers"></a>
+
+## Cloudflare Workers
+
+Из корня репозитория:
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install worker-build
+pnpm --dir console install --frozen-lockfile
+pnpm --dir deploy/cloudflare install
+pnpm --dir deploy/cloudflare build
+pnpm --dir deploy/cloudflare check
+```
+
+`worker-build` компилирует и оптимизирует модуль WebAssembly. `check` выполняет
+пробное развёртывание Wrangler без публикации. Настройка и ограничения среды
+выполнения описаны в разделе [Edge-развёртывание](/ru/deployment/edge), а сборка
+Worker с собственным каналом — в разделе
+[Добавление канала](/ru/development/adding-a-channel#building-the-worker).
+
+<a id="checks-ci-runs"></a>
+
+## Проверки CI
+
+Запустите их перед открытием pull request. CI выполняет их для каждого
+изменения в трёх заданиях: бэкенд, настольный хост и WebAssembly.
+
+Бэкенд (участники workspace по умолчанию):
+
+```sh
+cargo fmt --all --check
+cargo clippy --all-targets -- -D warnings
+cargo test
+```
+
+Дополнительно CI проверяет линтером бинарник serverless и пример внешнего
+канала, которые не входят в участников по умолчанию:
+
+```sh
+cargo clippy -p gproxy --bin gproxy-serverless --no-default-features --features channels,postgres,embedded-console -- -D warnings
+cargo clippy -p gproxy-example-channel -p gproxy-example-native --all-targets -- -D warnings
+```
+
+Настольный хост:
+
+```sh
+cargo clippy -p gproxy-host-tauri --all-targets -- -D warnings
+cargo test -p gproxy-host-tauri
+```
+
+WebAssembly: проверка охватывает библиотеки и хосты, поддерживающие эту цель,
+но не CLI и не Tauri. Не запускайте её для всего workspace: оба используют фичу
+`net` из tokio, а mio под эту цель не собирается.
+
+```sh
+cargo check --target wasm32-unknown-unknown \
+  -p gproxy-protocol -p gproxy-store -p gproxy-seaorm -p gproxy-client \
+  -p gproxy-cache -p gproxy-channel -p gproxy-core -p gproxy-file \
+  -p gproxy-tokenizer -p gproxy-sdk -p gproxy-app -p gproxy-host-axum \
+  -p gproxy-host-edge
+```
+
+CI также проверяет наборы фич не по умолчанию, которые README крейтов
+называют совместимыми с wasm, отдельным вызовом для каждого, поскольку cargo
+объединяет фичи в пределах одного вызова:
+
+```sh
+cargo check --target wasm32-unknown-unknown -p gproxy-sdk --features libsql
+cargo check --target wasm32-unknown-unknown -p gproxy-cache --all-features
+cargo check --target wasm32-unknown-unknown -p gproxy-file --no-default-features --features s3
+cargo check --target wasm32-unknown-unknown -p gproxy-channel --all-features --lib
+cargo check --target wasm32-unknown-unknown -p gproxy-example-edge --lib
+```
+
+Консоль и документация:
+
+```sh
+pnpm --dir console lint
+pnpm --dir console test
+pnpm --dir console build
+git submodule update --init docs
+pnpm --dir docs install --frozen-lockfile
+pnpm --dir docs check
+```
+
+`pnpm --dir console lint` включает проверку согласованности переводов
+(`pnpm i18n:check`). После изменения DTO в Rust выполните
+`pnpm --dir console types`, чтобы заново сгенерировать типы TypeScript.
+
+<a id="publishing"></a>
+
+## Публикация
+
+<a id="branches-and-update-channels"></a>
+
+### Ветки и каналы обновлений
+
+Рабочий процесс Release (`.github/workflows/release.yml`) публикует при push:
+
+- `dev` — разработка новых функций. Push в неё публикует только в `nightly`,
+  канал обновлений для разработки.
+- `main` — сопровождение выпущенной функциональности и исправление ошибок.
+  Push в неё публикует только в `staging`, бета-канал обновлений.
+- Теги стабильных версий создаются из `main` и публикуются в канал release и
+  в бета-канал. Канал dev они никогда не перезаписывают.
+
+Перед push в `dev` выполните `bash scripts/push-dev.sh`. Скрипт получает
+последний `origin/main`, перебазирует на него `dev` и отправляет с явным
+`--force-with-lease` относительно ранее опубликованного `dev`. Включите
+локальную проверку push командой `git config core.hooksPath .githooks`.
+
+<a id="releasing-a-version"></a>
+
+### Выпуск версии
+
+Запускайте `bash scripts/release.sh` поверх последнего `main`, добавив только
+коммиты `chore(release):`. Скрипт останавливается, если не выполнено
+что-либо из следующего:
+
+- тег совпадает с версией workspace, и существует `release-notes/v<version>.md`;
+- отслеживаемое рабочее дерево чистое;
+- `HEAD` содержит последний `origin/main`, и все коммиты после него —
+  коммиты `chore(release):`.
+
+Для стабильной версии скрипт затем обновляет зависимости: npm-зависимости
+консоли через `pnpm update --latest`, требования к зависимостям Rust из реестра
+через `cargo upgrade` (включая мажорные и закреплённые версии) и `Cargo.lock`
+через `cargo update`. Мосты совместимости для RSA/getrandom, JNI/Tauri, reqwest
+в Codex и конфигурации WebSocket сохраняют требуемые upstream линии версий, но
+совместимые версии всё равно обновляются через `cargo update`. Сначала
+установите вспомогательный инструмент: `cargo install cargo-edit --locked`.
+Если обновление изменило отслеживаемые файлы, скрипт останавливается до
+создания тега: разберитесь с изменениями совместимости, выполните проверки
+выше, закоммитьте и отправьте в `main`, затем запустите скрипт снова. Для тегов
+предварительных версий обновление зависимостей не выполняется.
+
+Затем скрипт создаёт тег и отправляет `main` и тег одним атомарным push. Запуск
+рабочего процесса по тегу публикует каналы release и beta, а запуск для `main`
+на помеченном коммите ничего не публикует. После этого отправьте `dev` через
+`scripts/push-dev.sh`.
+
+Рабочий процесс собирает пакеты, создаёт подписанный манифест обновлений и
+загружает вложения. Если сборка или подпись завершилась ошибкой, релиз
+опубликован не полностью.
+
+Теги версий также запускают `scripts/publish-crates.sh`, который публикует
+выбранные библиотеки под лицензией MIT на crates.io. Остальные крейты
+используются как git- или path-зависимости; см.
+[Встраивание ядра](/ru/development/embedding).
+
+<a id="signing-and-store-submission"></a>
+
+### Подпись и публикация в магазинах
+
+Если не хватает ключей подписи или переменных идентичности Store, упаковка
+завершается ошибкой.
+
+- Манифест обновлений подписывается Ed25519; самообновление проверяет подпись
+  перед установкой.
+- Android: APK подписываются секретами `ANDROID_SIGNING_*`.
+- macOS: только подпись ad-hoc.
+- Windows: пакеты используют идентичность пакета Microsoft Store. Задайте в
+  окружении `release` четыре переменные: `MS_STORE_IDENTITY_NAME`,
+  `MS_STORE_DISPLAY_NAME`, `MS_STORE_IDENTITY_PUBLISHER` и
+  `MS_STORE_PUBLISHER_DISPLAY_NAME`. CLI использует соответствующие
+  переменные `MS_STORE_CLI_*`. У Headless идентичность и отображаемое имя
+  фиксированы, поэтому для его публикации в Store к общим переменным издателя
+  добавляется только `MS_STORE_HEADLESS_PRODUCT_ID`. Стабильные релизы
+  сохраняют пакеты обеих архитектур для Store, а при включённом
+  `MS_STORE_PUBLISH_ENABLED` успешная публикация на GitHub запускает рабочий
+  процесс отправки в Store. Пакеты для Store не подписываются: их подписывает
+  Store при распространении.
+- Windows на GitHub: при включённом SignPath (`SIGNPATH_ENABLED`) файлы MSIX
+  релиза версии пересобираются с издателем сертификата подписи и
+  подписываются в отдельном задании, поэтому устанавливаются напрямую.
+  SignPath требует, чтобы сопровождающий одобрил каждый запрос на подпись, и
+  задание ждёт этого одобрения; запрос, не одобренный вовремя, приводит к
+  ошибке релиза, а повторный запуск упавших заданий отправляет его снова. Без
+  SignPath файлы MSIX на GitHub тоже не подписаны.

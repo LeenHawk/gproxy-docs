@@ -1,0 +1,240 @@
+---
+title: "嵌入 SDK"
+description: "在 Rust 程式中透過 gproxy-sdk crate 執行 GPROXY 閘道：裝配、feature、呼叫、登入、管理寫入、查詢、同步與 TypeScript 型別匯出。"
+---
+
+`gproxy-sdk` 是 GPROXY 閘道本身所依賴的 crate。如果你想讓一個 Rust 程式透過憑證池傳送請求，同時獲得自動重新整理、供應商之間的失敗轉移和計量結算，又不想執行 HTTP server，可以直接連結它。
+
+控制代碼必須連線資料庫，憑證狀態不能只儲存在記憶體裡。以 Claude 為例，它每次重新整理都會輪換 refresh token；如果控制代碼只在記憶體中儲存憑證，重啟之後的第一次重新整理就會讓一把可用的憑證失效。
+
+## crate 的範圍
+
+sdk 包含裝配、配置寫入、登入、模型解析、呼叫、查詢和同步，不包含以下內容：
+
+- 身份。使用者、API key、組織、團隊、權限、訂閱、限流和 OAuth issuer 屬於 `gproxy-app`，它從同一批資料中讀取同一個持久 revision。
+- 下游認證。sdk 不判斷呼叫方是誰，呼叫方的權限由外部傳入。
+- server。沒有監聽器、router、中介軟體或 CLI。
+- console。本 crate 生成 UI 所需的 TypeScript 型別，UI 本身由應用實作。
+- 執行。嘗試、轉換、改寫、觀測、預算與結算都由引擎（`gproxy-core`）完成，sdk 只決定把什麼交給引擎。
+
+sdk 在引擎與 app 之間的位置見[架構](/zh-tw/development/architecture)。
+
+## 新增依賴
+
+透過 Git tag 或路徑依賴引入 `gproxy-sdk`：
+
+```toml
+[dependencies]
+gproxy-sdk = { git = "https://github.com/LeenHawk/gproxy", tag = "v4.0.0" }
+```
+
+範例中固定的是 `v4.0.0` tag，實際使用時請換成你要對接的版本。workspace 使用 Rust edition 2024。v4 的 Rust API 和管理 API 與 v3 不同。
+
+`gproxy-sdk` 的許可證是 AGPL-3.0-or-later。MIT 協議的配套庫（`gproxy-protocol`、`gproxy-client`、`gproxy-cache`、`gproxy-seaorm`、`gproxy-tokenizer`、`gproxy-file` 等）也會單獨發布到 crates.io。
+
+## 建置控制代碼
+
+```rust
+use gproxy_sdk::{GproxyBuilder, SyncMode};
+
+let gproxy = GproxyBuilder::sqlite("gproxy.db")
+    .await?
+    .master_key([0u8; 32])
+    .sync_mode(SyncMode::Background)
+    .build()
+    .await?;
+
+for channel in gproxy.channels() {
+    println!("{} ({})", channel.display_name, channel.id);
+}
+println!("serving revision {}", gproxy.revision().0);
+```
+
+builder 可以從 `GproxyBuilder::sqlite(path)`、`GproxyBuilder::sqlite_memory()`、`GproxyBuilder::database_url(url)` 建立，也可以用 `GproxyBuilder::connection(connection)` 傳入自己開啟的連線。
+
+`build()` 不會開啟任何沒有交給它的資源。它依次同步實體表結構（設定了 `.sync_schema(false)` 時跳過）、建立 settings 行、裝配引擎、載入第一份快照（設定了 `.initial_reload(false)` 時跳過），並在後臺模式下啟動訂閱迴圈和輪詢迴圈。`build_unsynced()` 只裝配、不做任何表結構操作，適用於只讀副本或已經同步過表結構的宿主；這時不會檢查表結構是否匹配。
+
+金鑰的儲存方式必須顯式選擇。`.master_key(key)` 用 AES-256-GCM 加密憑證金鑰，`.plaintext_secrets()` 以明文儲存。兩者都沒有設定時 build 會被拒絕，因此控制代碼不會在預設情況下以明文儲存金鑰。
+
+其他 builder 方法：
+
+| 方法 | 預設值 | 用途 |
+| --- | --- | --- |
+| `.cache(cache)` | 原生為 `MemoryCache`，wasm 上為 `StoreCache` | 共享的臨時狀態與失效通知通道。多實例需要共享的 cache：原生用 Redis，edge 上用基於 D1 或 libSQL 的 `StoreCache`。 |
+| `.channel(channel)` | | 額外註冊一個渠道，優先於編譯進來的同 id 渠道。 |
+| `.without_default_channels()` | | 只註冊透過 `.channel(...)` 傳入的渠道。 |
+| `.client_pool(pool)` | `ClientPool::default()` | 出站 client 快取。 |
+| `.file_storage(operator)` | | 存放發布內容和下載的詞表的物件儲存。 |
+| `.publication_url(builder)` | | 宿主為 URL 形式的發布內容生成連結的方法。 |
+| `.fetch_policy(policy)` | `DefaultFetchPolicy` | 引擎代呼叫方獲取哪些 URL。見[呼叫](#呼叫)。 |
+| `.observer(observer)` | `StoreObserver` | 用自己的實作替換用量與捕獲的資料庫持久化。 |
+| `.instance_id(id)` | 隨機 | 本處理程序的穩定標識，記錄在持有上游長連線的續接上。 |
+| `.sync_mode(mode)` | `SyncMode::Background` | 由誰驅動同步。見[同步](#同步)。 |
+| `.poll_interval(interval)` | 30 秒 | 後臺迴圈檢查持久 revision 的間隔。 |
+| `.login_ttl(ttl)` | 600 秒／900 秒 | 授權碼登入／裝置碼登入可以繼續完成的時長。 |
+
+## Cargo feature
+
+| Feature | 作用 |
+| --- | --- |
+| 渠道 id（`codex`、`kiro`、`openai`…） | 編譯該渠道。除非呼叫了 `without_default_channels()`，builder 會自動註冊它。 |
+| `channels` | workspace 提供的全部渠道 |
+| `postgres` / `mysql` | 額外的資料庫驅動，僅原生。原生環境始終可以使用 SQLite。 |
+| `libsql` | 經 Hrana HTTP pipeline 訪問 libSQL/Turso，所有目標平臺都可用 |
+| `d1` | Cloudflare D1 binding 的標記（wasm 上 binding 始終可用） |
+| `memory`（預設） | 處理程序內 cache |
+| `redis` | Redis cache，用於多實例 |
+| `fs`（預設） | 本地檔案儲存，僅原生 |
+| `s3` | S3/R2 儲存 |
+| `bundled-vocabulary`（預設） | 內建 DeepSeek 詞表，為沒有自帶詞表檔案的模型估算 token |
+| `ts` | 為每個 DTO 和每個渠道 descriptor 生成 `ts-rs` 宣告 |
+
+預設 feature 集合可以為 `wasm32-unknown-unknown` 建置，`libsql` 也可以。
+
+原生建置使用 `reqwest` 傳輸。需要其他後端的渠道會自行啟用：`claudecode`、`kiro`、`antigravity` 等渠道啟用 `wreq` 做 TLS 模擬，`codex` 啟用與 Codex CLI 指紋一致的原生 `reqwest` 棧。宿主也可以直接在 `gproxy-client` 上啟用後端 feature，或者透過 `.client_pool` 傳入自己的 client 池。
+
+## 呼叫
+
+```rust
+let execution = gproxy
+    .call(
+        OperationKey { operation: Operation::GenerateContent, dialect: Dialect::OpenAi },
+        request,
+    )
+    .scope("user:u-1")
+    .attribution(UsageAttribution { user_id: Some("u-1".into()), ..Default::default() })
+    .budgets(vec![BudgetOwner::new("user", "u-1")])
+    .credentials(["cred-1".to_owned()].into())
+    .send()
+    .await?;
+
+let (response, usage) = execution.into_parts();
+```
+
+`call` 接收操作鍵和一個 `WireRequest`，返回 builder；`send` 解析模型名，並按得到的計劃依次嘗試，在憑證之間和供應商之間做失敗轉移，規則見[架構](/zh-tw/development/architecture#失敗轉移)。`connect` 是同一個 builder 的 WebSocket 握手版本。
+
+`.scope(...)` 必填，沒有預設值。scope 是隔離邊界，引擎在這個邊界內維護呼叫方的憑證親和性和續接。如果有預設 scope，互不相關的呼叫方就會共享這些狀態。
+
+其餘 builder 方法用來傳入應用層已經做出的決定：
+
+- `.attribution(...)`：用量記在誰名下。
+- `.budgets(...)`：要扣減的預算所有者鏈。
+- `.providers(...)` 和 `.credentials(...)`：呼叫方可以使用的供應商 id 和憑證 id。`None` 表示不限制，空集合表示什麼都不允許。
+- `.session(...)`、`.session_id(...)`、`.agent_session_id(...)`：用於親和性的會話身份。
+- `.model(...)`：模型名不在 body 中時使用。
+- `.max_attempts(...)`、`.deadline(...)`、`.cancellation(...)`、`.request_id(...)`。
+
+`.channel("claudecode")` 把候選收窄到一個渠道。當渠道對呼叫方確實有區別時使用它：`claudecode` 消耗的是 OAuth 訂閱額度，`claudeapi` 消耗的是按 token 計費的 API key，二者的配額池和計費相互獨立。供應商則只是一行配置，實例外部的呼叫方不需要知道。指定渠道之後，控制代碼仍然會在該渠道的多個供應商及其憑證之間選擇，並在渠道內做失敗轉移。
+
+### 資源獲取策略
+
+請求透過 URL 引用資源時，引擎按 `FetchPolicy` 獲取該資源。預設的 `DefaultFetchPolicy` 只允許以 http 和 https 訪問公網地址；原生直連時會固定已驗證的公網 IP。如果配置了代理，而域名需要由代理自行解析，該 URL 會被拒絕。嵌入方可以透過 `.fetch_policy(...)` 顯式設定 `AllowlistFetchPolicy`，只允許自己控制的域名，並由代理負責目的地址的限制。wasm 上域名目的地址仍取決於平臺的出站訪問控制。
+
+## 登入
+
+`gproxy.login()` 把上游的 OAuth 登入轉換為一行憑證。支援兩種流程，各由兩個呼叫組成：
+
+- 授權碼：`authcode_start` 返回要開啟的授權 URL；`authcode_complete` 接收回呼並建立憑證。
+- 裝置碼：`device_start` 返回供使用者輸入的代碼；`device_poll` 執行一次輪詢，返回上游的應答，其中包括下次輪詢前需要等待的時間。sdk 不會自己等待或迴圈，輪詢節奏由呼叫方控制。
+
+PKCE verifier 和 CSRF state 都由 sdk 生成和校驗。state 不匹配的回呼會被拒絕，對應的會話也會被銷燬。待完成的登入會話儲存在共享 cache 中，按登入 TTL 過期，因此部署中的任何實例都能完成另一個實例發起的登入。交換成功之前不會持久化任何資料，金鑰在插入之前用配置的編解碼器加密。
+
+## 管理
+
+`gproxy.manage()` 是寫入側。每個配置家族對應一個訪問器，全部透過同一個提交原語寫入（見[配置寫入與重新載入](/zh-tw/development/architecture#配置寫入與重新載入)）。
+
+| 家族 | 資料 | CRUD 之外的方法 |
+| --- | --- | --- |
+| `providers()` | `providers` | `reset_routing_defaults` |
+| `credentials()` | `credentials` | `reveal_secret`、`set_status`、`refresh`、`quota_probe`、`quota_diagnostics`、`quota_read`、`quota_observations`、`quota_reset`、`quota_reset_with`、`quota_reset_credits`、`health_reset`、`limit_status` |
+| `models()` / `provider_models()` | 模型目錄 | |
+| `routes()` / `route_members()` | 路由 | |
+| `connection_profiles()` | 出站棧 | |
+| `settings()` | 唯一的 settings 行 | 只有 `get` / `update` |
+| `rewrite()` | 規則集、規則、掛載 | `replace_rules` |
+| `endpoints()` | `operation_rules`、`operation_endpoints` | `effective`、`set_mapping`、`reset_mapping` |
+| `quotas()` | `quotas` | `budget_status`、`reset_budget`、`limit_status`、`reset_limit` |
+| `pricing()` | 規則、費率、檔位 | |
+| `transfer()` | 全部配置 | `export`、`import` |
+| `catalog()` | 應用之前不寫入任何資料 | `channels`、`default_models`、`apply_default_prices`、`tls_presets`、`rule_presets`、`apply_rule_preset` |
+| `connectivity()` | `provider_models` | `test`、`model_test`、`discover_models`、`refresh_models`、`apply_discovered` |
+| `tokenizer()` | 詞表檔案 | `vocabularies`、`fetch`、`import`、`progress`、`delete`、`auth`、`set_auth`、`reveal_auth` |
+| `history()` | 捕獲的日誌與用量記錄 | `delete_logs`、`delete_usage` |
+
+CRUD 家族都提供 `list`、`get`、`create`、`update`、`delete` 和 `batch`。傳入 id 時使用傳入的值，未傳入時自動生成；時間戳為 Unix 毫秒；小數以字串傳輸；憑證金鑰不會出現在任何 DTO 中，需要時用 `reveal_secret` 讀取。
+
+列表接收 `ListQuery`，返回 `Page`。頁碼從 1 開始；`page_size` 預設 50，範圍限制在 1–500。
+
+每次寫入都要宣告 scope，scope 決定隨後的重新載入方式。憑證狀態 scope 走開銷較小的重新載入路徑，只適用於僅修改憑證金鑰、過期時間和生命週期狀態的寫入。憑證的其他屬性在裝配時已固定到執行快照中，修改後需要完整重新載入；如果誤用了憑證狀態 scope，修改會寫進資料庫，但在下一次無關的重新載入之前，本實例都看不到它。
+
+`history()` 操作的不是配置。刪除歷史不會推進 revision，也不會觸發重新載入，已結算的配額計數、計費記錄和訂閱視窗都不受影響。仍在寫入中的捕獲不會被刪除。一次刪除最多指定 500 個 id。
+
+## 查詢
+
+`gproxy.query()` 是讀取側。這裡不寫入任何資料，因此也不會推進 revision。
+
+| 家族 | 方法 |
+| --- | --- |
+| `usage()` | `records`、`summary`、`group`、`trend`、`aggregate` |
+| `quota()` | `windows`、`settlements`、`credential_cycles`、`credential_observations`、`counted_windows`、`budget_status` |
+| `logs()` | `list`、`upstream`、`capture`、`detail(request_id)` |
+
+### 用量聚合
+
+固定的用量欄位存放在專用列中，每次實際的上游呼叫對應一行，不儲存下游彙總行。供應商和憑證篩選在 SQL 中完成；之後 `summary`、`group` 和 `trend` 在 Rust 中按鍵序分塊，對匹配的行和自定義指標做聚合。
+
+不設定 `max_scan_rows` 時，聚合會分批讀取全部匹配範圍。設定後，掃描到指定行數（限制在 1–50 000）即停止，結果中帶有 `truncated: true` 和實際掃描的行數 `scanned`，不會把部分結果當作總數返回。
+
+趨勢查詢還受桶數限制：桶寬為零或負數、結束時間早於開始時間、以及會產生超過 5 000 個桶的區間，都會被拒絕。
+
+費用從專用的 USD 列讀取。沒有任何已計價記錄時，`currency` 為 `None`。`quantities` 以十進位制字串返回媒體、工具和自定義計數。
+
+### 分頁
+
+用量記錄、配額視窗和管理列表都用 offset 分頁。請求日誌用遊標分頁，因為日誌是隻追加的資料流，讀取過程中隊首一直在增長，用 offset 分頁會出現重複或遺漏。遊標由兩部分組成：`next_cursor`（時間戳）和 `next_cursor_id`（行 id），兩者都要原樣傳回。只用時間戳不夠，因為兩個請求可能在同一毫秒開始。
+
+### 脫敏
+
+`logs()` 不做脫敏。觀察者在寫入這些行時已經按部署的捕獲策略處理過，存下來的內容就是允許展示的內容。宿主不應假設讀取時還會再過濾一遍：如果資料庫裡有金鑰，說明策略允許把它存在那裡。
+
+## 同步
+
+同一部署的各個實例透過共享 cache 上的失效通知和對 `settings.config_revision` 的輪詢（預設每 30 秒一次）保持配置一致，機制見[架構](/zh-tw/development/architecture#多實例同步)。
+
+控制代碼提供以下同步方法：
+
+- `reload()`：重新讀取配置併發布新快照。
+- `reload_credentials(ids)`：只重新讀取憑證資料。
+- `sync_now()`：輪詢一次 revision；如果持久 revision 比當前快照新，就重新載入。
+- `drain_notifications()`：應用已經到達的通知，不訪問資料庫。在 `SyncMode::Background` 下不做任何事。
+- `tick()`：先 `drain_notifications()`，再 `sync_now()`。
+
+使用 `SyncMode::Background` 時，控制代碼自己執行兩個迴圈，這需要 Tokio runtime 和一個比單次請求活得更久的程序。使用 `SyncMode::Manual` 時，只有宿主呼叫上述方法才會同步。
+
+wasm 上 cache 預設是基於資料庫的 `StoreCache`，同步始終是手動的，因為 isolate 的生命週期不超過一次請求。請在每個請求開始時呼叫 `tick()`：
+
+```rust
+// tick() = 取走已投遞的通知，然後輪詢一次 revision。
+instance.tick().await;
+```
+
+取通知的開銷很小，可以每個請求都做；輪詢的開銷較大，所以只想做前一半的宿主可以單獨呼叫 `drain_notifications()`。手動模式下，訂閱在 `build()` 時建立，並丟棄訂閱開頭的 resync 提示（首次載入本身就是這次 resync）。因此，在裝配完成到第一次 `tick()` 之間發生的寫入也不會漏掉。
+
+## TypeScript 型別匯出
+
+啟用 `ts` feature 後，sdk 可以為每個 DTO 和渠道 descriptor 匯出 TypeScript 宣告：
+
+```sh
+GPROXY_TS_OUT=console/src/generated \
+  cargo test -p gproxy-sdk --features ts export_types
+```
+
+沒有設定 `GPROXY_TS_OUT` 時，測試直接返回，不寫任何檔案，因此 `cargo test --all-features` 沒有副作用。設定之後，輸出目錄會先被清空，避免已刪除的 DTO 留下過期的宣告，最後寫入一個 re-export 全部型別的 `index.ts`。
+
+匯出渠道 descriptor 是因為 console 根據每個渠道返回的 descriptor 渲染供應商表單。表單型別直接來自 descriptor，渠道新增配置鍵時型別會隨之更新。
+
+匯出清單是手工維護的，因為 Rust 無法在執行時列舉一個模組裡的型別。v3 中這份清單就出現過遺漏：新增的 DTO 沒有加進清單，console 也就沒有對應的型別。現在另有一個測試 `every_exported_dto_is_in_the_export_list`，讀取 `dto` 模組的原始碼，如果有 re-export 的型別不在清單中就會失敗。
+
+## sdk 之上的各層
+
+還需要身份功能的應用可以連結 `gproxy-app`。它提供認證、准入、管理面與使用者面的操作家族以及 OAuth issuer，不包含傳輸層。`gproxy-host-axum` 把這些功能以 HTTP 形式提供，`gproxy-host-edge` 在 Cloudflare Worker 中掛載同一個 router，`gproxy-host-tauri` 透過 IPC 提供管理面。上述每個 crate 都可以在各自的層級上被嵌入。

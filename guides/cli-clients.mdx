@@ -1,9 +1,14 @@
 ---
 title: "CLI Clients"
-description: "Point the Codex CLI and Claude Code at GPROXY: the vendor service routes a channel declares, the three views, and the OAuth issuer this instance runs."
+description: "Point the Codex CLI and Claude Code at GPROXY: vendor service routes, the x-gproxy-view header, the OAuth issuer this instance runs, and session affinity."
 ---
 
 import { VideoTutorial } from "/snippets/video-tutorial.jsx";
+
+This page explains what GPROXY does for vendor CLIs such as the Codex CLI and
+Claude Code beyond forwarding model calls: their account and control-plane
+requests, logging in to GPROXY itself with OAuth, and keeping a conversation on
+one credential. The videos show the client setup.
 
 Claude Code video tutorial.
 
@@ -17,76 +22,80 @@ Cherry Studio video tutorial.
 
 <VideoTutorial topic="cherry" locale="en" title="Cherry Studio video tutorial" />
 
-Some vendor CLIs talk to more than an inference endpoint. They fetch account
+## Vendor service routes
+
+Some vendor CLIs need more than an inference endpoint. They fetch account
 profiles, usage windows, plugins, tasks and files from the vendor's control
-plane, and they refuse to work without them.
+plane, and they stop working when those requests fail.
 
-A channel can therefore declare a **service route table**: the control-plane
-paths it knows, and what each one returns. The host matches an incoming path
-against that table before it tries the data plane.
+A channel can therefore declare a service route table: the control-plane paths
+it knows and what each one returns. The host matches an incoming path against
+that table before it tries the data plane.
 
-## Reaching Them
-
-A control-plane path is vendor-specific, so it is only matched on a **provider
-or namespace mount**. Matching a service route needs a channel, and the
-aggregated mount names none.
+Control-plane paths are vendor-specific, so they are matched only on a provider
+or namespace mount. The aggregated mount names no channel, and without a
+channel there is no table to match against:
 
 ```text
 https://gproxy.example/codex/backend-api/wham/profiles/me
                        ^^^^^ the provider (or namespace) named "codex"
 ```
 
-## The Three Views
+A path that is not in the table returns `404`, unless the view is
+`credential:{id}` (see below).
 
-`x-gproxy-view` names what the caller wants back. Absent means `caller`, which
-is the only view an ordinary member may ask for.
+### Choosing a view
+
+The `x-gproxy-view` request header says what the caller wants back. Without
+the header the view is `caller`, and `caller` is the only view an ordinary
+member may request.
 
 | Header | What it answers |
 | --- | --- |
-| `x-gproxy-view: caller` | **This caller's** facts — their usage windows, their budget chain, the resources their own calls created. The vendor is never reached for identity, usage or settings. |
+| `x-gproxy-view: caller` | This caller's own facts: their usage windows, their budget chain, the resources their own calls created. Identity, usage and settings requests do not reach the vendor. |
 | `x-gproxy-view: pool` | The same, aggregated over every credential in the target. |
-| `x-gproxy-view: credential:{id}` | Raw. The named credential's own auth goes upstream and the vendor's answer comes back untouched. |
+| `x-gproxy-view: credential:{id}` | Raw passthrough. The named credential's own authentication goes upstream and the vendor's answer is returned unchanged. |
 
-Who may ask for which is decided by ownership, not by a flag. The target is the
-caller's **visible** credentials of that provider — the same set a model call
-from the same key could spend — and the caller is an administrator of it only
-when they are an instance administrator, or an `Admin` member of the
-organization or team that owns **every** credential in that set. Anything else
-is a member, and a member may only ask for `caller`; `pool` and
-`credential:{id}` are `403`.
+Which views a caller may request follows from credential ownership. The
+target is the set of credentials of that provider the caller can see, which
+is the same set a model call with the same key could use. The caller
+administers the target when they are an instance administrator, or an `Admin`
+member of the organization or team that owns every credential in the set.
+Anyone else is a member and may only request `caller`; `pool` and
+`credential:{id}` return `403`.
 
-"Every credential" is not a formality: administering one organization must not
-render a pool that also contains another's. An unowned credential has no
-administrator by construction — nobody is an admin member of nothing — so on a
-single-tenant instance where every credential is shared, only an instance
-administrator reaches `pool` and `credential`.
+The condition is "every credential" so that administering one organization
+never shows a pool that also contains another organization's credentials. An
+unowned credential has no owner whose admin you could be, so on a
+single-tenant instance where all credentials are shared, only an instance
+administrator can use `pool` and `credential`.
 
-**Key minting is refused under every view.** A long-lived API key on a shared
-subscription is exactly the credential a pooled gateway exists to avoid handing
-out.
+Key minting is refused under every view. A long-lived API key on a shared
+subscription is the kind of credential a pooling gateway is meant to keep from
+being handed out.
 
-A path the table does not know is `404`, unless the view is `credential:{id}`.
+### Metering and cancellation
 
-## What Is Not Metered
+A vendor service call takes no rate-limit lease, because charging a window for
+a profile fetch would use up allowance the caller needs for paid traffic. It
+also writes no capture record: the engine writes no upstream record for a
+service call, so a downstream capture would have nothing to link to and would
+look like a request that never reached an upstream.
 
-A vendor service call takes **no rate-limit lease** — charging a window for a
-profile fetch would spend an allowance the caller needs for traffic that costs
-money — and writes **no capture record**. The engine writes no upstream record
-for a service, so a downstream one would have nothing to link to and would read
-as a request that reached no upstream.
+Service calls do pass through the budget chain, because the `caller` view
+reports the caller's own windows from it. Reading a quota does not spend any of
+it.
 
-It does pass the budget chain, because the `caller` view renders the caller's
-own windows from it. Reporting a quota is not spending one.
-
-Service calls carry the same cancellation token as model requests. Cancellation
-stops credential preparation, upstream dispatch and HTTP response streaming. For
-WebSocket services it covers the handshake; the host manages the established socket.
-Services still take no rate-limit lease and produce no model usage.
+Service calls carry the same cancellation token as model requests. A
+cancellation stops credential preparation, upstream dispatch and streaming of
+the HTTP response. For WebSocket services the token covers the handshake; once
+the socket is established, the host manages it. Service calls still take no
+rate-limit lease and produce no model usage.
 
 ## Codex CLI
 
 The `codex` channel declares the ChatGPT backend calls the CLI makes besides
-Responses. Wire facts follow the CLI's own source under `samples/codex`:
+Responses. The wire details follow the CLI's own source under `samples/codex`.
 
 | Family | Paths |
 | --- | --- |
@@ -96,19 +105,19 @@ Responses. Wire facts follow the CLI's own source under `samples/codex`:
 | workspace plugin sharing | `/backend-api/public/plugins/**` |
 | the start-up identity probe | `GET /v1/user-auth-credential/whoami` |
 
-The CLI addresses the same endpoints two ways — `/backend-api/wham/**` on
+The CLI addresses the same endpoints in two ways: `/backend-api/wham/**` on
 ChatGPT hosts and `/api/codex/**` on Codex API hosts. Both spellings, and the
-bare `/codex/**` and `/ps/**` mounts, are normalized onto `/backend-api/**`
-before the table is consulted, so a client's choice of host style is not a
-configuration question.
+bare `/codex/**` and `/ps/**` mounts, are normalized to `/backend-api/**`
+before the table is consulted, so it does not matter which host style the
+client is configured for.
 
-`/backend-api/wham/remote/control/server` is a **WebSocket**, and it is the one
-service route that upgrades. Codex refuses a synthesized view outright, so
-`x-gproxy-view: credential:{id}` from an administrator of that credential is
-the only way through.
+`/backend-api/wham/remote/control/server` is a WebSocket, and it is the only
+service route that upgrades. Codex rejects a synthesized view for it, so the
+only way through is `x-gproxy-view: credential:{id}`, sent by an administrator
+of that credential.
 
-Anything the table does not classify falls into the `/backend-api/{*path}`
-prefix rows and is forwarded as-is, non-2xx answers included.
+Paths the table does not classify fall through to the `/backend-api/{*path}`
+prefix rows and are forwarded unchanged, non-2xx answers included.
 
 ## Claude Code
 
@@ -118,20 +127,21 @@ limits, account settings, file upload and download, organization connectors,
 plugins and skills, onboarding and billing controls, desktop update redirects
 and the Claude Design surface.
 
-All of them resolve against `api.anthropic.com`; `claude.ai` serves only the
-cookie initialization, so the channel does not consult it here.
+All of them resolve against `api.anthropic.com`. `claude.ai` is used only for
+cookie initialization of a credential, so the channel does not contact it for
+these calls.
 
-Under `caller` and `pool` the identity, usage and settings answers are
-synthesized from what this instance knows, and their ids are a stable hash of
-the provider and the caller identity. Nothing about the shared account is
-invented and nothing about it leaks: the account, organization and plan the CLI
-displays are GPROXY's synthetic values, not the upstream account's.
+Under the `caller` and `pool` views, the identity, usage and settings answers
+are synthesized from what this instance knows, and their ids are a stable hash
+of the provider and the caller's identity. The account, organization and plan
+the CLI displays are GPROXY's synthetic values; nothing is invented about the
+shared upstream account, and nothing about it is exposed.
 
-## GPROXY as the OAuth Issuer
+## GPROXY as an OAuth issuer
 
-A CLI that logs in with OAuth can log in to **this instance** instead of to the
-vendor. That is a different thing from the sdk's `login()`, which speaks
-somebody else's OAuth as a client:
+A CLI that logs in with OAuth can log in to this GPROXY instance instead of to
+the vendor. This is separate from the SDK's `login()`, in which GPROXY is the
+OAuth client of somebody else's authorization server:
 
 ```text
   Claude Code ──authorize/token──▶ gproxy   (the authorization server)
@@ -139,8 +149,8 @@ somebody else's OAuth as a client:
                                      └──login()──▶ OpenAI   (the client)
 ```
 
-The endpoints sit under each mount, so a client discovers the one it is talking
-to:
+The endpoints exist under every mount, so a client discovers the issuer of the
+mount it is talking to:
 
 ```text
 GET  {mount}/v1/oauth/authorize
@@ -168,66 +178,70 @@ curl -s http://127.0.0.1:8787/v1/.well-known/oauth-authorization-server
  "code_challenge_methods_supported":["S256"]}
 ```
 
-v3 served these at the root; v4 moved them under `/v1` so the prefix rule is
-the same one `/v1/messages` follows and there is one implementation of it.
+v3 served these endpoints at the root. v4 moved them under `/v1` so that they
+follow the same prefix rule as `/v1/messages` and share its implementation.
 
-### Rules this issuer does not bend
+### Issuer security rules
 
-- **PKCE S256, always.** `plain` is refused and so is an absent challenge.
-  Every registered client is public, with no secret to prove with, so the
-  verifier is the only thing standing between a leaked code and a token.
-- **Redirect URIs match exactly.** Not a prefix, not a wildcard, not "same
-  origin". Every looser rule accepts a URL an attacker controls.
-- **Codes, refresh tokens and device codes are single-use**, consumed and
-  replaced in one atomic batch, so two redemptions cannot both succeed however
-  they interleave.
-- **A replayed code or refresh token revokes the whole family** — the grant,
-  its internal key and every token it ever issued. There is no way to tell a
-  lost response from a stolen credential, so the leak is assumed. The
-  legitimate client re-runs its login; the thief cannot. The device flow is the
-  exception, because a polling client re-sends its code by design.
+- PKCE with S256 is required. `plain` is refused, and so is a request without
+  a challenge. Every registered client is public and has no secret to prove
+  itself with, so the verifier is the only thing that keeps a leaked code from
+  being exchanged for a token.
+- Redirect URIs must match exactly. Prefixes, wildcards and "same origin" are
+  not accepted, because each looser rule admits some URL an attacker controls.
+- Authorization codes, refresh tokens and device codes are single-use. Each is
+  consumed and replaced in one atomic batch, so two redemptions cannot both
+  succeed, however they interleave.
+- Replaying a code or refresh token revokes the whole family: the grant, its
+  internal key and every token it has issued. A lost response cannot be told
+  apart from a stolen credential, so a replay is treated as a leak. The
+  legitimate client logs in again; the thief cannot. The device flow is
+  exempt, because a polling client resends its code by design.
 
 ### What an OAuth caller may do
 
-An access token is a credential a user handed to **somebody else's binary**.
-Unless the client is named in the instance's `oauth.cliClientIds`, it may only
-list models, get a model, count tokens, generate, stream and compact. Anything
-else is `403`, and that limit applies to an instance administrator's account
-too — an administrator's is exactly the account where a third-party token must
-not become an administrative credential.
+An access token is a credential the user has handed to somebody else's
+program. Unless the client is listed in the instance's `oauth.cliClientIds`,
+the token may only list models, get a model, count tokens, generate, stream
+and compact. Any other operation returns `403`. The limit applies to an
+instance administrator's account as well; that is the account where a
+third-party token must least be allowed to act as an administrative
+credential.
 
-Naming a client in `cliClientIds` is an operator accepting that it speaks for
-the user across the whole API.
+Listing a client in `cliClientIds` means the operator accepts that the client
+acts for the user across the whole API. The scopes the user consented to still
+bound the token: every operation requires the matching `gproxy:{operation}`
+scope in the grant, for listed clients too.
 
-An OAuth caller also may not mint, rotate, reveal or delete keys, and may not
+An OAuth caller also cannot mint, rotate, reveal or delete keys, and cannot
 change the account password.
 
-## Session Affinity
+## Session affinity
 
 A multi-turn CLI works best when one conversation stays on one credential.
-GPROXY reads the conversation identity from the client that **actually sent**
-the request, never from the upstream it is about to be forwarded to — a Claude
-Code request forwarded to another channel still reads Claude Code's field.
+GPROXY reads the conversation identity in the format of the client that sent
+the request, not of the upstream it is forwarded to: a Claude Code request
+routed to another channel is still read for Claude Code's fields.
 
-The ladder, first non-empty wins:
+The first non-empty source in this list is used:
 
-1. `x-gproxy-session-id`, the gateway's own header;
-2. `thread-id`, `session-id`, `x-claude-code-session-id`, `x-conversation-id`,
-   `x-grok-session-id`;
-3. the inbound body's own field — Responses'
-   `client_metadata.thread_id`/`session_id`, Claude's `session_id` *inside* the
-   JSON-encoded `metadata.user_id`, Gemini's `request.session_id` and
-   `request.sessionId`;
-4. a sha256 fingerprint of the conversation's stable prefix;
-5. the request id, labelled honestly as a fallback rather than claimed as a
-   session.
+1. `x-gproxy-session-id`, the gateway's own header.
+2. The clients' native headers, in this order: `x-opencode-session`,
+   `thread-id`, `session-id`, `x-claude-code-session-id`, `x-conversation-id`,
+   `x-grok-session-id`, `x-session-id`, `x-session-affinity`, `session_id`.
+3. The session field of the inbound body format: Responses'
+   `client_metadata.thread_id` or `session_id`; Claude's `session_id` inside
+   the JSON-encoded `metadata.user_id`; Gemini's `request.session_id` or
+   `request.sessionId`. Chat Completions defines no such field.
+4. A sha256 fingerprint of the conversation's stable prefix.
+5. The request id, recorded as a fallback rather than as a session.
 
-Nothing recurses through arbitrary JSON looking for a field called
-`session_id`, and request, turn and cache identifiers — `x-grok-req-id`,
-`user_prompt_id`, `prompt_cache_key`, `previous_response_id` — are **never**
-sessions.
+Only these fields are read; GPROXY does not search arbitrary JSON for a field
+named `session_id`. Request, turn and cache identifiers such as
+`x-grok-req-id`, `user_prompt_id`, `prompt_cache_key` and
+`previous_response_id` are not treated as sessions.
 
-The gateway header is stripped before the request goes upstream, and it is
-stripped from a client's request too: a client must not be able to choose
-another caller's conversation by sending the header the gateway uses to name
-one. A missing session header never refuses a request.
+The gateway header is never forwarded upstream, including when the client
+sent it: a client must not be able to pick another caller's conversation by
+sending the header the gateway uses to name one. A request without any session
+header is never refused.

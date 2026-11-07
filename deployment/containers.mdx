@@ -1,23 +1,14 @@
 ---
 title: "Docker, Render, and Heroku"
-description: "Deploy the native GPROXY container with managed PostgreSQL."
-sidebarTitle: "Docker & Container Platforms"
+description: "Run the GPROXY container image, or deploy to Render or Heroku with PostgreSQL."
+sidebarTitle: "Docker and container hosts"
 ---
 
-These templates assemble a lightweight Node.js container around the prebuilt **latest stable release** PostgreSQL executable, with one application instance connected to PostgreSQL. They reuse the existing HTTP/SSE/WebSocket bridge and verify the release archive checksums. No Rust build is required. The ordinary CLI container only includes SQLite, so it cannot replace this image. The service and database can incur charges; review the selected plans before deploying.
-
-<Columns cols={2}>
-  <Card title="Render" icon="rocket" href="https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev" cta="Deploy to Render" arrow={true}>
-  Free web service with your external PostgreSQL database. Secrets are generated automatically.
-</Card>
-  <Card title="Heroku" icon="rocket" href="https://heroku.com/deploy?template=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev" cta="Deploy to Heroku" arrow={true}>
-  Basic dyno + Essential PostgreSQL. Bring your encryption key; the database is created for you.
-</Card>
-</Columns>
+This page covers two different containers. The Docker image runs the ordinary `gproxy` CLI with a SQLite database in a volume, for a host you manage yourself. The Render and Heroku templates build a separate image that runs the native PostgreSQL build behind a small Node.js entry point, for platforms whose local disk does not survive a restart. For Cloudflare Workers, Netlify and Vercel, see [Cloudflare Workers, Netlify, and Vercel](/deployment/edge).
 
 ## Docker
 
-The same images are published to four registries for amd64, arm64 and riscv64. Pick the one closest to you:
+The same images are published to four registries for amd64, arm64 and riscv64. Use whichever is closest to you:
 
 | Registry | Image |
 | --- | --- |
@@ -26,7 +17,9 @@ The same images are published to four registries for amd64, arm64 and riscv64. P
 | GitLab | `registry.gitlab.com/leenhawk1/gproxy` |
 | CNB | `docker.cnb.cool/leenhawk/gproxy` |
 
-Stable versions use `vX.Y.Z` tags, beta uses `staging`, and development snapshots use `nightly`; append `-musl` for musl images. Old v3 tags do not run v4.
+Stable releases are tagged `vX.Y.Z`, the beta channel is `staging`, and development snapshots are `nightly`. Append `-musl` to any tag for the musl build. Images with v3 tags run v3, not v4.
+
+Start a container with a named volume for the data directory and your master key in the environment:
 
 ```sh
 export GPROXY_IMAGE='gproxy2/gproxy:<tag>'
@@ -39,31 +32,65 @@ docker run -d --name gproxy --restart unless-stopped \
 docker logs gproxy
 ```
 
-Save the administrator credentials from the first startup log, then open `/console/`. The image runs as `65532:65532`, so a bind-mounted directory must be writable by that user. Keep the `/app/data` volume when replacing the container.
+On the first start, GPROXY creates an administrator and an API key and prints the generated credentials to the log. Save them, then open `http://127.0.0.1:8787/console/`. The log is the only place they appear, so protect it.
+
+The image listens on port 8787, keeps its SQLite database in `/app/data`, and runs as user `65532:65532`. If you bind-mount a host directory instead of using a named volume, that user must be able to write to it.
+
+To move to a new version, stop and remove the container and start a new one from the new tag with the same volume and the same `GPROXY_MASTER_KEY`. The database is in the volume, so removing the container does not touch it.
 
 ## Render
 
-1. Use the Render card above and review the root `render.yaml` Blueprint: a Free web service using an external PostgreSQL database.
-2. Set `GPROXY_DATABASE_URL` to your external PostgreSQL connection URL and deploy the service. The database must be reachable from Render; preserve any SSL parameters required by your database provider. Render generates the administrator password and encryption key.
-3. Open the service's **Environment** settings and save `GPROXY_ADMIN_PASSWORD` and `GPROXY_MASTER_KEY`. Visit the service URL followed by `/console/` and sign in as `admin`.
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)][render-deploy]
 
-The template does not create a database. The Render web service uses the free plan; external database pricing and limits depend on your provider. Free web services sleep when idle, so the next request may take longer. The health check is `/healthz` on port `8787`.
+The Render template is the `render.yaml` Blueprint in the repository root. It creates one web service on the free plan and no database: you supply an external PostgreSQL database.
+
+1. Use the button above and review the Blueprint.
+2. Set `GPROXY_DATABASE_URL` to your PostgreSQL connection URL and deploy. The database must accept connections from Render; keep any SSL parameters your provider requires in the URL.
+3. Render generates `GPROXY_ADMIN_PASSWORD` and `GPROXY_MASTER_KEY`. Open the service's **Environment** settings and save a copy of both.
+4. Open the service URL followed by `/console/` and sign in as `admin`.
+
+The service's health check is `/healthz` on port `8787`. Free web services sleep when idle, so the first request after a pause is slow while the service wakes up. Pricing and limits of the external database are your provider's.
 
 ## Heroku
 
+[![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)][heroku-deploy]
+
+The Heroku template is `app.json` and `heroku.yml` in the repository root. It creates one Basic web dyno and a `heroku-postgresql:essential-0` add-on. Both are paid; review the plans before you deploy.
+
 1. Generate a master key with `openssl rand -hex 32` and save it.
-2. Use the Heroku card above, choose an app name and region, and enter the key as `GPROXY_MASTER_KEY`.
-3. Review the Basic web dyno and `heroku-postgresql:essential-0` add-on, then deploy.
-4. Retrieve `GPROXY_ADMIN_PASSWORD` from **Settings → Reveal Config Vars** and sign in as `admin` at `/console/`.
+2. Use the button above, choose an app name and region, and enter the key as `GPROXY_MASTER_KEY`.
+3. Review the dyno and the add-on, then deploy. Heroku generates `GPROXY_ADMIN_PASSWORD`.
+4. Read the password under **Settings → Reveal Config Vars**, then sign in as `admin` at `/console/`.
 
-The root `app.json` and `heroku.yml` use `deploy/serverless/Dockerfile`. The Node.js entry listens on Heroku's dynamic `PORT`, and the shared gateway reads `DATABASE_URL`. It supports Heroku's assigned runtime UID. Local files are temporary; configuration, credentials, usage, and cache state are stored in PostgreSQL.
+The image is built from `deploy/serverless/Dockerfile`. The Node.js entry point listens on the `PORT` Heroku assigns and works under the user ID Heroku runs it as; the gateway reads the add-on's `DATABASE_URL`. A dyno's local files are temporary, and everything that matters (configuration, credentials, usage, cache state) is kept in PostgreSQL.
 
-## Operating the service
+## Running the Render and Heroku templates
 
-- Keep the database and `GPROXY_MASTER_KEY` across updates. Back up both. These templates accept `GPROXY_DATABASE_URL` or the platform's `DATABASE_URL`.
-- Builds download the latest stable release by default (`GPROXY_RELEASE_VERSION=latest`) and verify SHA-256. To upgrade, clear the platform build cache and redeploy. To pin a version, set this Docker build argument to a release tag; the release must contain both serverless Linux archives and `SHA256SUMS`.
-- The templates start with one application instance. Their shared cache is stored in PostgreSQL, using the existing serverless host.
-- Set `GPROXY_PUBLIC_BASE_URL` to the public HTTPS origin when using OAuth or published file URLs. These templates do not enable file storage. Use a custom native CLI build for filesystem or object storage support. Client IPs are taken from the socket peer, which can be the platform router; forwarded client-IP headers are not trusted.
-- The native host supports HTTP, SSE, and WebSocket. Platform router timeouts, idle limits, and restarts still apply; these templates do not remove those limits.
+Both templates build the same image. At build time it downloads the release's `gproxy-serverless` executables for x86_64 and aarch64, checks them against the release's `SHA256SUMS`, and packages them with the Node.js entry point. Nothing is compiled. The ordinary Docker image above includes only the SQLite driver, so it cannot take this image's place.
 
-For Workers and function deployments, see the [Cloudflare, Netlify, and Vercel guide](/deployment/edge).
+### Database
+
+The gateway reads `GPROXY_DATABASE_URL`, or the platform's `DATABASE_URL` when that is unset. Keep the database and `GPROXY_MASTER_KEY` across updates and back up both.
+
+### Updates
+
+The build downloads the latest stable release by default (`GPROXY_RELEASE_VERSION=latest`). To upgrade, clear the platform's build cache and redeploy. To stay on one version, set the Docker build argument `GPROXY_RELEASE_VERSION` to a release tag; that release must contain both serverless Linux archives and `SHA256SUMS`.
+
+### Instances
+
+The templates start one application instance. The shared cache is kept in PostgreSQL.
+
+### Public address
+
+Set `GPROXY_PUBLIC_BASE_URL` to the service's public HTTPS origin if you use OAuth or published file links. The templates do not configure file storage; for a filesystem or object storage, run a native CLI build instead.
+
+### Client addresses
+
+The client IP is taken from the TCP peer, which may be the platform's router. Forwarded client-IP headers are not trusted.
+
+### Connections
+
+The entry point serves HTTP, SSE and WebSocket. The platform's router timeouts, idle limits and restarts still apply. On shutdown it stops accepting connections and gives open SSE and WebSocket connections up to 25 seconds before it exits.
+
+[render-deploy]: https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev
+[heroku-deploy]: https://heroku.com/deploy?template=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev

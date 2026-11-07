@@ -1,77 +1,59 @@
 ---
 title: "重写规则与协议覆盖"
 description: "设置提示词、缓存断点、JSON 与文本重写，以及上游协议和端点。"
-sidebarTitle: "改写规则与操作覆盖"
+sidebarTitle: "重写规则与协议覆盖"
 ---
 
-在供应商的重写规则页面新增规则，选择类型并填写内容。新建供应商会自动创建并绑定同名默认规则集，一般不需要手动管理绑定；多个供应商需要共用规则时，再使用高级绑定设置。
+重写规则在请求发往上游、或响应返回客户端的途中修改内容：添加系统文本、放置缓存断点、修改 JSON 字段、替换文本以及设置请求头。本页最后一节介绍协议与端点覆盖，用于决定供应商在某个操作上使用哪种上游协议和 URL。
 
-## 规则类型
+## 添加规则
+
+打开供应商的“重写规则”页面，新增规则，选择类型并填写内容。新建供应商时会自动创建并绑定一个同名的默认规则集，只有一个供应商时无需手动管理绑定。多个供应商需要共用一组规则时，再使用高级绑定设置。
 
 | 界面类型 | 用途 | API `action` |
 | --- | --- | --- |
-| 系统提示词 | 在现有系统指令前或后添加文本 | `system_text` |
+| 系统文本 | 在现有系统指令前或后添加文本 | `system_text` |
 | 缓存断点 | 按协议为全局、系统、消息或工具添加缓存标记 | `cache_breakpoint` |
-| JSON 改写 | 设置、删除字段，或合并 JSON 对象 | `set`、`delete`、`merge` |
-| 文本转换 | 对正文、请求头或查询参数做正则替换 | `replace` |
+| 重写 | 设置、删除字段，或合并 JSON 对象 | `set`、`delete`、`merge` |
+| 变换 | 对正文、请求头或查询参数做正则替换 | `replace` |
 | 请求头 | 设置值，或合并逗号分隔的值 | `header_set`、`header_merge` |
 
-系统提示词支持 Claude、OpenAI Chat、Responses（含 WebSocket）和 Gemini。缓存断点支持 Claude 与 OpenAI 协议；具体位置和有效期见[提示缓存](/zh-cn/guides/claude-caching)。
+系统文本支持 Claude、OpenAI Chat、Responses（含 WebSocket）和 Gemini。缓存断点支持 Claude 与 OpenAI 协议，具体位置和有效期见[提示缓存](/zh-cn/guides/claude-caching)。
 
-## 高级 JSON 编辑
+每条规则都有 `phase`（`request`、`response` 或 `both`）和 `target`（`body`、`header` 或 `query`）。
 
-在规则集内新建或编辑规则时，切换到“高级 JSON”即可直接粘贴一个 v4 规则对象。供应商的重写规则页面也提供此入口。表单和 JSON 可以相互切换，并支持格式化；JSON 有误时会保留输入并提示，保存时还会校验规则是否可执行。
+## 执行顺序
 
-例如，将正文中的 `"type":"function"}` 替换为 `"type":"function","strict":false}`：
+请求先转换为上游协议，然后执行请求规则，最后由渠道发出。响应先执行响应规则，再转换回客户端协议。因此，规则中的字段路径要按上游格式填写。例如，OpenAI Chat 请求路由到 Claude 供应商后，请求规则看到的已经是 Claude 的 `system` 和 `messages` 字段。
 
-```json
-{
-  "action": "replace",
-  "phase": "request",
-  "target": "body",
-  "pattern": "\"type\":\"function\"\\}",
-  "replacement": "\"type\":\"function\",\"strict\":false}"
-}
-```
+已启用的规则集绑定按 `sortOrder`、再按 ID 排序执行，集内已启用的规则也按同样方式排序。每条规则都基于前一条的结果执行。系统文本和缓存断点规则与其他规则遵循同一顺序。
 
-这里使用 v4 的 `action`、`pattern`、`replacement` 字段。规则集、ID 和顺序由页面管理，不填入 JSON；可选的过滤条件及 `enabled` 可以一并填写。省略过滤条件表示不限制匹配，省略 `enabled` 表示启用。一次编辑一条规则，不接受规则数组。
+## 路径、正则与请求头
 
-## 执行位置与顺序
+JSON 改写需要填写路径，例如 `temperature` 或 `messages.*.content`，路径中的 `*` 表示所有元素。`set` 的值可以是任意合法 JSON，`merge` 的值必须是 JSON 对象，`delete` 不需要值。
 
-请求先转换为上游协议，再执行请求重写，然后由渠道发送。响应先执行响应重写，再转换为客户端协议。因此，规则中的字段路径必须使用**上游格式**。
+变换使用 Rust 正则语法，支持 `(?i)`、`(?s)`，替换内容中可以使用 `$1` 和 `${name}`。填写正文路径时，只在选中的 JSON 字符串值内替换；不填路径时对整段正文文本替换，此时要注意替换后仍是合法 JSON。
 
-例如，OpenAI Chat 请求转到 Claude 供应商后，规则应使用 Claude 的 `system` 和 `messages` 字段。
-
-规则集绑定和集内规则分别按 `sortOrder`、ID 排序，只执行启用项。后一条规则会看到前一条的结果。系统提示词、缓存断点和其他规则也遵循这个顺序。
-
-## 字段与正则
-
-JSON 改写需要填写路径，例如 `temperature` 或 `messages.*.content`。路径中的 `*` 表示所有元素。`set` 的值必须是合法 JSON，`merge` 的值必须是 JSON 对象；`delete` 不需要值。
-
-文本转换使用 Rust 正则语法，支持 `(?i)`、`(?s)` 和替换中的 `$1`、`${name}`。填写正文路径时只替换匹配的 JSON 字符串值；不填路径时对整段正文文本替换。修改 JSON 文本时应避免破坏语法。
-
-请求头和查询参数规则需要 `targetName`。`header_set` 替换请求头值；`header_merge` 合并逗号分隔的值并去重。不要把上游密钥写进可共享的规则。
+请求头和查询参数规则需要填写 `targetName`。`header_set` 替换请求头的值；`header_merge` 合并逗号分隔的值并去重。不要把上游密钥写进与其他供应商共用的规则。
 
 ## 过滤条件
 
-| 条件 | 匹配内容 |
-| --- | --- |
-| 操作与协议 | 转换后在供应商上执行的操作 |
-| 模型 | 上游模型或客户端请求的模型名，支持 `*`、`?` |
-| 请求头 | 入站请求头的正则匹配 |
-| 流事件 | SSE 事件名或 JSON `type`，用于正文规则 |
+过滤条件限制规则在什么情况下执行。所有已设置的条件都满足时规则才会执行，未设置的条件不做限制。
 
-多个条件同时满足时规则才生效。省略的条件不限制匹配。为某个客户端添加兼容规则时，应配置请求头过滤，避免影响其他客户端。
+| 条件 | API 字段 | 匹配内容 |
+| --- | --- | --- |
+| 操作与协议 | `filterOperationKeys` | 转换后在供应商上执行的操作 |
+| 模型 | `filterModelPattern` | 上游模型名或客户端请求的模型名，支持 `*`、`?` |
+| 请求头 | `filterHeaderPattern` | 正则表达式，逐个匹配 `name: value` 形式的入站请求头 |
+| 流事件 | `filterEventPattern` | SSE 事件名或 JSON `type`，用于正文规则 |
 
-模型筛选的候选只来自供应商已添加的模型和变体。供应商页面仅显示当前供应商的模型；独立规则集页面显示关联供应商的模型并集。未关联供应商时没有候选，仍可手动填写模型名或 `gpt-*` 等匹配模式。候选列表不会请求上游模型目录。
+为某个客户端添加兼容规则时，应加上请求头过滤，以免影响其他客户端。
 
-## 流式响应
-
-正文重写以完整事件为单位执行，例如 SSE 事件或 JSON 数组元素，不以网络数据块为单位。单个事件超过 `settings.maxStreamEventBytes` 时会报错。可以用事件过滤器只修改特定类型的事件。
+模型过滤的候选项只来自已保存的供应商模型及其变体。在供应商页面中只显示该供应商的模型；在独立的规则集页面中显示所关联供应商模型的并集。未关联供应商的规则集没有候选项，但仍可手动填写模型名或 `gpt-*` 这类匹配模式。候选列表不会请求上游的模型目录。
 
 ## 正文与请求头条件
 
-在过滤条件中填写正文路径或请求头名称，即可让规则按字段值触发。两者与现有模型、操作、请求头正则及事件条件同时满足时才执行：
+`filterBody` 和 `filterHeader` 让规则只在某个正文字段或请求头取特定值时执行。两者可以单独使用，也可以同时使用，并且要与其他过滤条件同时满足：
 
 ```json
 {
@@ -96,19 +78,19 @@ JSON 改写需要填写路径，例如 `temperature` 或 `messages.*.content`。
 }
 ```
 
-`filterBody` 判断当前 JSON 正文，能看到前面规则的修改；仅支持正文目标。路径支持 `reasoning.effort`、`messages.0.role`，不支持 `*`。值按 JSON 类型比较，`"1"` 不等于 `1`。
+`filterBody` 判断当前的 JSON 正文，能看到前面规则所做的修改，只能用于正文目标。路径由点分隔的键和数组下标组成，例如 `reasoning.effort`、`messages.0.role`，不支持 `*`。相等比较区分 JSON 类型，`"1"` 不等于 `1`；字段缺失与值为 `null` 是两种情况。非 JSON 正文不满足任何正文条件，`not_exists` 也不例外。
 
-`filterHeader` 判断**原始入站请求头**，可用于正文、请求头和查询参数规则。名称不区分大小写，值区分大小写且不自动分割逗号列表。同名头有多个值时，`eq` 任一值相等即命中；`ne` 要求头存在且所有值均不相等。
+`filterHeader` 判断原始的入站请求头，可用于任何目标和阶段。请求头名称不区分大小写；值按区分大小写的完整字符串比较，不按逗号拆分。同名请求头出现多次时，`eq` 只要有一个值相等即命中；`ne` 要求请求头存在且所有值都不相等。
 
-比较方式为 `eq`、`ne`、`exists`、`not_exists`。前两者必须提供 `value`；后两者不填写 `value`。缺字段不满足 `ne`；JSON `null` 是存在的值。非 JSON 正文不满足任何正文条件，包括 `not_exists`。
+比较方式有 `eq`、`ne`、`exists` 和 `not_exists`。`eq` 和 `ne` 必须提供 `value`，`exists` 和 `not_exists` 不能提供。字段缺失时不满足 `ne`。
 
-SSE、NDJSON、JSON 数组流和 WebSocket 按单个事件/元素/消息判断，不跨事件累积。普通 HTTP 正文按整份判断。清空表单路径/名称，或将 API 字段设为 `null`，即可移除对应条件；PATCH 省略字段则保留原值。
+在流式传输中，条件对每个完整的 SSE 事件、NDJSON 记录、JSON 数组元素或 WebSocket 消息单独判断，不在它们之间保留状态；普通 HTTP 正文按整体判断。要移除条件，在表单中清空对应的路径或名称，或者把 API 字段设为 `null`。PATCH 请求中省略该字段则保留原有条件。
 
 ### JMESPath 表达式
 
-`filterBody` 也接受 JMESPath 表达式字符串。表达式针对当前正文求值，仅返回布尔值 `true` 时执行动作；类型错误、未知函数、其他求值错误或非布尔结果都不触发。表达式语法在保存时校验。原有 `{ "path", "op", "value" }` 对象格式继续可用。
+`filterBody` 也可以是一个 JMESPath 表达式字符串。表达式针对当前正文求值，只有结果为布尔值 `true` 时才执行动作；类型错误、未知函数、其他求值错误以及非布尔结果都视为不匹配。保存规则时会校验表达式语法。原有的 `{ "path", "op", "value" }` 对象形式仍然可用。
 
-例如，只在最后一条消息的任意文本块包含 keepalive marker 时将 `max_tokens` 设为 0，历史消息中的 marker 不会命中：
+下面的规则只在最后一条消息的某个文本块包含 keepalive 标记时把 `max_tokens` 设为 0，历史消息中的标记不会触发：
 
 ```json
 {
@@ -123,13 +105,35 @@ SSE、NDJSON、JSON 数组流和 WebSocket 按单个事件/元素/消息判断�
 }
 ```
 
-负索引 `[-1]`、多值筛选、`contains()`、比较和逻辑组合均遵循 [JMESPath 规范](https://jmespath.org/specification.html)。缺失字段按 JMESPath 规则产生 `null`，可显式用表达式判断；非 JSON 正文不参与条件求值。`paths` 修改目标仍沿用原有点路径语法，与表达式独立。
+负索引 `[-1]`、投影、`contains()`、比较运算和逻辑组合都遵循 [JMESPath 规范](https://jmespath.org/specification.html)。缺失的字段求值为 `null`，可以在表达式中显式判断；非 JSON 正文始终不匹配。动作的 `paths` 仍使用上文的点路径语法，与表达式无关。
 
-表达式预先编译；正文不变时，共用已转换的 JMESPath 数据。前面规则实际修改正文后再重新转换，避免使用过期值。不使用表达式的规则不会创建 JMESPath 数据副本。每个流式事件独立判断。复杂全量查询的成本仍随正文大小增加。
+表达式只编译一次。正文没有变化时，所有表达式共用同一份转换后的 JMESPath 数据；前面的规则确实修改了正文时，会重新转换，避免读到过期的值。不使用表达式的规则不会产生这份额外副本。流中的每个单元单独求值；需要遍历整个文档的查询，耗时仍随文档大小增长。
+
+## 流式响应
+
+正文重写以完整事件为单位执行，例如一个 SSE 事件或一个 JSON 数组元素，而不是网络数据块。单个事件超过 `settings.maxStreamEventBytes` 时请求失败。可以用事件过滤只改写特定类型的事件。
+
+## 以 JSON 编辑规则
+
+在规则集中，或在供应商的“重写规则”页面中新建或编辑规则时，切换到“高级 JSON”即可粘贴一个 v4 规则对象。表单与 JSON 可以相互切换，JSON 可以格式化。输入有误时内容会保留在编辑器中并显示错误，保存时还会校验规则能否执行。
+
+例如，将正文中的 `"type":"function"}` 替换为 `"type":"function","strict":false}`：
+
+```json
+{
+  "action": "replace",
+  "phase": "request",
+  "target": "body",
+  "pattern": "\"type\":\"function\"\\}",
+  "replacement": "\"type\":\"function\",\"strict\":false}"
+}
+```
+
+请使用 v4 的 `action`、`pattern`、`replacement` 字段。规则集、ID 和顺序由页面管理，不要写进 JSON。可选的过滤条件和 `enabled` 可以一并填写；省略过滤条件表示不限制，省略 `enabled` 表示启用。编辑器一次只接受一个规则对象，不接受数组。
 
 ## 通过 API 管理
 
-下面创建一条正则替换规则，把指定路径中的 `widget` 替换为 `gadget`。将规则集 ID 替换为你的实际值。
+下面的示例把选中字符串中的 `widget` 替换为 `gadget`。请换成你自己的规则集 ID。
 
 ```sh
 curl -sS -X POST http://127.0.0.1:8787/admin/api/rules \
@@ -141,22 +145,24 @@ curl -sS -X POST http://127.0.0.1:8787/admin/api/rules \
        "filterOperationKeys":[{"operation":"generate_content","dialect":"openai_chat"}]}'
 ```
 
-`PUT /admin/api/rule-sets/{id}/rules` 可一次替换整组规则。系统提示词与缓存断点的 `replacement` 是 JSON 编码的配置字符串，控制台会生成它，不需要手工拼接。
+`PUT /admin/api/rule-sets/{id}/rules` 一次替换规则集中的全部规则。系统文本和缓存断点规则的 `replacement` 是 JSON 编码的配置字符串，控制台会自动生成，无需手工拼接。
 
 ## 兼容预设
 
-`GET /admin/api/rule-presets` 返回内置的 OpenCode、the agent-mono、Aider、Cline、Continue 和 Cursor 兼容预设。规则数量与内容以当前接口返回为准。
+`GET /admin/api/rule-presets` 返回内置的 OpenCode、pi-mono、Aider、Cline、Continue 和 Cursor 兼容预设。每个预设包含哪些规则，以接口的返回为准。
 
-`POST /admin/api/rule-sets/{id}/rule-presets/{preset}` 会**替换**规则集内的已有规则。需要保留原规则时，先导出或读取规则，合并后再保存。
+<Warning>
+`POST /admin/api/rule-sets/{id}/rule-presets/{preset}` 会替换规则集中的全部已有规则。需要保留原有规则时，先读取或导出，合并后再保存。
+</Warning>
 
 ## 协议与端点覆盖
 
-供应商的“路由规则”控制使用哪个上游协议，与选择供应商的“模型路由”是不同的配置。
+供应商的“路由规则”决定它在某个操作上使用哪种上游协议。它与选择供应商的“模型路由”是两项不同的配置。
 
-- `operation_rules` 覆盖某个操作支持的协议列表。客户端协议在列表中时优先直通，否则尝试转换到列表的第一项。
-- `operation_endpoints` 覆盖某个操作、协议和传输方式的完整端点 URL。
+- `operation_rules` 覆盖供应商在某个操作上的协议列表。客户端协议在列表中时直接透传，否则转换为列表中的第一个协议。
+- `operation_endpoints` 覆盖某个操作、协议和传输方式对应的完整端点 URL。
 
-例如，修改生成操作支持的协议：
+例如，修改生成操作使用的协议：
 
 ```sh
 curl -sS -X POST http://127.0.0.1:8787/admin/api/operation-rules \
@@ -166,6 +172,6 @@ curl -sS -X POST http://127.0.0.1:8787/admin/api/operation-rules \
        "action":"dialects","target":["claude","openai_chat"]}'
 ```
 
-没有覆盖时使用渠道默认值。`POST /admin/api/providers/{id}/routing-defaults/reset` 清除该供应商的操作规则和端点覆盖。
+没有覆盖时使用渠道的默认值。`POST /admin/api/providers/{id}/routing-defaults/reset` 清除该供应商的操作规则和端点覆盖。
 
-`custom` 渠道还需要在供应商配置中声明 `dialects`，例如 `["openai_chat", "openai"]`。某个操作无法调用时，先核对上游是否支持它，再检查这个列表和操作覆盖。
+`custom` 渠道还需要在供应商配置中声明 `dialects`，例如 `["openai_chat", "openai"]`。某个操作调用失败时，先确认上游是否支持该操作，再检查这个列表和操作覆盖。

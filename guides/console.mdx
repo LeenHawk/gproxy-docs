@@ -1,157 +1,239 @@
 ---
-title: "Console and Scoped Administration"
-description: "Manage credentials, upstream sign-in, routes, quotas, pricing and configuration transfer in the v4 Console."
-sidebarTitle: "Console & Scoped Administration"
+title: "Console"
+description: "Use the GPROXY web console: first startup, language, management scope, pages, credentials and upstream sign-in, budgets and limits, prices, configuration import and export, fonts, and building the console."
+sidebarTitle: "Console"
 ---
 
-The CLI / container Console is served at `/console`. One application contains personal
-pages and administrative pages. Sign in using the deployment's configured
-account; the Console uses `/portal/api/login` and an HttpOnly session cookie.
+The console is GPROXY's web interface for both personal use and
+administration. This page describes what each part of it does and how scoped
+administrators use it.
 
-Personal cost budgets are displayed read-only on Overview, alongside usage.
-There is no separate personal quota page; administrators edit budgets on the
-corresponding user, API key, organization or team.
-
-## Language
-
-The Console supports English, Simplified Chinese, Traditional Chinese and Russian (Русский). On first use it selects a supported browser/system language, including regional Russian tags such as `ru-RU`. A manual selection takes priority and is saved on this device. Numbers and dates follow the selected locale; currency remains the configured billing currency.
+The CLI and container builds serve the console at `/console`. Sign in with an
+account configured for the deployment. The console signs in through
+`/portal/api/login` and keeps the session in an HttpOnly cookie.
 
 ## First startup
 
-A new Application instance opens a three-step wizard before the in-app console. CLI / container instances create an administrator on first startup and use the browser console at `/console/`, without the app wizard. See [Download & Install](/download#setup).
+CLI and container instances create an administrator on first startup; open
+`/console/` in a browser and sign in with it. There is no setup wizard in this
+case.
 
-## Management Scope
+A new Application instance instead opens a setup wizard before the in-app
+console. Its steps are **Instance**, **Administrator** and **Upstreams**; the
+providers created there are then given credentials in **Add credentials**,
+after sign-in. See [Download & Install](/download#setup).
 
-The Console combines personal features from `/portal/api/context` with the
-management sections returned by `/admin/api/context`. Instance administrators
-manage the gateway. Organization and team administrators use the same Providers
-entry for their credentials. Their Organizations and Teams pages show only
-admitted objects and cost budgets, without identity CRUD or provider configuration.
+## Language
 
-If you administer multiple organizations or teams, choose a scope in the
-account menu. Management requests send the server-provided scope selector in
-`x-gproxy-admin-scope`. Switching scope closes open editors and login flows
-and replaces the scope's query cache. A pending write must finish before
-switching. Personal pages remain available independently of management scope.
+The console is available in English, Simplified Chinese, Traditional Chinese
+and Russian (Русский). On first use it picks a supported language from the
+browser or system settings; regional Russian tags such as `ru-RU` use the
+Russian translation. A language you choose by hand takes priority and is saved
+on the device. Numbers and dates are formatted for the selected language;
+amounts stay in the configured billing currency.
 
-## Configuration Pages
+## Management scope
 
-| Console path | Capability |
-| --- | --- |
-| `/console/providers` | Provider configuration, credentials, models, protocol conversion, rewrite bindings and endpoint overrides |
-| `/console/model-routes` | Cross-provider routes, members, weights, fallback tiers and public model names |
-| `/console/rule-sets` | Rewrite rules, ordering and whole-set saves |
-| `/console/transfer` | Configuration export and import |
-| `/console/clients` | Reusable connection profiles |
-| `/console/settings` | Instance and logging settings |
-| `/console/tokenizer` | Vocabulary downloads and model vocabulary bindings |
-| `/console/update` | Available update operations for the host |
+The console combines personal pages, from `/portal/api/context`, with the
+management sections returned by `/admin/api/context`. What you see depends on
+your role:
 
-The provider's **Routing** tab controls operation/protocol conversion. **Model
-routes** choose among upstream providers; these are separate settings.
+- Instance administrators manage the whole gateway.
+- Organization and team administrators manage their own credentials through
+  the same **Providers** entry. Their **Organizations** and **Teams** pages
+  show only the objects they are admitted to and their cost budgets, with no
+  identity create/edit/delete and no provider configuration.
 
-Configuration tables support current-page selection and batch deletion; rows
-with an enabled flag also support batch enable/disable. Filtering, changing
-page, or changing management scope clears the selection. Each batch uses the
-existing transactional configuration API.
+If you administer more than one organization or team, choose the scope in the
+account menu. Management requests then carry the server-provided scope
+selector in the `x-gproxy-admin-scope` header. Switching scope closes open
+editors and login flows and replaces the cached data for the scope. A write
+that is still being submitted must finish before you can switch. Personal
+pages do not depend on the management scope.
 
-## Credentials and Upstream Sign-in
+Personal cost budgets appear read-only on **Overview**, next to usage. There is
+no separate personal quota page; administrators edit budgets on the user, API
+key, organization or team they belong to.
 
-Open the provider's Credentials tab to manage its credentials. New credentials
-and sign-in flows inherit that provider. Ownership choices
-are restricted to the current administrative scope. Tenant directories expose
-provider labels and supported actions, not gateway configuration.
+## Pages
 
-Editing a credential opens one panel with **Basic settings**, **Local limits**
-and **Upstream allowance** tabs. The credential row offers Upstream allowance, a
-compact model test dialog, and deletion. Secret
-reveal and refresh sit below the secret field in Basic settings; lifecycle
-status and health reset sit in the status area. The test dialog loads available
-models and shows the result, latency, and reply. Upstream readings are presented as amounts and reset
-times; generation tests make a real upstream request.
+The configuration pages, with their menu labels:
 
-**Add by signing in** offers the channel's supported methods:
+| Console path | Menu label | Contents |
+| --- | --- | --- |
+| `/console/providers` | **Providers** | provider configuration, credentials, models, protocol conversion, rewrite rule bindings, endpoint overrides |
+| `/console/model-routes` | **Model routes** | cross-provider routes, members, weights, fallback tiers and public model names |
+| `/console/rule-sets` | **Rule sets** | rewrite rules, their order, and saving a whole set at once |
+| `/console/model-catalog` | **Models** | the global model catalogue and global prices |
+| `/console/settings` | **Global settings** | instance and logging settings |
+| `/console/settings/transfer` | **Configuration transfer** (a tab of **Global settings**) | configuration export and import; `/console/transfer` opens the same panel |
+| `/console/clients` | **HTTP client configuration** | reusable connection profiles |
+| `/console/tokenizer` | **Vocabularies** | vocabulary downloads and model vocabulary bindings |
+| `/console/update` | **Updates** | the update operations this host supports |
 
-- Browser authorization: start, open the authorization link, then paste the
-  full callback URL including `code` and `state`. A registered loopback
-  callback may fail to load in the browser; copy its address anyway. This
-  Console does not run a local callback listener.
-- Device code: open the verification link and enter the displayed code. The
-  Console polls at the interval returned by the backend and stops on success,
-  denial, expiry or closing the window.
+A provider page has the tabs **Credentials**, **Models**, **Rules**,
+**Routing rules** and **Settings**. **Routing rules** controls operation and
+protocol conversion for that provider. **Model routes** chooses between
+upstream providers. The two are configured separately.
 
-Login sessions are bound to the initiating user, administrative scope and
-credential owner. Completion returns a credential ID, not its secret. Closing
-an unfinished flow stops the UI; cached sessions expire naturally. Refreshing
-the page does not restore the login wizard.
+Configuration tables let you select rows on the current page and delete them
+in one batch; tables whose rows have an enabled switch also allow batch enable
+and disable. Changing the filter or page, or switching management scope,
+clears the selection. Each batch goes through the existing transactional
+configuration API.
 
-All upstream login routes are POSTs under `/admin/api/credential-login`:
-`/authcode/start`, `/authcode/complete`, `/device/start`, `/device/poll`. They use the credentials section's scope checks. Scoped
-credential discovery and testing use
-`/admin/api/credentials/{id}/models/discover` and `/models/test` respectively.
+## Credentials and upstream sign-in
 
-## Quotas and Prices
+A provider's credentials are managed on its **Credentials** tab. New
+credentials and sign-in flows started there belong to that provider. The
+ownership you can choose is limited to the current management scope. Tenant
+directories show provider labels and the actions available, not gateway
+configuration.
 
-Administrators can set a key budget directly below its name in the **New key**
-form, both in personal Keys and in User keys. The key and initial budget commit
-in one transaction; invalid budgets create no key. Existing keys open a single
-editor with **Basic settings** and **Cost budget** tabs. Ordinary users keep
-the self-service key flow; administrators manage their budgets.
+Editing a credential opens one panel with three tabs: **Basic settings**,
+**Local limits** and **Upstream allowance**. From the credential row you can
+also open **Upstream allowance**, run a test, or delete the credential.
 
-Open **Cost budget** on a user, API key, organization or team. Rules are added
-and edited inside that panel, without another dialog. Costs remain decimal
-strings in USD; provider/credential request limits use unit `count`.
+- Revealing and refreshing the secret are below the secret field in **Basic
+  settings**.
+- Changing the lifecycle status and **Reset health state** are in the status
+  area.
+- The test dialog loads the available models and shows the result, the latency
+  and the reply. **Test generation** sends a real request upstream.
+- Upstream readings are shown as amounts, counts and reset times.
 
-A provider's **Settings → Default credential limits** applies each rule to
-**each credential separately**, not to a shared provider budget. The page shows
-configuration; individual credentials show usage and reset times. An enabled
-credential rule with the same rule name overrides the provider default.
-**Restore inheritance** deletes that credential override. Disabling an override
-also allows an enabled default to apply again; it does not mean unlimited use.
+### Signing in to an upstream
 
-Credential limit cards show their source, configured cap, actual usage and next
-reset. Tenant administrators can read effective credential limits; instance
-administrators configure operator limits. Period, amount/count, model pattern
-and enablement are edited in place. Custom duration and fixed-period anchors
-are advanced options.
+**Add by signing in** offers the sign-in methods the channel supports.
 
-Resetting a provider default affects every credential currently inheriting it,
-so its confirmation names that scope. An inherited card has no credential-only
-reset button. Credential overrides and caller budgets reset only their own
-rule. None of these actions resets the upstream account allowance.
+For browser authorization:
 
-Price rules may apply to all providers or one provider, and model patterns
-support `*` and `?`. Multiple operation-specific rules can coexist. Edit global prices from the Models page and provider-specific prices from a
-provider's Models tab. These existing model dialogs manage rules, dimensional
-rates and context/service tiers together.
+1. Click **Start sign-in** and open the authorization link.
+2. Complete the authorization with the upstream.
+3. Copy the full callback URL, including `code` and `state`, and paste it into
+   the console. If the callback is a registered loopback address, the page may
+   fail to load in the browser; copy the address from the address bar anyway.
+   The console does not run a local callback listener.
+4. Click **Complete sign-in**.
 
-## Import and Export
+For a device code, open the verification link and enter the code the console
+shows. The console polls at the interval the backend returns and stops on
+success, denial, expiry, or when you close the window.
 
-The transfer document contains gateway configuration, not identities, usage
-or request logs. Export omits credential secrets by default. Including secrets
-exports the stored sealing format. Import accepts the current v4 envelope.
+A login session is bound to the user who started it, the management scope and
+the credential owner. Completing it returns the credential ID, never the
+secret. Closing an unfinished flow stops the UI only; the cached session
+expires on its own. Reloading the page does not restore the login wizard.
 
-The file summary shows version and record counts; it is not a server-side dry
-run. **Merge** updates matching IDs and keeps unmentioned records. **Replace**
-also deletes unmentioned records of the exported configuration kinds.
+The upstream login routes are POST requests under
+`/admin/api/credential-login`: `/authcode/start`, `/authcode/complete`,
+`/device/start` and `/device/poll`. They use the same scope checks as the
+credentials section. Model discovery and testing for a credential use
+`/admin/api/credentials/{id}/models/discover` and `/models/test`.
 
-For encrypted secrets from another master key, supply the source key so the
-backend can reseal them. Without it, encrypted blobs require the same key at
-the destination. The UI clears the source key after submission.
+## Quotas and prices
 
-Import is transactional. After it commits, the host reloads runtime settings.
-Read the returned warnings and skipped counts: a reload failure is reported
-as an already-imported configuration with a runtime warning, not as a rolled
-back import.
+### Key budgets
+
+Administrators can set a budget for a key directly in the **New key** form,
+below the key name (**Set a budget for this key**). This works both in **Personal
+→ Your keys** and in **Access control → User keys**. The key and its first budget are saved in one
+transaction; if the budget is invalid, no key is created. Editing an existing
+key opens one panel with **Basic settings** and **Cost budget** tabs.
+
+Ordinary users create and manage their own keys as before, but only
+administrators set budgets on them.
+
+### Cost budgets
+
+Users, API keys, organizations and teams each have a **Cost budget** entry.
+Rules are added and edited inside that panel, without a second dialog. Costs
+are decimal strings in USD. Request-count limits on providers and credentials
+use the unit `count`.
+
+### Default credential limits
+
+A provider's **Settings → Default credential limits** apply each rule to each
+credential separately; they are not a budget shared by the provider. That page
+shows the configuration; usage and reset times are shown on each credential.
+
+An enabled credential rule with the same name overrides the provider default.
+**Restore inheritance** deletes the credential's override. Disabling an
+override also lets an enabled default apply again; it does not remove the
+limit.
+
+Credential limit cards show the source of the rule, the configured cap, the
+actual usage and the next reset. Organization and team administrators can see
+the effective limits; instance administrators configure them. Period, amount
+or count, model pattern and enabled state are edited in place. A custom
+duration and the anchor of a fixed period are under the advanced options.
+
+### Resetting limits
+
+Resetting a provider default affects every credential that currently inherits
+it, and the confirmation says so. An inherited card has no reset button of its
+own. Resetting a credential override or a caller budget resets only that rule.
+None of these actions resets the upstream account's allowance.
+
+### Prices
+
+Global prices are edited on the **Models** page, and provider-specific prices on
+a provider's **Models** tab. The model dialog manages the price rule, its rates
+for each dimension, and its context and service tiers together.
+
+A price rule applies to all providers or to one provider, and its model
+pattern accepts `*` and `?`. One model can have several rules for different
+operations. For how a price is computed, see
+[Pricing and tiers](/reference/pricing).
+
+## Import and export
+
+The transfer document contains gateway configuration. It does not contain
+identities, usage or request logs.
+
+- **Export configuration** leaves credential secrets out unless you tick
+  **Include stored credential secrets**. Included secrets are exported in
+  their stored, sealed form.
+- **Import configuration** accepts the current v4 document format. The summary
+  shown after you choose a file lists the format version and record counts; it
+  is not a server-side dry run.
+
+The import mode decides what happens to existing records:
+
+- **Merge** updates records with matching IDs and keeps records the file does
+  not mention.
+- **Replace configuration** also deletes records the file does not mention,
+  within the configuration kinds that are exported.
+
+Encrypted secrets from an instance with a different master key can only be
+read if you enter that key in **Source master key (optional, Hex or Base64)**,
+so the backend can reseal them. Without it, the destination must use the same
+master key. The console clears the field after submitting.
+
+The import runs in one transaction, and after it commits the host reloads its
+runtime settings. Read the returned warnings and skipped counts. If the reload
+fails, the result reports a configuration that has been imported plus a
+runtime warning; the import has not been rolled back.
 
 ## Fonts
 
-The Console uses system fonts by default in CLI and Application builds. You can choose to download Noto Sans, Noto Sans SC/TC and Noto Sans Mono during application setup or in Settings. GPROXY downloads about 9.2 MiB from `https://gproxy.leenhawk.com/fonts/`, verifies the files and stores them in its local data directory for offline use. No font requests are made to the CDN until you choose to download. Deleting the fonts in Settings restores system fonts. Edge serves bundled same-origin static fonts; headless packages contain no Console or fonts.
+In CLI and Application builds the console uses system fonts by default. You
+can download Noto Sans, Noto Sans SC/TC and Noto Sans Mono during application
+setup or later under **Interface fonts** in settings (**Download interface
+fonts**). GPROXY downloads about 9.2 MiB from
+`https://gproxy.leenhawk.com/fonts/`, verifies the files and stores them in
+its local data directory, so they work offline. No font requests are made
+until you choose to download. **Delete fonts and use system fonts** goes back
+to system fonts.
 
-## Building the Console
+Edge deployments serve bundled static fonts from the same origin. Headless
+packages contain neither the console nor fonts.
 
-Run `pnpm --dir console lint`, `pnpm --dir console test`, and
-`pnpm --dir console build`. The build type-checks, bundles with Vite and copies
-assets to the embedded Console directory. Native binary builds can then serve
-that bundle under `/console`; Edge deployments serve the same bundle as static
-assets in front of the gateway.
+## Building the console
+
+Run `pnpm --dir console lint`, `pnpm --dir console test` and
+`pnpm --dir console build`. The build type-checks the code, bundles it with
+Vite and copies the assets into the embedded console directory. A native
+binary built afterwards serves that bundle at `/console`; Edge deployments
+serve the same bundle as static assets in front of the gateway. See
+[Building](/development/building).

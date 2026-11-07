@@ -1,77 +1,59 @@
 ---
-title: "重寫規則與協議覆蓋"
-description: "設定提示詞、快取斷點、JSON 與文字重寫，以及上游協議和端點。"
-sidebarTitle: "改寫規則與操作覆蓋"
+title: "重寫規則與協定覆蓋"
+description: "設定提示詞、快取斷點、JSON 與文字重寫，以及上游協定和端點。"
+sidebarTitle: "重寫規則與協定覆蓋"
 ---
 
-在供應商的重寫規則頁面新增規則，選擇型別並填寫內容。新建供應商會自動建立並繫結同名預設規則集，一般不需要手動管理繫結；多個供應商需要共用規則時，再使用高階繫結設定。
+重寫規則在請求送往上游、或回應返回用戶端的途中修改內容：新增系統文字、放置快取斷點、修改 JSON 欄位、取代文字以及設定請求標頭。本頁最後一節介紹協定與端點覆蓋，用於決定供應商在某個操作上使用哪種上游協定和 URL。
 
-## 規則型別 {#规则类型}
+## 新增規則
 
-| 介面型別 | 用途 | API `action` |
+開啟供應商的「重寫規則」頁面，新增規則，選擇類型並填寫內容。建立供應商時會自動建立並綁定一個同名的預設規則集，只有一個供應商時無需手動管理綁定。多個供應商需要共用一組規則時，再使用進階綁定設定。
+
+| 介面類型 | 用途 | API `action` |
 | --- | --- | --- |
-| 系統提示詞 | 在現有系統指令前或後新增文字 | `system_text` |
-| 快取斷點 | 按協議為全域性、系統、訊息或工具新增快取標記 | `cache_breakpoint` |
-| JSON 改寫 | 設定、刪除欄位，或合併 JSON 物件 | `set`、`delete`、`merge` |
-| 文字轉換 | 對正文、請求頭或查詢引數做正則替換 | `replace` |
-| 請求頭 | 設定值，或合併逗號分隔的值 | `header_set`、`header_merge` |
+| 系統文字 | 在現有系統指令前或後新增文字 | `system_text` |
+| 快取斷點 | 按協定為全域、系統、訊息或工具新增快取標記 | `cache_breakpoint` |
+| 重寫 | 設定、刪除欄位，或合併 JSON 物件 | `set`、`delete`、`merge` |
+| 變換 | 對正文、請求標頭或查詢參數做正規表示式取代 | `replace` |
+| 請求標頭 | 設定值，或合併逗號分隔的值 | `header_set`、`header_merge` |
 
-系統提示詞支援 Claude、OpenAI Chat、Responses（含 WebSocket）和 Gemini。快取斷點支援 Claude 與 OpenAI 協議；具體位置和有效期見[提示快取](/zh-tw/guides/claude-caching)。
+系統文字支援 Claude、OpenAI Chat、Responses（含 WebSocket）和 Gemini。快取斷點支援 Claude 與 OpenAI 協定，具體位置和有效期見[提示快取](/zh-tw/guides/claude-caching)。
 
-## 高階 JSON 編輯 {#高级-json-编辑}
+每條規則都有 `phase`（`request`、`response` 或 `both`）和 `target`（`body`、`header` 或 `query`）。
 
-在規則集內新建或編輯規則時，切換到“高階 JSON”即可直接貼上一個 v4 規則物件。供應商的重寫規則頁面也提供此入口。表單和 JSON 可以相互切換，並支援格式化；JSON 有誤時會保留輸入並提示，儲存時還會校驗規則是否可執行。
+## 執行順序
 
-例如，將正文中的 `"type":"function"}` 替換為 `"type":"function","strict":false}`：
+請求先轉換為上游協定，然後執行請求規則，最後由渠道送出。回應先執行回應規則，再轉換回用戶端協定。因此，規則中的欄位路徑要按上游格式填寫。例如，OpenAI Chat 請求路由到 Claude 供應商後，請求規則看到的已經是 Claude 的 `system` 和 `messages` 欄位。
 
-```json
-{
-  "action": "replace",
-  "phase": "request",
-  "target": "body",
-  "pattern": "\"type\":\"function\"\\}",
-  "replacement": "\"type\":\"function\",\"strict\":false}"
-}
-```
+已啟用的規則集綁定按 `sortOrder`、再按 ID 排序執行，集內已啟用的規則也按同樣方式排序。每條規則都基於前一條的結果執行。系統文字和快取斷點規則與其他規則遵循同一順序。
 
-這裡使用 v4 的 `action`、`pattern`、`replacement` 欄位。規則集、ID 和順序由頁面管理，不填入 JSON；可選的過濾條件及 `enabled` 可以一併填寫。省略過濾條件表示不限制匹配，省略 `enabled` 表示啟用。一次編輯一條規則，不接受規則陣列。
+## 路徑、正規表示式與請求標頭
 
-## 執行位置與順序 {#执行位置与顺序}
+JSON 改寫需要填寫路徑，例如 `temperature` 或 `messages.*.content`，路徑中的 `*` 表示所有元素。`set` 的值可以是任意合法 JSON，`merge` 的值必須是 JSON 物件，`delete` 不需要值。
 
-請求先轉換為上游協議，再執行請求重寫，然後由渠道傳送。回應先執行回應重寫，再轉換為用戶端協議。因此，規則中的欄位路徑必須使用**上游格式**。
+變換使用 Rust 正規表示式語法，支援 `(?i)`、`(?s)`，取代內容中可以使用 `$1` 和 `${name}`。填寫正文路徑時，只在選中的 JSON 字串值內取代；不填路徑時對整段正文文字取代，此時要注意取代後仍是合法 JSON。
 
-例如，OpenAI Chat 請求轉到 Claude 供應商後，規則應使用 Claude 的 `system` 和 `messages` 欄位。
+請求標頭和查詢參數規則需要填寫 `targetName`。`header_set` 取代請求標頭的值；`header_merge` 合併逗號分隔的值並去除重複。不要把上游金鑰寫進與其他供應商共用的規則。
 
-規則集繫結和集內規則分別按 `sortOrder`、ID 排序，只執行啟用項。後一條規則會看到前一條的結果。系統提示詞、快取斷點和其他規則也遵循這個順序。
+## 過濾條件
 
-## 欄位與正則 {#字段与正则}
+過濾條件限制規則在什麼情況下執行。所有已設定的條件都滿足時規則才會執行，未設定的條件不做限制。
 
-JSON 改寫需要填寫路徑，例如 `temperature` 或 `messages.*.content`。路徑中的 `*` 表示所有元素。`set` 的值必須是合法 JSON，`merge` 的值必須是 JSON 物件；`delete` 不需要值。
+| 條件 | API 欄位 | 比對內容 |
+| --- | --- | --- |
+| 操作與協定 | `filterOperationKeys` | 轉換後在供應商上執行的操作 |
+| 模型 | `filterModelPattern` | 上游模型名或用戶端請求的模型名，支援 `*`、`?` |
+| 請求標頭 | `filterHeaderPattern` | 正規表示式，逐一比對 `name: value` 形式的入站請求標頭 |
+| 串流事件 | `filterEventPattern` | SSE 事件名或 JSON `type`，用於正文規則 |
 
-文字轉換使用 Rust 正則語法，支援 `(?i)`、`(?s)` 和替換中的 `$1`、`${name}`。填寫正文路徑時只替換匹配的 JSON 字串值；不填路徑時對整段正文文字替換。修改 JSON 文字時應避免破壞語法。
+為某個用戶端新增相容規則時，應加上請求標頭過濾，以免影響其他用戶端。
 
-請求頭和查詢引數規則需要 `targetName`。`header_set` 替換請求頭值；`header_merge` 合併逗號分隔的值並去重。不要把上游金鑰寫進可共享的規則。
+模型過濾的候選項只來自已儲存的供應商模型及其變體。在供應商頁面中只顯示該供應商的模型；在獨立的規則集頁面中顯示所關聯供應商模型的聯集。未關聯供應商的規則集沒有候選項，但仍可手動填寫模型名或 `gpt-*` 這類比對模式。候選列表不會請求上游的模型目錄。
 
-## 過濾條件 {#过滤条件}
+## 正文與請求標頭條件
 
-| 條件 | 匹配內容 |
-| --- | --- |
-| 操作與協議 | 轉換後在供應商上執行的操作 |
-| 模型 | 上游模型或用戶端請求的模型名，支援 `*`、`?` |
-| 請求頭 | 入站請求頭的正則匹配 |
-| 流事件 | SSE 事件名或 JSON `type`，用於正文規則 |
-
-多個條件同時滿足時規則才生效。省略的條件不限制匹配。為某個用戶端新增相容規則時，應配置請求頭過濾，避免影響其他用戶端。
-
-模型篩選的候選只來自供應商已新增的模型和變體。供應商頁面僅顯示當前供應商的模型；獨立規則集頁面顯示關聯供應商的模型並集。未關聯供應商時沒有候選，仍可手動填寫模型名或 `gpt-*` 等匹配模式。候選列表不會請求上游模型目錄。
-
-## 串流回應 {#流式响应}
-
-正文重寫以完整事件為單位執行，例如 SSE 事件或 JSON 陣列元素，不以網路資料塊為單位。單個事件超過 `settings.maxStreamEventBytes` 時會報錯。可以用事件過濾器只修改特定型別的事件。
-
-## 正文與請求頭條件 {#正文与请求头条件}
-
-在過濾條件中填寫正文路徑或請求頭名稱，即可讓規則按欄位值觸發。兩者與現有模型、操作、請求頭正則及事件條件同時滿足時才執行：
+`filterBody` 和 `filterHeader` 讓規則只在某個正文欄位或請求標頭取特定值時執行。兩者可以單獨使用，也可以同時使用，並且要與其他過濾條件同時滿足：
 
 ```json
 {
@@ -96,19 +78,19 @@ JSON 改寫需要填寫路徑，例如 `temperature` 或 `messages.*.content`。
 }
 ```
 
-`filterBody` 判斷當前 JSON 正文，能看到前面規則的修改；僅支援正文目標。路徑支援 `reasoning.effort`、`messages.0.role`，不支援 `*`。值按 JSON 型別比較，`"1"` 不等於 `1`。
+`filterBody` 判斷目前的 JSON 正文，能看到前面規則所做的修改，只能用於正文目標。路徑由點分隔的鍵和陣列索引組成，例如 `reasoning.effort`、`messages.0.role`，不支援 `*`。相等比較區分 JSON 類型，`"1"` 不等於 `1`；欄位缺少與值為 `null` 是兩種情況。非 JSON 正文不滿足任何正文條件，`not_exists` 也不例外。
 
-`filterHeader` 判斷**原始入站請求頭**，可用於正文、請求頭和查詢參數規則。名稱不區分大小寫，值區分大小寫且不自動分割逗號列表。同名頭有多個值時，`eq` 任一值相等即命中；`ne` 要求頭存在且所有值均不相等。
+`filterHeader` 判斷原始的入站請求標頭，可用於任何目標和階段。請求標頭名稱不區分大小寫；值按區分大小寫的完整字串比較，不按逗號拆分。同名請求標頭出現多次時，`eq` 只要有一個值相等即命中；`ne` 要求請求標頭存在且所有值都不相等。
 
-比較方式為 `eq`、`ne`、`exists`、`not_exists`。前兩者必須提供 `value`；後兩者不填寫 `value`。缺欄位不滿足 `ne`；JSON `null` 是存在的值。非 JSON 正文不滿足任何正文條件，包括 `not_exists`。
+比較方式有 `eq`、`ne`、`exists` 和 `not_exists`。`eq` 和 `ne` 必須提供 `value`，`exists` 和 `not_exists` 不能提供。欄位缺少時不滿足 `ne`。
 
-SSE、NDJSON、JSON 陣列流和 WebSocket 按單個事件/元素/訊息判斷，不跨事件累積。普通 HTTP 正文按整份判斷。清空表單路徑/名稱，或將 API 欄位設為 `null`，即可移除對應條件；PATCH 省略欄位則保留原值。
+在串流傳輸中，條件對每個完整的 SSE 事件、NDJSON 記錄、JSON 陣列元素或 WebSocket 訊息單獨判斷，不在它們之間保留狀態；一般 HTTP 正文按整體判斷。要移除條件，在表單中清空對應的路徑或名稱，或者把 API 欄位設為 `null`。PATCH 請求中省略該欄位則保留原有條件。
 
-### JMESPath 表達式 {#jmespath-表达式}
+### JMESPath 表達式
 
-`filterBody` 也接受 JMESPath 表達式字串。表達式針對當前正文求值，僅返回布林值 `true` 時執行動作；型別錯誤、未知函式、其他求值錯誤或非布林結果都不觸發。表達式語法在儲存時校驗。原有 `{ "path", "op", "value" }` 物件格式繼續可用。
+`filterBody` 也可以是一個 JMESPath 表達式字串。表達式針對目前正文求值，只有結果為布林值 `true` 時才執行動作；類型錯誤、未知函式、其他求值錯誤以及非布林結果都視為不符合。儲存規則時會驗證表達式語法。原有的 `{ "path", "op", "value" }` 物件形式仍然可用。
 
-例如，只在最後一條訊息的任意文字塊包含 keepalive marker 時將 `max_tokens` 設為 0，歷史訊息中的 marker 不會命中：
+下面的規則只在最後一則訊息的某個文字區塊包含 keepalive 標記時把 `max_tokens` 設為 0，歷史訊息中的標記不會觸發：
 
 ```json
 {
@@ -123,13 +105,35 @@ SSE、NDJSON、JSON 陣列流和 WebSocket 按單個事件/元素/訊息判斷�
 }
 ```
 
-負索引 `[-1]`、多值篩選、`contains()`、比較和邏輯組合均遵循 [JMESPath 規範](https://jmespath.org/specification.html)。缺失欄位按 JMESPath 規則產生 `null`，可顯式用表達式判斷；非 JSON 正文不參與條件求值。`paths` 修改目標仍沿用原有點路徑語法，與表達式獨立。
+負索引 `[-1]`、投影、`contains()`、比較運算和邏輯組合都遵循 [JMESPath 規範](https://jmespath.org/specification.html)。缺少的欄位求值為 `null`，可以在表達式中明確判斷；非 JSON 正文始終不符合。動作的 `paths` 仍使用上文的點路徑語法，與表達式無關。
 
-表達式預先編譯；正文不變時，共用已轉換的 JMESPath 資料。前面規則實際修改正文後再重新轉換，避免使用過期值。不使用表達式的規則不會建立 JMESPath 資料副本。每個串流事件獨立判斷。複雜全量查詢的成本仍隨正文大小增加。
+表達式只編譯一次。正文沒有變化時，所有表達式共用同一份轉換後的 JMESPath 資料；前面的規則確實修改了正文時，會重新轉換，避免讀到過期的值。不使用表達式的規則不會產生這份額外副本。串流中的每個單元單獨求值；需要走訪整個文件的查詢，耗時仍隨文件大小增長。
 
-## 透過 API 管理 {#通过-api-管理}
+## 串流回應
 
-下面建立一條正則替換規則，把指定路徑中的 `widget` 替換為 `gadget`。將規則集 ID 替換為你的實際值。
+正文重寫以完整事件為單位執行，例如一個 SSE 事件或一個 JSON 陣列元素，而不是網路資料塊。單個事件超過 `settings.maxStreamEventBytes` 時請求失敗。可以用事件過濾只改寫特定類型的事件。
+
+## 以 JSON 編輯規則
+
+在規則集中，或在供應商的「重寫規則」頁面中新建或編輯規則時，切換到「進階 JSON」即可貼上一個 v4 規則物件。表單與 JSON 可以相互切換，JSON 可以格式化。輸入有誤時內容會保留在編輯器中並顯示錯誤，儲存時還會驗證規則能否執行。
+
+例如，將正文中的 `"type":"function"}` 取代為 `"type":"function","strict":false}`：
+
+```json
+{
+  "action": "replace",
+  "phase": "request",
+  "target": "body",
+  "pattern": "\"type\":\"function\"\\}",
+  "replacement": "\"type\":\"function\",\"strict\":false}"
+}
+```
+
+請使用 v4 的 `action`、`pattern`、`replacement` 欄位。規則集、ID 和順序由頁面管理，不要寫進 JSON。選用的過濾條件和 `enabled` 可以一併填寫；省略過濾條件表示不限制，省略 `enabled` 表示啟用。編輯器一次只接受一個規則物件，不接受陣列。
+
+## 透過 API 管理
+
+下面的範例把選中字串中的 `widget` 取代為 `gadget`。請換成你自己的規則集 ID。
 
 ```sh
 curl -sS -X POST http://127.0.0.1:8787/admin/api/rules \
@@ -141,22 +145,24 @@ curl -sS -X POST http://127.0.0.1:8787/admin/api/rules \
        "filterOperationKeys":[{"operation":"generate_content","dialect":"openai_chat"}]}'
 ```
 
-`PUT /admin/api/rule-sets/{id}/rules` 可一次替換整組規則。系統提示詞與快取斷點的 `replacement` 是 JSON 編碼的配置字串，控制台會生成它，不需要手工拼接。
+`PUT /admin/api/rule-sets/{id}/rules` 一次取代規則集中的全部規則。系統文字和快取斷點規則的 `replacement` 是 JSON 編碼的設定字串，控制台會自動產生，無需手工拼接。
 
-## 相容預設 {#兼容预设}
+## 相容預設
 
-`GET /admin/api/rule-presets` 返回內建的 OpenCode、the agent-mono、Aider、Cline、Continue 和 Cursor 相容預設。規則數量與內容以當前介面返回為準。
+`GET /admin/api/rule-presets` 回傳內建的 OpenCode、pi-mono、Aider、Cline、Continue 和 Cursor 相容預設。每個預設包含哪些規則，以介面的回傳為準。
 
-`POST /admin/api/rule-sets/{id}/rule-presets/{preset}` 會**替換**規則集內的已有規則。需要保留原規則時，先匯出或讀取規則，合併後再儲存。
+<Warning>
+`POST /admin/api/rule-sets/{id}/rule-presets/{preset}` 會取代規則集中的全部已有規則。需要保留原有規則時，先讀取或匯出，合併後再儲存。
+</Warning>
 
-## 協議與端點覆蓋 {#协议与端点覆盖}
+## 協定與端點覆蓋
 
-供應商的“路由規則”控制使用哪個上游協議，與選擇供應商的“模型路由”是不同的配置。
+供應商的「路由規則」決定它在某個操作上使用哪種上游協定。它與選擇供應商的「模型路由」是兩項不同的設定。
 
-- `operation_rules` 覆蓋某個操作支援的協議列表。用戶端協議在列表中時優先直通，否則嘗試轉換到列表的第一項。
-- `operation_endpoints` 覆蓋某個操作、協議和傳輸方式的完整端點 URL。
+- `operation_rules` 覆蓋供應商在某個操作上的協定列表。用戶端協定在列表中時直接透傳，否則轉換為列表中的第一個協定。
+- `operation_endpoints` 覆蓋某個操作、協定和傳輸方式對應的完整端點 URL。
 
-例如，修改生成操作支援的協議：
+例如，修改產生操作使用的協定：
 
 ```sh
 curl -sS -X POST http://127.0.0.1:8787/admin/api/operation-rules \
@@ -166,6 +172,6 @@ curl -sS -X POST http://127.0.0.1:8787/admin/api/operation-rules \
        "action":"dialects","target":["claude","openai_chat"]}'
 ```
 
-沒有覆蓋時使用渠道預設值。`POST /admin/api/providers/{id}/routing-defaults/reset` 清除該供應商的操作規則和端點覆蓋。
+沒有覆蓋時使用渠道的預設值。`POST /admin/api/providers/{id}/routing-defaults/reset` 清除該供應商的操作規則和端點覆蓋。
 
-`custom` 渠道還需要在供應商配置中宣告 `dialects`，例如 `["openai_chat", "openai"]`。某個操作無法呼叫時，先核對上游是否支援它，再檢查這個列表和操作覆蓋。
+`custom` 渠道還需要在供應商設定中宣告 `dialects`，例如 `["openai_chat", "openai"]`。某個操作呼叫失敗時，先確認上游是否支援該操作，再檢查這個列表和操作覆蓋。
