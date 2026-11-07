@@ -62,7 +62,7 @@ AGPL-3.0-or-later.
 | `gproxy-channel` | AGPL | `BaseChannel`, the optional ability traits, and the upstream adapters, one Cargo feature per channel | Depend on the engine or the store; pick a transport backend |
 | `gproxy-client` | MIT | The outbound transport contract (`OutboundClient`) and its `reqwest` / `wreq` implementations, plus the wasm `fetch` and Workers backends | Read the database, pick a credential, convert a protocol |
 | `gproxy-core` | AGPL | The engine: the provider execution snapshot, credential selection, refresh and health inside a permitted set, conversion, rewriting, budgets, pricing, settlement and observation | Resolve a route, check a permission, run a server |
-| `gproxy-store` | AGPL | SeaORM entities, batch repositories, schema migration; database backend chosen by feature | |
+| `gproxy-store` | MIT | SeaORM entities, batch repositories, schema migration; database backend chosen by feature | |
 | `gproxy-cache` | MIT | TTL state, atomic counters, permits and leases, cross-instance invalidation; Memory and Redis backends | Hold business entities; fall back to local state when the backend fails |
 | `gproxy-seaorm` | MIT | SeaORM batch reads and writes, the D1 binding, type mapping, schema sync | Hold business entities |
 | `gproxy-tokenizer` | MIT | String to token count against a local shared vocabulary | Parse requests, download, run background work |

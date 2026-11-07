@@ -42,7 +42,7 @@ host =  app + 一個傳輸層
 | `gproxy-channel` | AGPL | `BaseChannel`、可選能力 trait，以及上游介面卡，每個渠道對應一個 Cargo feature | 依賴引擎或 store；選擇傳輸後端 |
 | `gproxy-client` | MIT | 出站傳輸契約（`OutboundClient`）及其 `reqwest` / `wreq` 實作，以及 wasm 的 `fetch` 與 Workers 後端 | 讀資料庫、選憑證、做協議轉換 |
 | `gproxy-core` | AGPL | 引擎：供應商執行快照，在允許集合內選擇、重新整理憑證並跟蹤其健康狀態，轉換、改寫、預算、計價、結算與觀測 | 解析路由、檢查權限、執行 server |
-| `gproxy-store` | AGPL | SeaORM 實體、批次倉儲、結構遷移；資料庫後端按 feature 選擇 | |
+| `gproxy-store` | MIT | SeaORM 實體、批次倉儲、結構遷移；資料庫後端按 feature 選擇 | |
 | `gproxy-cache` | MIT | TTL 狀態、原子計數、許可與租約、跨實例失效通知；提供 Memory 與 Redis 後端 | 儲存業務實體；後端故障時退回本地狀態 |
 | `gproxy-seaorm` | MIT | SeaORM 批次讀寫、D1 binding、型別對映、結構同步 | 儲存業務實體 |
 | `gproxy-tokenizer` | MIT | 基於本地共享詞表把字串換算為 token 數 | 解析請求、下載、後臺任務 |
