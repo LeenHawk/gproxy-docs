@@ -124,9 +124,11 @@ CLI 和容器執行個體在首次啟動時建立管理員，在瀏覽器中開�
 
 ## 字型
 
-CLI 和 Application 版本的控制台預設使用系統字型。可以在應用首次設定時，或之後在設定中的“介面字型”處點選“下載介面字型”，下載 Noto Sans、Noto Sans SC/TC 和 Noto Sans Mono。GPROXY 從 `https://gproxy.leenhawk.com/fonts/` 下載約 9.2 MiB 字型，驗證後儲存在本機資料目錄中，離線也能使用。在選擇下載之前，不會發出任何字型請求。點選“刪除字型並使用系統字型”即可恢復系統字型。
+CLI 和 Application 版本的控制台預設使用系統字型。可以在應用首次設定時，或之後在設定中的“介面字型”處點選“下載介面字型”，下載 Noto Sans、Noto Sans SC/TC 和 Noto Sans Mono。GPROXY 會依序嘗試從公開的 npm CDN（npmmirror、jsDelivr、unpkg）下載約 9.2 MiB 字型。每個檔案都以自己的 SHA-256 命名，雜湊不符就不接受，因此不需要信任 CDN。字型儲存在本機資料目錄中，離線也能使用。在選擇下載之前，不會發出任何字型請求。點選“刪除字型並使用系統字型”即可恢復系統字型。
 
-Edge 部署把字型作為同源靜態資源提供。headless 包既不含控制台，也不含字型。
+Edge 部署把字型作為同源靜態資源提供。headless 套件既不含控制台，也不含字型。
+
+v4.1.14 及更早的版本從 `https://gproxy.leenhawk.com/fonts/` 下載字型，文件站已不再提供這些檔案，所以在這些版本上下載會失敗，控制台繼續使用系統字型。升級後即可恢復。
 
 ## 構建控制台
 
