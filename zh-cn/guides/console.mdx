@@ -124,9 +124,11 @@ CLI 和容器实例在首次启动时创建管理员，在浏览器中打开 `/c
 
 ## 字体
 
-CLI 和 Application 版本的控制台默认使用系统字体。可以在应用首次设置时，或之后在设置中的“界面字体”处点击“下载界面字体”，下载 Noto Sans、Noto Sans SC/TC 和 Noto Sans Mono。GPROXY 从 `https://gproxy.leenhawk.com/fonts/` 下载约 9.2 MiB 字体，校验后保存在本地数据目录中，离线也能使用。在选择下载之前，不会发出任何字体请求。点击“删除字体并使用系统字体”即可恢复系统字体。
+CLI 和 Application 版本的控制台默认使用系统字体。可以在应用首次设置时，或之后在设置中的“界面字体”处点击“下载界面字体”，下载 Noto Sans、Noto Sans SC/TC 和 Noto Sans Mono。GPROXY 会依次尝试从公共 npm CDN（npmmirror、jsDelivr、unpkg）下载约 9.2 MiB 字体。每个文件都以自己的 SHA-256 命名，哈希不符就不接受，因此不需要信任 CDN。字体保存在本地数据目录中，离线也能使用。在选择下载之前，不会发出任何字体请求。点击“删除字体并使用系统字体”即可恢复系统字体。
 
 Edge 部署把字体作为同源静态资源提供。headless 包既不含控制台，也不含字体。
+
+v4.1.14 及更早的版本从 `https://gproxy.leenhawk.com/fonts/` 下载字体，文档站已不再提供这些文件，所以在这些版本上下载会失败，控制台继续使用系统字体。升级后即可恢复。
 
 ## 构建控制台
 

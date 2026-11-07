@@ -220,14 +220,19 @@ runtime warning; the import has not been rolled back.
 In CLI and Application builds the console uses system fonts by default. You
 can download Noto Sans, Noto Sans SC/TC and Noto Sans Mono during application
 setup or later under **Interface fonts** in settings (**Download interface
-fonts**). GPROXY downloads about 9.2 MiB from
-`https://gproxy.leenhawk.com/fonts/`, verifies the files and stores them in
-its local data directory, so they work offline. No font requests are made
+fonts**). GPROXY downloads about 9.2 MiB from public npm CDNs, trying
+npmmirror, then jsDelivr, then unpkg. Each file is named by its SHA-256 and
+accepted only if the hash matches, so the CDN does not have to be trusted.
+The files are stored in the local data directory and work offline. No font requests are made
 until you choose to download. **Delete fonts and use system fonts** goes back
 to system fonts.
 
 Edge deployments serve bundled static fonts from the same origin. Headless
 packages contain neither the console nor fonts.
+
+Versions up to v4.1.14 download from `https://gproxy.leenhawk.com/fonts/`,
+which the documentation site no longer serves; on those versions the download
+fails and the console keeps system fonts. Upgrading fixes it.
 
 ## Building the console
 
