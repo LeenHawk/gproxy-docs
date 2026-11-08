@@ -48,3 +48,10 @@ jobs:
           auth="$(printf 'cnb:%s' "$CNB_TOKEN" | base64 -w0)"
           git -c credential.helper= -c "http.https://cnb.cool/.extraheader=Authorization: Basic $auth" \
             push --force https://cnb.cool/LeenHawk/gproxy-docs.git "$GITHUB_SHA:refs/heads/$GITHUB_REF_NAME"
+          # CNB is a push mirror; deleting dev on GitHub does not remove it there.
+          retired_dev="$(git -c credential.helper= -c "http.https://cnb.cool/.extraheader=Authorization: Basic $auth" \
+            ls-remote https://cnb.cool/LeenHawk/gproxy-docs.git refs/heads/dev | cut -f1)"
+          if [ -n "$retired_dev" ]; then
+            git -c credential.helper= -c "http.https://cnb.cool/.extraheader=Authorization: Basic $auth" \
+              push --force-with-lease="refs/heads/dev:$retired_dev" https://cnb.cool/LeenHawk/gproxy-docs.git :refs/heads/dev
+          fi
