@@ -113,7 +113,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
           },
           "ohos": {
               "name": "OpenHarmony / HarmonyOS NEXT",
-              "hint": "CLI в ZIP для ARM64 и x86_64. HAP экспериментальный и требует собственной подписи. Фоновая работа зависит от устройства, профиля подписи и выданных разрешений."
+              "hint": "CLI в ZIP для ARM64 и x86_64. HAP экспериментальный и требует собственной подписи."
           }
       }
   },
@@ -181,7 +181,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
         windows: { name: 'Windows', hint: 'ZIP needs no installer. MSIX attachments are Store submission packages and may not yet carry a Microsoft signature.' },
         macos: { name: 'macOS', hint: 'Choose ARM64 for Apple Silicon. Apps are ad-hoc signed and not notarized; allow them in System Settings on first launch.' },
         android: { name: 'Android', hint: 'The Application is an APK. The CLI runs inside Termux: install the DEB with apt, or unpack the ZIP and follow TERMUX.txt.' },
-        ohos: { name: 'OpenHarmony / HarmonyOS NEXT', hint: 'CLI ZIPs for ARM64 and x86_64. The HAP is experimental, needs your own signature and has no background service.' },
+        ohos: { name: 'OpenHarmony / HarmonyOS NEXT', hint: 'CLI ZIPs for ARM64 and x86_64. The HAP is experimental, needs your own signature.' },
       },
     },
     'zh-CN': {
@@ -248,7 +248,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
         windows: { name: 'Windows', hint: 'ZIP 无需安装器。MSIX 附件为商店提交包，可能尚未带有 Microsoft 签名。' },
         macos: { name: 'macOS', hint: 'Apple Silicon 请选 ARM64。应用为 ad-hoc 签名、未公证，首次启动需在系统设置中允许。' },
         android: { name: 'Android', hint: '应用版为 APK。CLI 在 Termux 中运行：用 apt 安装 DEB，或解压 ZIP 并按 TERMUX.txt 操作。' },
-        ohos: { name: 'OpenHarmony / HarmonyOS NEXT', hint: '提供 ARM64 与 x86_64 的 CLI ZIP。HAP 为实验性，需自行签名，且没有后台服务。' },
+        ohos: { name: 'OpenHarmony / HarmonyOS NEXT', hint: '提供 ARM64 与 x86_64 的 CLI ZIP。HAP 为实验性，需自行签名。' },
       },
     },
     'zh-TW': {
@@ -315,7 +315,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
         windows: { name: 'Windows', hint: 'ZIP 無需安裝程式。MSIX 附件為商店提交套件，可能尚未帶有 Microsoft 簽章。' },
         macos: { name: 'macOS', hint: 'Apple Silicon 請選 ARM64。應用為 ad-hoc 簽章、未公證，首次啟動需在系統設定中允許。' },
         android: { name: 'Android', hint: '應用版為 APK。CLI 在 Termux 中執行：用 apt 安裝 DEB，或解壓 ZIP 並依 TERMUX.txt 操作。' },
-        ohos: { name: 'OpenHarmony / HarmonyOS NEXT', hint: '提供 ARM64 與 x86_64 的 CLI ZIP。HAP 為實驗性，需自行簽章，且沒有背景服務。' },
+        ohos: { name: 'OpenHarmony / HarmonyOS NEXT', hint: '提供 ARM64 與 x86_64 的 CLI ZIP。HAP 為實驗性，需自行簽章。' },
       },
     },
   };
@@ -323,13 +323,13 @@ export const DownloadPage = ({ locale = 'en' }) => {
   const copy = GP_DL_COPY[locale] ?? GP_DL_COPY.en;
 
   const linuxRows = ['x86_64', 'aarch64', 'riscv64'].flatMap((arch) => [
-    { arch, variant: 'GNU', app: [{ asset: `gproxy-tauri-linux-${arch}.zip`, label: 'ZIP' }, { asset: `gproxy-tauri-linux-${arch}.deb`, label: 'DEB' }], cli: [{ asset: `gproxy-linux-${arch}.zip`, label: 'ZIP' }, { asset: `gproxy-linux-${arch}.deb`, label: 'DEB' }] },
-    { arch, variant: 'musl', app: [{ asset: `gproxy-tauri-linux-${arch}-musl.zip`, label: 'ZIP' }, { asset: `gproxy-tauri-linux-${arch}-musl.apk`, label: 'Alpine APK' }], cli: [{ asset: `gproxy-linux-${arch}-musl.zip`, label: 'ZIP' }, { asset: `gproxy-linux-${arch}-musl.apk`, label: 'Alpine APK' }] },
+    { arch, variant: 'GNU', app: [{ asset: `gproxy-tauri-linux-${arch}.deb`, label: 'DEB' }, { asset: `gproxy-tauri-linux-${arch}.zip`, label: 'ZIP' }], cli: [{ asset: `gproxy-linux-${arch}.deb`, label: 'DEB' }, { asset: `gproxy-linux-${arch}.zip`, label: 'ZIP' }] },
+    { arch, variant: 'musl', app: [{ asset: `gproxy-tauri-linux-${arch}-musl.apk`, label: 'Alpine APK' }, { asset: `gproxy-tauri-linux-${arch}-musl.zip`, label: 'ZIP' }], cli: [{ asset: `gproxy-linux-${arch}-musl.apk`, label: 'Alpine APK' }, { asset: `gproxy-linux-${arch}-musl.zip`, label: 'ZIP' }] },
   ]);
   const platforms = [
     { id: 'linux', rows: linuxRows },
-    { id: 'windows', store: true, scoop: true, rows: ['x86_64', 'aarch64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-windows-${arch}.zip`, label: 'ZIP' }, { asset: `gproxy-tauri-windows-${arch}.msix`, label: 'MSIX' }], cli: [{ asset: `gproxy-windows-${arch}.zip`, label: 'ZIP' }, { asset: `gproxy-windows-${arch}.msix`, label: 'MSIX' }] })) },
-    { id: 'macos', rows: ['aarch64', 'x86_64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-macos-${arch}.dmg`, label: 'DMG' }, { asset: `gproxy-tauri-macos-${arch}.zip`, label: 'ZIP' }], cli: [{ asset: `gproxy-macos-${arch}.zip`, label: 'ZIP' }, { asset: `gproxy-macos-${arch}.dmg`, label: 'DMG' }] })) },
+    { id: 'windows', store: true, scoop: true, rows: ['x86_64', 'aarch64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-windows-${arch}.msix`, label: 'MSIX' }, { asset: `gproxy-tauri-windows-${arch}.zip`, label: 'ZIP' }], cli: [{ asset: `gproxy-windows-${arch}.msix`, label: 'MSIX' }, { asset: `gproxy-windows-${arch}.zip`, label: 'ZIP' }] })) },
+    { id: 'macos', rows: ['aarch64', 'x86_64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-macos-${arch}.dmg`, label: 'DMG' }, { asset: `gproxy-tauri-macos-${arch}.zip`, label: 'ZIP' }], cli: [{ asset: `gproxy-macos-${arch}.dmg`, label: 'DMG' }, { asset: `gproxy-macos-${arch}.zip`, label: 'ZIP' }] })) },
     { id: 'android', fdroid: true, rows: ['aarch64', 'x86_64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-android-${arch}.apk`, label: 'APK' }], cli: [{ asset: `gproxy-android-${arch}.deb`, label: 'Termux DEB' }, { asset: `gproxy-android-${arch}.zip`, label: 'ZIP' }] })) },
     { id: 'ohos', rows: ['aarch64', 'x86_64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-ohos-${arch}-unsigned.hap`, label: 'HAP' }], cli: [{ asset: `gproxy-ohos-${arch}.zip`, label: 'ZIP' }] })) },
   ];
@@ -385,22 +385,9 @@ export const DownloadPage = ({ locale = 'en' }) => {
     const tag = `v${manifest.version}`;
     const encodedTag = encodeURIComponent(tag);
     const release = await json(`${gitlabApi}/${encodedTag}`);
-    // Release links carry no size; read it from the generic package the links
-    // point into. Sizes are cosmetic, so a failure only hides them.
-    const sizes = new Map();
-    try {
-      const packageVersion = release.assets.links[0]?.url.match(/\/packages\/generic\/gproxy\/([^/]+)\//)?.[1];
-      const projectApi = gitlabApi.replace(/\/releases$/, '');
-      const [pkg] = await json(`${projectApi}/packages?package_type=generic&package_name=gproxy&package_version=${packageVersion}`);
-      for (let page = 1; page; ) {
-        const response = await fetch(`${projectApi}/packages/${pkg.id}/package_files?per_page=100&page=${page}`, { signal });
-        if (!response.ok) break;
-        for (const file of await response.json()) sizes.set(file.file_name, file.size);
-        page = Number(response.headers.get('X-Next-Page')) || 0;
-      }
-    } catch (error) {
-      if (signal.aborted) throw error;
-    }
+    const sizes = new Map(manifest.artifacts.map((asset) => [
+      decodeURIComponent(new URL(asset.url).pathname.split('/').pop()), asset.size,
+    ]));
     return {
       tag_name: tag,
       html_url: `${base}/${encodedTag}`,
@@ -408,11 +395,60 @@ export const DownloadPage = ({ locale = 'en' }) => {
       assets: release.assets.links.map((asset) => ({
         name: asset.name,
         size: sizes.get(asset.name),
+        size_url: asset.url,
         browser_download_url: source === 'cnb'
           ? `${base}/download/${encodedTag}/${encodeURIComponent(asset.name)}`
           : asset.direct_asset_url,
       })),
     };
+  };
+
+  const loadSizes = async (release, signal, update) => {
+    // Package metadata covers installers too; the update manifest only covers
+    // self-updating packages. Keep this optional work off the release load path.
+    const sizes = new Map();
+    const packages = new Map();
+    for (const asset of release.assets) {
+      const match = asset.size_url?.match(/^(.*)\/packages\/generic\/gproxy\/([^/]+)\//);
+      if (match) packages.set(`${match[1]}/${match[2]}`, match);
+    }
+    await Promise.all([...packages.values()].map(async ([, projectApi, version]) => {
+      try {
+        const query = new URLSearchParams({ package_type: 'generic', package_name: 'gproxy', package_version: decodeURIComponent(version) });
+        const response = await fetch(`${projectApi}/packages?${query}`, { signal });
+        if (!response.ok) return;
+        const pkg = (await response.json()).find((item) => item.name === 'gproxy' && item.version === decodeURIComponent(version));
+        if (!pkg) return;
+        for (let page = 1; ; page++) {
+          const response = await fetch(`${projectApi}/packages/${pkg.id}/package_files?per_page=100&page=${page}`, { signal });
+          if (!response.ok) break;
+          const files = await response.json();
+          for (const file of files) sizes.set(file.file_name, file.size);
+          update(sizes);
+          if (files.length < 100) break;
+        }
+      } catch (error) {
+        if (signal.aborted) throw error;
+      }
+    }));
+    // If the registry API is unavailable, HEAD the same mirrored files. Limit
+    // concurrency and never download package bodies just to display a size.
+    const missing = release.assets.filter((asset) => asset.size_url && asset.size === undefined && !sizes.has(asset.name));
+    await Promise.all(Array.from({ length: Math.min(4, missing.length) }, async () => {
+      while (missing.length && !signal.aborted) {
+        const asset = missing.shift();
+        try {
+          const response = await fetch(asset.size_url, { method: 'HEAD', signal });
+          const size = Number(response.headers.get('Content-Length'));
+          if (response.ok && size > 0) {
+            sizes.set(asset.name, size);
+            update(sizes);
+          }
+        } catch (error) {
+          if (signal.aborted) throw error;
+        }
+      }
+    }));
   };
 
   const [source, setSource] = useState(null);
@@ -433,9 +469,19 @@ export const DownloadPage = ({ locale = 'en' }) => {
     let current = true;
     // Reset immediately so links and metadata from the previous source never linger.
     setState({ status: 'loading' });
-    const timeout = setTimeout(() => controller.abort(), 10000);
+    let timeout = setTimeout(() => controller.abort(), 10000);
     loadRelease(source, controller.signal)
-      .then((release) => { if (current) setState({ status: 'ready', release }); })
+      .then(async (release) => {
+        if (!current) return;
+        setState({ status: 'ready', release });
+        clearTimeout(timeout);
+        timeout = setTimeout(() => controller.abort(), 30000);
+        await loadSizes(release, controller.signal, (sizes) => {
+          if (current) setState((state) => ({ ...state, release: {
+            ...release, assets: release.assets.map((asset) => ({ ...asset, size: sizes.get(asset.name) ?? asset.size })),
+          } }));
+        }).catch(() => {});
+      })
       .catch(() => { if (current) setState({ status: 'offline' }); })
       .finally(() => clearTimeout(timeout));
     return () => {
@@ -484,7 +530,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
   const version = release ? release.tag_name : state.status === 'offline' ? '—' : '…';
 
   // First match in catalog order: the rows put the preferred package first
-  // (GNU before musl, DMG before ZIP, APK, ZIP before MSIX).
+  // (GNU before musl, native installers before ZIP).
   let forYou = null;
   if (release && guess) {
     const platform = platforms.find((p) => p.id === guess.os);
