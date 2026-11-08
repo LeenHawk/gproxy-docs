@@ -4,7 +4,7 @@ name: Docs
 # workflow only checks that it will build and mirrors every push to CNB.
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 

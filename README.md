@@ -39,10 +39,11 @@ pnpm check   # notifications.json, mint validate, mint broken-links
 
 ## Reference
 
-gproxy's CI runs `scripts/generate-reference.mjs` on every push of its `main`
-or `dev` and commits the result to the branch of the same name here: the JSON in
+gproxy's CI runs `scripts/generate-reference.mjs` and publishes the result here
+on pushes to its `main` branch: the JSON in
 `generated/` and the tables `scripts/render-reference.mjs` renders from it into
-`snippets/generated/`. To preview an unreleased Rust change, run it from a
+`snippets/generated/`. This repository uses only `main`; development branches
+in gproxy validate the export without publishing it. To preview an unreleased Rust change, run it from a
 gproxy checkout (the parent directory when this repository is its submodule,
 or `GPROXY_ROOT`):
 
