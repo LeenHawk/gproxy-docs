@@ -58860,6 +58860,12 @@
             },
             "type": "array"
           },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "expiresAtMs": {
             "format": "int64",
             "type": [
@@ -58895,12 +58901,28 @@
           "program": {
             "type": "string"
           },
+          "scopeLabels": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "usable": {
             "type": "boolean"
           }
         },
         "required": [
           "program",
+          "title",
+          "description",
+          "scopeLabels",
           "grantId",
           "label",
           "availableCount",
