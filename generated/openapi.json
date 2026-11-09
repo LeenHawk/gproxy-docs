@@ -13526,6 +13526,16 @@
               }
             ]
           },
+          "thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Input_MessageThreadParam"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "tool_choice": {
             "anyOf": [
               {
@@ -19789,6 +19799,41 @@
           "assistant"
         ],
         "type": "string"
+      },
+      "Input_MessageThreadParam": {
+        "description": "Server-held Messages conversation state (`message-threads-2026-08-12`).",
+        "oneOf": [
+          {
+            "additionalProperties": true,
+            "properties": {
+              "type": {
+                "const": "create",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": true,
+            "properties": {
+              "previous_message_id": {
+                "type": "string"
+              },
+              "type": {
+                "const": "continue",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "previous_message_id"
+            ],
+            "type": "object"
+          }
+        ]
       },
       "Input_MessageToolCall": {
         "anyOf": [
@@ -74545,7 +74590,7 @@
   "info": {
     "description": "Forwarding, management, portal and OAuth APIs generated from Rust types. Input and output schemas preserve their respective Serde contracts. Streaming events and WebSocket messages are documented alongside HTTP payloads.",
     "title": "GPROXY HTTP API",
-    "version": "4.2.1"
+    "version": "4.2.2"
   },
   "openapi": "3.1.0",
   "paths": {
