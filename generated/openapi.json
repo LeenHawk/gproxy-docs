@@ -42429,6 +42429,26 @@
         ],
         "type": "object"
       },
+      "Output_CredentialUsageDto": {
+        "description": "One credential with its open upstream cycles, for an overview of many\ncredentials at once. Closed cycles and blocks stay on the per-credential\n[`CredentialQuotaDto`] read.",
+        "properties": {
+          "credential": {
+            "$ref": "#/components/schemas/Output_CredentialDto"
+          },
+          "cycles": {
+            "description": "Open cycles only, by window.",
+            "items": {
+              "$ref": "#/components/schemas/Output_CredentialCycleDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "credential",
+          "cycles"
+        ],
+        "type": "object"
+      },
       "Output_CustomCall": {
         "additionalProperties": true,
         "properties": {
@@ -77232,6 +77252,242 @@
           }
         ],
         "summary": "GET /admin/api/credentials/providers",
+        "tags": [
+          "Management"
+        ],
+        "x-gproxy-section": "credentials"
+      }
+    },
+    "/admin/api/credentials/usage": {
+      "get": {
+        "parameters": [
+          {
+            "description": "",
+            "in": "query",
+            "name": "credentialId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "enabled",
+            "required": false,
+            "schema": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Restrict price rules to the global scope.",
+            "in": "query",
+            "name": "globalOnly",
+            "required": false,
+            "schema": {
+              "description": "Restrict price rules to the global scope.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "modelId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Exact pricing pattern (not a runtime wildcard match).",
+            "in": "query",
+            "name": "modelPattern",
+            "required": false,
+            "schema": {
+              "description": "Exact pricing pattern (not a runtime wildcard match).",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "ownerId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "ownerKind",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "1-based. Zero and absent both mean the first page.",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "description": "1-based. Zero and absent both mean the first page.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Clamped to 1..=500; absent means 50.",
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "description": "Clamped to 1..=500; absent means 50.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "priceRuleId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "providerId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "routeId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "ruleSetId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Case-insensitive substring of the family's natural name column.",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "description": "Case-insensitive substring of the family's natural name column.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Administrative scope selected by the caller.",
+            "in": "header",
+            "name": "x-gproxy-admin-scope",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Output_CredentialUsageDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Envelope"
+                }
+              }
+            },
+            "description": "Gateway error"
+          }
+        },
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "bearer": []
+          },
+          {
+            "anthropicKey": []
+          },
+          {
+            "googleKey": []
+          }
+        ],
+        "summary": "GET /admin/api/credentials/usage",
         "tags": [
           "Management"
         ],
