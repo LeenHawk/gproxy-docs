@@ -40754,6 +40754,45 @@
         ],
         "type": "string"
       },
+      "Output_ConsoleBundleStatus": {
+        "properties": {
+          "builtin": {
+            "description": "The binary carries a built-in console, so the recovery switch works.",
+            "type": "boolean"
+          },
+          "bytes": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "files": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "installed": {
+            "description": "An uploaded bundle is installed and serves `/console`.",
+            "type": "boolean"
+          },
+          "installedAt": {
+            "description": "Unix seconds of the upload, when one is installed.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "installed",
+          "builtin",
+          "installedAt",
+          "files",
+          "bytes"
+        ],
+        "type": "object"
+      },
       "Output_ContainerFileCitation": {
         "additionalProperties": true,
         "properties": {
@@ -76226,6 +76265,173 @@
           "Management"
         ],
         "x-gproxy-section": "connectivity"
+      }
+    },
+    "/admin/api/console-bundle": {
+      "delete": {
+        "parameters": [
+          {
+            "description": "Administrative scope selected by the caller.",
+            "in": "header",
+            "name": "x-gproxy-admin-scope",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_ConsoleBundleStatus"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Envelope"
+                }
+              }
+            },
+            "description": "Gateway error"
+          }
+        },
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "bearer": []
+          },
+          {
+            "anthropicKey": []
+          },
+          {
+            "googleKey": []
+          }
+        ],
+        "summary": "DELETE /admin/api/console-bundle",
+        "tags": [
+          "Management"
+        ],
+        "x-gproxy-section": "configuration.settings",
+        "x-runtime-condition": "Native host with the console switch on"
+      },
+      "get": {
+        "parameters": [
+          {
+            "description": "Administrative scope selected by the caller.",
+            "in": "header",
+            "name": "x-gproxy-admin-scope",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_ConsoleBundleStatus"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Envelope"
+                }
+              }
+            },
+            "description": "Gateway error"
+          }
+        },
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "bearer": []
+          },
+          {
+            "anthropicKey": []
+          },
+          {
+            "googleKey": []
+          }
+        ],
+        "summary": "GET /admin/api/console-bundle",
+        "tags": [
+          "Management"
+        ],
+        "x-gproxy-section": "configuration.settings",
+        "x-runtime-condition": "Native host with the console switch on"
+      },
+      "post": {
+        "parameters": [
+          {
+            "description": "Administrative scope selected by the caller.",
+            "in": "header",
+            "name": "x-gproxy-admin-scope",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_ConsoleBundleStatus"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Envelope"
+                }
+              }
+            },
+            "description": "Gateway error"
+          }
+        },
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "bearer": []
+          },
+          {
+            "anthropicKey": []
+          },
+          {
+            "googleKey": []
+          }
+        ],
+        "summary": "POST /admin/api/console-bundle",
+        "tags": [
+          "Management"
+        ],
+        "x-gproxy-section": "configuration.settings",
+        "x-runtime-condition": "Native host with the console switch on"
       }
     },
     "/admin/api/context": {
