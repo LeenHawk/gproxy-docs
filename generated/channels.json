@@ -1400,7 +1400,7 @@
     {
       "descriptor": {
         "capabilities": {
-          "paidUsage": false,
+          "paidUsage": true,
           "quotaQuery": true,
           "quotaReset": false,
           "refresh": false,
