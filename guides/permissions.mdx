@@ -20,17 +20,17 @@ Rate limits come last because they are the only step that uses something up. A r
 
 ## Permission rules
 
-A permission rule belongs to one user or one API key. It can be narrowed to a provider, a model pattern and an operation, and its action is `allow` or `deny`. Model patterns support `*` and `?`, so you can restrict individual models without creating separate providers for them.
+A permission rule can name a user, an API key or both. A rule that names neither applies to every user and key; one that names both applies only when that user uses that key. It can be narrowed to a provider, a model pattern and an operation, and its action is `allow` or `deny`. Model patterns support `*` and `?`, so you can restrict individual models without creating separate providers for them.
 
 For each provider, rules are scanned in order of descending priority, then by ID, and the first rule that applies decides. To carve out an exception, give it a higher priority than the broad rule: `allow *` at priority 0 with `deny gpt-4*` at 10 allows everything except `gpt-4*`, and `deny *` at 0 with `allow gpt-4o` at 10 allows only `gpt-4o`. Two applicable rules that disagree at the same priority are resolved by ID, which is stable but arbitrary, so give overlapping rules different priorities.
 
-There is no default grant. An ordinary user needs an applicable `allow` rule; if no provider is allowed for the model, the request fails with `403` before any routing happens.
+There is no default grant. An ordinary user needs an applicable `allow` rule; if no provider is allowed for the model, the request fails with `403` before any routing happens. To open a provider to everyone, create an `allow` rule for that provider with no user and no API key.
 
 Instance administrators bypass permission rules and can reach every provider. This keeps a mistaken `deny` rule from locking the operator out of their own instance. It does not lift the OAuth restrictions described below.
 
 | API field | Meaning |
 | --- | --- |
-| `userId` / `apiKeyId` | Exactly one rule subject |
+| `userId` / `apiKeyId` | Rule subject, both optional; omit both for a rule that applies to everyone |
 | `providerId` | Optional; omit to match all providers |
 | `modelPattern` | Model pattern, default `*` |
 | `operation` | Optional; omit to match all operations |
@@ -61,7 +61,11 @@ Management scope, model permissions and credential ownership are three separate 
 
 ## Rate limits
 
-A rate limit belongs to a user or an API key and has a metric, a limit, a period in seconds, an optional model pattern and an enabled state. Two metrics behave differently:
+A rate limit can name a user, an API key, both or neither, with the same meaning as for a permission rule. It has a metric, a limit, a period in seconds, an optional model pattern, a counting scope and an enabled state.
+
+The counting scope decides how the callers a rule covers share its limit. `shared` gives the rule one counter for all of them, `user` gives each user a counter of their own, and `key` gives each API key a counter of its own; a caller without an API key, such as a console session, is counted per user. A rule for everyone with the scope `user` limits each user separately, while the same rule with the scope `shared` limits all users together.
+
+Two metrics behave differently:
 
 - `concurrency` counts requests in flight. A request holds its slot until the response has been sent completely, which for a streamed response is long after the request started.
 - `requests`, and any other metric name, counts requests made in the current period. Each request counts as 1, whatever the metric is called. A token count is not known until the upstream has answered, so to limit tokens or spending, use a cost budget instead.
