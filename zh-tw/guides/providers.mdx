@@ -21,7 +21,7 @@ description: "選擇渠道、新增供應商與憑證，設定登入、額度查
 | `claudecode` | Claude.ai 訂閱，按 Claude Code CLI 的請求方式存取 | OAuth |
 | `claudeweb` | claude.ai 瀏覽器工作階段，輸出為 Claude Messages SSE | 工作階段 cookie + 組織 |
 | `cline` | Cline 自己的帳號，`api.cline.bot` | `{"api_key"}` 或 OAuth |
-| `cloudflare_ai_gateway` | 透過 REST API 使用 Cloudflare AI Gateway；account 與 gateway 按憑證設定，支援餘額查詢 | `{"api_key", "account_id", "gateway_id"?}` |
+| `cloudflare_ai_gateway` | 透過 REST API 使用 Cloudflare AI Gateway；account 與 gateway 按憑證設定，支援 embedding、rerank、Workers AI 模型探索和餘額查詢 | `{"api_key", "account_id"?, "gateway_id"?}` |
 | `codex` | 透過 Codex 後端使用 ChatGPT 帳號：SSE 與 WebSocket 上的 Responses，`/wham/usage` | OAuth |
 | `commandcode` | Command Code CLI：原生生成介面、模型目錄、餘額、帳期消費與請求數、用量視窗 | `{"api_key"}`，或瀏覽器授權（貼上簽發的金鑰，支援遠端部署） |
 | `copilotcli` | 透過 `copilot` CLI 使用 GitHub Copilot | GitHub OAuth 令牌 |
