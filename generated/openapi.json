@@ -74810,6 +74810,19 @@
             }
           },
           {
+            "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
+            "in": "query",
+            "name": "everyone",
+            "required": false,
+            "schema": {
+              "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          {
             "description": "",
             "in": "query",
             "name": "organizationId",
@@ -80944,6 +80957,19 @@
             }
           },
           {
+            "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
+            "in": "query",
+            "name": "everyone",
+            "required": false,
+            "schema": {
+              "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          {
             "description": "",
             "in": "query",
             "name": "organizationId",
@@ -82676,6 +82702,19 @@
             }
           },
           {
+            "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
+            "in": "query",
+            "name": "everyone",
+            "required": false,
+            "schema": {
+              "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          {
             "description": "",
             "in": "query",
             "name": "organizationId",
@@ -83206,6 +83245,19 @@
             }
           },
           {
+            "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
+            "in": "query",
+            "name": "everyone",
+            "required": false,
+            "schema": {
+              "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          {
             "description": "",
             "in": "query",
             "name": "organizationId",
@@ -83690,6 +83742,19 @@
             "name": "enabled",
             "required": false,
             "schema": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
+            "in": "query",
+            "name": "everyone",
+            "required": false,
+            "schema": {
+              "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
               "type": [
                 "boolean",
                 "null"
@@ -88778,6 +88843,19 @@
             }
           },
           {
+            "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
+            "in": "query",
+            "name": "everyone",
+            "required": false,
+            "schema": {
+              "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          {
             "description": "",
             "in": "query",
             "name": "organizationId",
@@ -91888,6 +91966,19 @@
             }
           },
           {
+            "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
+            "in": "query",
+            "name": "everyone",
+            "required": false,
+            "schema": {
+              "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          {
             "description": "",
             "in": "query",
             "name": "organizationId",
@@ -92254,6 +92345,19 @@
             "name": "enabled",
             "required": false,
             "schema": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
+            "in": "query",
+            "name": "everyone",
+            "required": false,
+            "schema": {
+              "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
               "type": [
                 "boolean",
                 "null"
@@ -92784,6 +92888,19 @@
             "name": "enabled",
             "required": false,
             "schema": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
+            "in": "query",
+            "name": "everyone",
+            "required": false,
+            "schema": {
+              "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
               "type": [
                 "boolean",
                 "null"
@@ -94683,6 +94800,19 @@
             "name": "enabled",
             "required": false,
             "schema": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
+            "in": "query",
+            "name": "everyone",
+            "required": false,
+            "schema": {
+              "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
               "type": [
                 "boolean",
                 "null"
