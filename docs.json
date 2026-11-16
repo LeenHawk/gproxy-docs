@@ -328,6 +328,10 @@
           {
             "label": "Netlify",
             "href": "https://www.netlify.com/"
+          },
+          {
+            "label": "Fastly",
+            "href": "https://www.fastly.com/"
           }
         ]
       }
