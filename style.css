@@ -1,8 +1,22 @@
+#footer div:has(> a[href="https://www.jetbrains.com/"]) {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+#footer div:has(> a[href="https://www.jetbrains.com/"])::before {
+  content: "Sponsored by";
+  font-size: 0.875rem;
+  opacity: 0.65;
+}
+
 #footer a[href="https://www.jetbrains.com/"],
 #footer a[href="https://www.netlify.com/"] {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  /* Keep the brand names accessible while displaying only their icons. */
+  font-size: 0;
 }
 
 #footer a[href="https://www.jetbrains.com/"]::before,
