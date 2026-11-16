@@ -317,6 +317,21 @@
     }
   },
   "footer": {
+    "links": [
+      {
+        "header": "Sponsors",
+        "items": [
+          {
+            "label": "JetBrains",
+            "href": "https://www.jetbrains.com/"
+          },
+          {
+            "label": "Netlify",
+            "href": "https://www.netlify.com/"
+          }
+        ]
+      }
+    ],
     "socials": {
       "github": "https://github.com/LeenHawk/gproxy"
     }

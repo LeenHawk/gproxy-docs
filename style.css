@@ -1,0 +1,23 @@
+#footer a[href="https://www.jetbrains.com/"],
+#footer a[href="https://www.netlify.com/"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+#footer a[href="https://www.jetbrains.com/"]::before,
+#footer a[href="https://www.netlify.com/"]::before {
+  content: "";
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  background: center / contain no-repeat;
+}
+
+#footer a[href="https://www.jetbrains.com/"]::before {
+  background-image: url("/images/sponsors/jetbrains.svg");
+}
+
+#footer a[href="https://www.netlify.com/"]::before {
+  background-image: url("/images/sponsors/netlify.svg");
+}
