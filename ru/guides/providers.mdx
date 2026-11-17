@@ -16,6 +16,7 @@ description: "Выбор канала, добавление провайдеро
 | Канал | Вышестоящий сервис | Учётные данные |
 | --- | --- | --- |
 | `aistudio` | Google AI Studio: нативные методы Gemini и слой совместимости `/v1beta/openai` на одном источнике | `{"api_key"}` |
+| `playground` | Веб-сессия AI Studio Playground: генерация Gemini, потоковые ответы и каталог моделей; нужен собственный сервис подписи WAA | `{"cookie"}` |
 | `antigravity` | Аккаунт Google через хост Code Assist, с которым работает редактор Antigravity | OAuth |
 | `aws_bedrock` | AWS Bedrock. Протокол зависит от модели: `InvokeModel` для моделей Anthropic (event stream преобразуется в Claude SSE), OpenAI-совместимый Chat Completions для GPT, Grok, Qwen, DeepSeek и остальных | Пара ключей AWS или API-ключ Bedrock |
 | `azure` | Azure OpenAI и модели Anthropic, размещённые в Azure AI Foundry | `{"api_key"}` |
@@ -57,6 +58,34 @@ description: "Выбор канала, добавление провайдеро
 Каждый канал собирается и для нативных целей, и для `wasm32-unknown-unknown`, поэтому у развёртывания на Worker тот же набор каналов, что и у нативного.
 
 <a id="compatible-vendors"></a>
+
+### AI Studio Playground
+
+Канал `playground` использует сессию Google из [AI Studio](https://aistudio.google.com/).
+Поддерживаются генерация Gemini, потоковые ответы, встроенные медиа, вызовы функций
+и каталог моделей. Для официального API с ключом используйте `aistudio`.
+
+1. Запустите собственный сервис подписи WAA, например локальный `waa-signer` из
+   [aistudio-api](https://github.com/DeconstructedCube/aistudio-api). Укажите его
+   адрес в `proof_server_url`, например `http://127.0.0.1:8081`. Сервис должен
+   быть доступен через исходящее соединение провайдера и использовать нужный
+   сетевой выход к Google.
+2. Войдите в AI Studio и экспортируйте cookie сайта, включая HttpOnly, через
+   Cookie-Editor в формате JSON или Header.
+3. На странице учётных данных выберите **Импорт → Cookie-Editor / Cookie Header**,
+   вставьте экспорт и сохраните. Весь набор cookie — одни учётные данные.
+   Для другого аккаунта Google используйте `{"cookies": [...], "auth_user": "1"}`;
+   по умолчанию используется индекс `0`.
+
+Сервис подписи получает cookie сессии и содержимое запроса. Автоматического
+перехода на публичный сервис нет; запрос генерации отправляется из GPROXY
+напрямую в Google.
+
+При импорте проверяется сессия и определяется подписка. Повторная проверка
+не восстанавливает истёкшую сессию: потребуется свежий экспорт cookie.
+Files API, Live WebSocket, пакетные задания, `countTokens` и специальные
+настройки речи/видео пока не поддерживаются. Для медиа используйте Gemini
+`inlineData`, а не `fileData`.
 
 ### Совместимые сервисы
 

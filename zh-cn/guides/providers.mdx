@@ -14,6 +14,7 @@ description: "选择渠道、添加供应商与凭证，配置登录、额度查
 | 渠道 | 上游 | 凭证 |
 | --- | --- | --- |
 | `aistudio` | Google AI Studio：原生 Gemini 方法与 `/v1beta/openai` 兼容层，同一个源 | `{"api_key"}` |
+| `playground` | AI Studio Playground 网页会话：Gemini 生成、流式响应与模型发现；需要自建 WAA 签名服务 | `{"cookie"}` |
 | `antigravity` | 通过 Antigravity 编辑器使用的 Code Assist 主机访问 Google 账号 | OAuth |
 | `aws_bedrock` | AWS Bedrock。接口随模型而定：Anthropic 模型走 `InvokeModel`（event-stream 转成 Claude SSE），GPT、Grok、Qwen、DeepSeek 等走 OpenAI 兼容的 Chat Completions | AWS 密钥对，或 Bedrock API key |
 | `azure` | Azure OpenAI，以及 Azure AI Foundry 托管的 Anthropic 模型 | `{"api_key"}` |
@@ -53,6 +54,18 @@ description: "选择渠道、添加供应商与凭证，配置登录、额度查
 | `xai` | xAI（Grok）：OpenAI Chat 与 Responses，以及 xAI 自己的 TTS、STT 和视频 | `{"api_key"}` |
 
 所有渠道都能同时为原生目标和 `wasm32-unknown-unknown` 构建，因此 Worker 部署可用的渠道与原生部署相同。
+
+### AI Studio Playground
+
+`playground` 使用 [AI Studio](https://aistudio.google.com/) 的 Google 登录会话，支持 Gemini 生成、流式响应、内联媒体、函数调用和模型发现。API Key 接口仍使用 `aistudio` 渠道。
+
+1. 启动自己的 WAA 签名服务，例如 [aistudio-api](https://github.com/DeconstructedCube/aistudio-api) 中的本地 `waa-signer`。在供应商配置中填写 `proof_server_url`，例如 `http://127.0.0.1:8081`。签名服务必须能通过该供应商的出站连接访问，并使用预期的 Google 网络出口。
+2. 在 AI Studio 登录，用 Cookie-Editor 导出本站的 JSON 或 Header，包含 HttpOnly Cookie。
+3. 打开供应商的凭证页，选择 **导入凭证 → Cookie-Editor / Cookie Header**，粘贴并导入。整组 Cookie 会保存为一个凭证。选择其他已登录的 Google 身份时，可导入 `{"cookies": [...], "auth_user": "1"}`；默认登录序号为 `0`。
+
+签名服务会接收 Google 会话 Cookie 和请求内容，为每次请求生成证明。GPROXY 不会自动回退到公共签名节点；生成请求由 GPROXY 直接发送给 Google。
+
+导入时会校验会话并识别订阅等级。定期校验不能恢复已过期的 Google 登录，此时需要重新导入 Cookie。目前不支持 Files API 引用、Live WebSocket、批处理、`countTokens` 和专用语音／视频配置；媒体请使用 Gemini `inlineData`，而不是 `fileData`。
 
 ### 接入兼容服务
 
