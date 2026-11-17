@@ -8932,6 +8932,23 @@
               }
             ]
           },
+          "frame_count": {
+            "description": "GIF frame controls, as sent by Codex 0.169 Images requests.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "frame_duration_ms": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "model": {
             "type": [
               "string",
@@ -10779,6 +10796,23 @@
               }
             ]
           },
+          "frame_count": {
+            "description": "GIF frame controls, as sent by Codex 0.169 Images requests.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "frame_duration_ms": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "images": {
             "items": {
               "$ref": "#/components/schemas/Input_ImageReference"
@@ -10904,6 +10938,22 @@
               {
                 "type": "null"
               }
+            ]
+          },
+          "frame_count": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "frame_duration_ms": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
             ]
           },
           "image": {
@@ -12512,7 +12562,7 @@
             "type": "object"
           },
           {
-            "$ref": "#/components/schemas/Input_FunctionCallOutputContentItemInputAudio",
+            "$ref": "#/components/schemas/Input_ContentItemInputAudio",
             "properties": {
               "type": {
                 "const": "input_audio",
@@ -12548,18 +12598,6 @@
         },
         "required": [
           "encrypted_content"
-        ],
-        "type": "object"
-      },
-      "Input_FunctionCallOutputContentItemInputAudio": {
-        "additionalProperties": true,
-        "properties": {
-          "audio_url": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "audio_url"
         ],
         "type": "object"
       },
@@ -14673,6 +14711,22 @@
               }
             ]
           },
+          "frame_count": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "frame_duration_ms": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "input_fidelity": {
             "anyOf": [
               {
@@ -14805,7 +14859,8 @@
         "enum": [
           "png",
           "webp",
-          "jpeg"
+          "jpeg",
+          "gif"
         ],
         "type": "string"
       },
@@ -14813,7 +14868,8 @@
         "enum": [
           "png",
           "jpeg",
-          "webp"
+          "webp",
+          "gif"
         ],
         "type": "string"
       },
@@ -27393,7 +27449,9 @@
         "additionalProperties": true,
         "properties": {
           "detail": {
-            "$ref": "#/components/schemas/Input_ImageDetail"
+            "$ref": "#/components/schemas/Input_ImageDetail",
+            "default": "auto",
+            "description": "Defaults to `auto` when omitted, as in the Responses image-input API."
           },
           "file_id": {
             "type": [
@@ -27422,8 +27480,7 @@
           }
         },
         "required": [
-          "type",
-          "detail"
+          "type"
         ],
         "type": "object"
       },
@@ -27431,7 +27488,9 @@
         "additionalProperties": true,
         "properties": {
           "detail": {
-            "$ref": "#/components/schemas/Input_ImageDetail4"
+            "$ref": "#/components/schemas/Input_ImageDetail4",
+            "default": "auto",
+            "description": "Defaults to `auto` when omitted, as in the Responses image-input API."
           },
           "file_id": {
             "type": [
@@ -27460,7 +27519,6 @@
           }
         },
         "required": [
-          "detail",
           "type"
         ],
         "type": "object"
@@ -46474,6 +46532,24 @@
         },
         "type": "object"
       },
+      "Output_GenericPluginMessages": {
+        "additionalProperties": true,
+        "properties": {
+          "intro": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "usage_instructions": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "Output_GoAway": {
         "additionalProperties": true,
         "properties": {
@@ -47522,6 +47598,22 @@
               }
             ]
           },
+          "frame_count": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "frame_duration_ms": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "input_fidelity": {
             "anyOf": [
               {
@@ -47631,7 +47723,8 @@
         "enum": [
           "png",
           "webp",
-          "jpeg"
+          "jpeg",
+          "gif"
         ],
         "type": "string"
       },
@@ -47639,7 +47732,8 @@
         "enum": [
           "png",
           "jpeg",
-          "webp"
+          "webp",
+          "gif"
         ],
         "type": "string"
       },
@@ -53587,6 +53681,16 @@
               }
             ]
           },
+          "web_search_provider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_WebSearchProvider"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "web_search_tool_type": {
             "anyOf": [
               {
@@ -54081,6 +54185,16 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "plugins": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_PluginMessages"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "token_budget": {
@@ -57222,6 +57336,54 @@
           "data",
           "media_type"
         ],
+        "type": "object"
+      },
+      "Output_PluginMessages": {
+        "additionalProperties": true,
+        "properties": {
+          "generic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_GenericPluginMessages"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recommendations": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_PluginRecommendationMessages"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "selected": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_SelectedPluginMessages"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Output_PluginRecommendationMessages": {
+        "additionalProperties": true,
+        "properties": {
+          "intro": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       },
       "Output_PortalContextDto": {
@@ -65521,7 +65683,9 @@
         "additionalProperties": true,
         "properties": {
           "detail": {
-            "$ref": "#/components/schemas/Output_ImageDetail"
+            "$ref": "#/components/schemas/Output_ImageDetail",
+            "default": "auto",
+            "description": "Defaults to `auto` when omitted, as in the Responses image-input API."
           },
           "file_id": {
             "type": [
@@ -65559,7 +65723,9 @@
         "additionalProperties": true,
         "properties": {
           "detail": {
-            "$ref": "#/components/schemas/Output_ImageDetail2"
+            "$ref": "#/components/schemas/Output_ImageDetail2",
+            "default": "auto",
+            "description": "Defaults to `auto` when omitted, as in the Responses image-input API."
           },
           "file_id": {
             "type": [
@@ -68655,6 +68821,54 @@
             ]
           },
           "text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Output_SelectedPluginMessages": {
+        "additionalProperties": true,
+        "properties": {
+          "apps": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "closing": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "intro": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mcp_servers": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "omitted": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "search_tools": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "skill_namespace": {
             "type": [
               "string",
               "null"
@@ -74475,6 +74689,14 @@
           }
         },
         "type": "object"
+      },
+      "Output_WebSearchProvider": {
+        "description": "Codex catalog preference for hosted search.",
+        "enum": [
+          "standalone",
+          "search_mcp"
+        ],
+        "type": "string"
       },
       "Output_WebSearchQuery": {
         "additionalProperties": true,

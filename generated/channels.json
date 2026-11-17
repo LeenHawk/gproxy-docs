@@ -577,6 +577,15 @@
           },
           "idempotent": true,
           "method": "GET",
+          "path": "/api/directory/server-urls",
+          "transport": "http"
+        },
+        {
+          "class": {
+            "class": "catalog"
+          },
+          "idempotent": true,
+          "method": "GET",
           "path": "/api/hello",
           "transport": "http"
         },

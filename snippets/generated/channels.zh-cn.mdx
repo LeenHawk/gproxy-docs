@@ -164,13 +164,14 @@ GPROXY 4.2.3. [下载 JSON](/generated/channels.json).
 | `credential_strategy` | 字符串 | 否 | How the host picks among this provider's credentials. | — |
 | `allowed_headers` | HTTP 请求头 | 否 | Additional client headers to forward, unioned with the global allow-list and channel defaults. | — |
 
-<Accordion title="厂商服务路由 (76)">
+<Accordion title="厂商服务路由 (77)">
 
 | 方法 | 路径 | 传输方式 | 访问分类 | 幂等 |
 | --- | --- | --- | --- | --- |
 | `GET` | `/v1/mcp_servers` | HTTP | 受限 | 是 |
 | `GET` | `/mcp-registry/v0/servers` | HTTP | 目录 | 是 |
 | `GET` | `/api/directory/servers` | HTTP | 目录 | 是 |
+| `GET` | `/api/directory/server-urls` | HTTP | 目录 | 是 |
 | `GET` | `/api/hello` | HTTP | 目录 | 是 |
 | `GET` | `/api/hello/{name}` | HTTP | 目录 | 是 |
 | `GET` | `/api/oauth/profile` | HTTP | 身份 | 是 |
