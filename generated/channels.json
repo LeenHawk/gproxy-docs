@@ -3870,6 +3870,69 @@
       "descriptor": {
         "capabilities": {
           "paidUsage": false,
+          "quotaQuery": false,
+          "quotaReset": false,
+          "refresh": true,
+          "services": false,
+          "websocket": false
+        },
+        "configKeys": [
+          {
+            "description": "MakerSuite RPC origin.",
+            "kind": "string",
+            "name": "base_url",
+            "placeholder": "https://alkalimakersuite-pa.clients6.google.com",
+            "required": false
+          },
+          {
+            "description": "Your WAA signing service. Receives this credential's Google cookies and request contents; no public fallback.",
+            "kind": "string",
+            "name": "proof_server_url",
+            "placeholder": "http://127.0.0.1:8081",
+            "required": true
+          },
+          {
+            "description": "IANA timezone sent with the Playground request.",
+            "kind": "string",
+            "name": "timezone",
+            "placeholder": "UTC",
+            "required": false
+          },
+          {
+            "description": "Forward thinking blocks from request history. Defaults to true; disabling removes reasoning content and signatures without disabling model thinking.",
+            "kind": "bool",
+            "name": "forward_thinking",
+            "placeholder": null,
+            "required": false
+          },
+          {
+            "description": "How the host picks among this provider's credentials.",
+            "kind": "string",
+            "name": "credential_strategy",
+            "placeholder": null,
+            "required": false
+          },
+          {
+            "description": "Additional client headers to forward, unioned with the global allow-list and channel defaults.",
+            "kind": "header_list",
+            "name": "allowed_headers",
+            "placeholder": null,
+            "required": false
+          }
+        ],
+        "credentialKinds": [
+          "cookie"
+        ],
+        "displayName": "Google AI Studio Playground",
+        "id": "playground",
+        "loginModes": []
+      },
+      "services": []
+    },
+    {
+      "descriptor": {
+        "capabilities": {
+          "paidUsage": false,
           "quotaQuery": true,
           "quotaReset": false,
           "refresh": true,

@@ -905,6 +905,28 @@ GPROXY 4.2.3. [Скачать JSON](/generated/channels.json).
 | `credential_strategy` | Строка | Нет | How the host picks among this provider's credentials. | — |
 | `allowed_headers` | HTTP-заголовки | Нет | Additional client headers to forward, unioned with the global allow-list and channel defaults. | — |
 
+## Google AI Studio Playground `playground`
+
+Способы входа: Нет. Типы учётных данных для ручного ввода: `cookie`.
+
+| Возможность | Заявленная поддержка |
+| --- | --- |
+| Платное использование | Нет |
+| Запрос квоты | Нет |
+| Сброс квоты | Нет |
+| Обновление учётных данных | Да |
+| Сервисные маршруты провайдера | Нет |
+| Сообщения WebSocket | Нет |
+
+| Ключ | Тип | Обязательно | Описание | Пример / заполнитель |
+| --- | --- | --- | --- | --- |
+| `base_url` | Строка | Нет | MakerSuite RPC origin. | `https://alkalimakersuite-pa.clients6.google.com` |
+| `proof_server_url` | Строка | Да | Your WAA signing service. Receives this credential's Google cookies and request contents; no public fallback. | `http://127.0.0.1:8081` |
+| `timezone` | Строка | Нет | IANA timezone sent with the Playground request. | `UTC` |
+| `forward_thinking` | Логическое значение | Нет | Forward thinking blocks from request history. Defaults to true; disabling removes reasoning content and signatures without disabling model thinking. | — |
+| `credential_strategy` | Строка | Нет | How the host picks among this provider's credentials. | — |
+| `allowed_headers` | HTTP-заголовки | Нет | Additional client headers to forward, unioned with the global allow-list and channel defaults. | — |
+
 ## Trae `trae`
 
 Способы входа: Код авторизации (PKCE). Типы учётных данных для ручного ввода: `oauth`.

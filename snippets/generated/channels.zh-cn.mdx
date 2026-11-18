@@ -905,6 +905,28 @@ GPROXY 4.2.3. [下载 JSON](/generated/channels.json).
 | `credential_strategy` | 字符串 | 否 | How the host picks among this provider's credentials. | — |
 | `allowed_headers` | HTTP 请求头 | 否 | Additional client headers to forward, unioned with the global allow-list and channel defaults. | — |
 
+## Google AI Studio Playground `playground`
+
+登录方式: 无. 手动添加凭证的类型: `cookie`.
+
+| 能力 | 声明支持 |
+| --- | --- |
+| 付费用量 | 否 |
+| 查询额度 | 否 |
+| 重置额度 | 否 |
+| 刷新凭证 | 是 |
+| 厂商服务路由 | 否 |
+| WebSocket 消息 | 否 |
+
+| 配置项 | 类型 | 必填 | 说明 | 示例／占位符 |
+| --- | --- | --- | --- | --- |
+| `base_url` | 字符串 | 否 | MakerSuite RPC origin. | `https://alkalimakersuite-pa.clients6.google.com` |
+| `proof_server_url` | 字符串 | 是 | Your WAA signing service. Receives this credential's Google cookies and request contents; no public fallback. | `http://127.0.0.1:8081` |
+| `timezone` | 字符串 | 否 | IANA timezone sent with the Playground request. | `UTC` |
+| `forward_thinking` | 布尔值 | 否 | Forward thinking blocks from request history. Defaults to true; disabling removes reasoning content and signatures without disabling model thinking. | — |
+| `credential_strategy` | 字符串 | 否 | How the host picks among this provider's credentials. | — |
+| `allowed_headers` | HTTP 请求头 | 否 | Additional client headers to forward, unioned with the global allow-list and channel defaults. | — |
+
 ## Trae `trae`
 
 登录方式: 授权码（PKCE）. 手动添加凭证的类型: `oauth`.
