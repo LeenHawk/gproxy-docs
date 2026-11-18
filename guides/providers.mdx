@@ -90,8 +90,11 @@ The signer receives Google session cookies and request contents to generate
 a fresh proof. GPROXY has no automatic fallback to a public signer. Generation
 requests go directly from GPROXY to Google.
 
-Import validates the session and discovers its subscription tier. Revalidation
-does not renew an expired Google login: import fresh cookies when necessary.
+Import validates the session and discovers its subscription tier. While the
+credential is in use, GPROXY saves the cookies Google replaces in its
+responses and rotates the session cookies about every 3 hours when requests
+arrive. Rotation does not restore a login that Google has signed out or
+revoked: import fresh cookies in that case.
 Files API references, Live WebSockets, batch jobs, and dedicated
 speech/video configuration are not supported by this channel yet. Send media
 as Gemini `inlineData` rather than `fileData`.
