@@ -65,7 +65,9 @@ description: "选择渠道、添加供应商与凭证，配置登录、额度查
 
 签名服务会接收 Google 会话 Cookie 和请求内容，为每次请求生成证明。GPROXY 不会自动回退到公共签名节点；生成请求由 GPROXY 直接发送给 Google。
 
-导入时会校验会话并识别订阅等级。定期校验不能恢复已过期的 Google 登录，此时需要重新导入 Cookie。目前不支持 Files API 引用、Live WebSocket、批处理、`countTokens` 和专用语音／视频配置；媒体请使用 Gemini `inlineData`，而不是 `fileData`。
+导入时会校验会话并识别订阅等级。定期校验不能恢复已过期的 Google 登录，此时需要重新导入 Cookie。目前不支持 Files API 引用、Live WebSocket、批处理和专用语音／视频配置；媒体请使用 Gemini `inlineData`，而不是 `fileData`。
+
+`countTokens` 复用 GPROXY 现有的本地 tokenizer，返回 `totalTokens`，不调用 Google 或 WAA 签名服务。结果是本地估算，可能与 Google 官方计数不同。
 
 ### 接入兼容服务
 

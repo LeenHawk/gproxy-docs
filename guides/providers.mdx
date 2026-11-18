@@ -92,9 +92,13 @@ requests go directly from GPROXY to Google.
 
 Import validates the session and discovers its subscription tier. Revalidation
 does not renew an expired Google login: import fresh cookies when necessary.
-Files API references, Live WebSockets, batch jobs, `countTokens`, and dedicated
+Files API references, Live WebSockets, batch jobs, and dedicated
 speech/video configuration are not supported by this channel yet. Send media
 as Gemini `inlineData` rather than `fileData`.
+
+`countTokens` uses GPROXY's existing local tokenizer and returns `totalTokens`.
+It does not call Google or the WAA signer. The result is a local estimate and
+may differ from Google's official count.
 
 ### Compatible vendors
 
