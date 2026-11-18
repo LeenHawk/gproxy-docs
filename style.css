@@ -13,6 +13,7 @@
 
 #footer a[href="https://www.jetbrains.com/"],
 #footer a[href="https://www.netlify.com/"],
+#footer a[href="https://neon.com/"],
 #footer a[href="https://www.fastly.com/"] {
   display: inline-flex;
   align-items: center;
@@ -22,6 +23,7 @@
 
 #footer a[href="https://www.jetbrains.com/"]::before,
 #footer a[href="https://www.netlify.com/"]::before,
+#footer a[href="https://neon.com/"]::before,
 #footer a[href="https://www.fastly.com/"]::before {
   content: "";
   width: 20px;
@@ -36,6 +38,10 @@
 
 #footer a[href="https://www.netlify.com/"]::before {
   background-image: url("/images/sponsors/netlify.svg");
+}
+
+#footer a[href="https://neon.com/"]::before {
+  background-image: url("/images/sponsors/neon.svg");
 }
 
 #footer a[href="https://www.fastly.com/"]::before {

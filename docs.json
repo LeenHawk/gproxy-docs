@@ -330,6 +330,10 @@
             "href": "https://www.netlify.com/"
           },
           {
+            "label": "Neon",
+            "href": "https://neon.com/"
+          },
+          {
             "label": "Fastly",
             "href": "https://www.fastly.com/"
           }
