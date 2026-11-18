@@ -13,7 +13,7 @@ The templates download prebuilt release bundles at build time, so you do not nee
 | Platform | Platform database | Existing database | WebSocket / Realtime |
 | --- | --- | --- | --- |
 | [Cloudflare Workers](#cloudflare-workers) | D1, created during deployment | libSQL / Turso | Supported |
-| [Netlify Functions](#netlify) | Netlify Database | PostgreSQL | Not supported |
+| [Netlify Functions](#netlify) | None | PostgreSQL (required) | Not supported |
 | [Vercel Functions](#vercel) | PostgreSQL product selected during deployment | PostgreSQL | Supported (platform Beta) |
 
 All three serve HTTP and SSE streaming. If clients need WebSocket or Realtime, choose Cloudflare Workers or Vercel, or run the [CLI or a container](/download) instead.
@@ -57,17 +57,15 @@ To deploy with Wrangler yourself or change the Worker configuration, see [Deploy
 
 [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)][netlify-auto]
 
-[Use an existing PostgreSQL database][netlify-external]
+The template does not create a database. Prepare a PostgreSQL database before you deploy; any hosted PostgreSQL provider works.
 
-The deploy button uses Netlify Database. The second link opens the same template with a field for an external PostgreSQL connection.
-
-1. Open the entry you want, authorize the repository, and enter the administrator password and the master key.
-2. With Netlify Database, the function reads the platform's connection string and you enter nothing. With an existing database, enter its PostgreSQL connection string as `GPROXY_DATABASE_URL`.
+1. Open the deploy button, authorize the repository, and enter the administrator password and the master key.
+2. Enter the PostgreSQL connection string as `GPROXY_DATABASE_URL`.
 3. Keep the template's build command and Functions configuration, then deploy.
 
-An external connection string looks like `postgresql://user:password@db.example.com/gproxy?sslmode=require`; use the values your database provider gives you.
+A connection string looks like `postgresql://user:password@db.example.com/gproxy?sslmode=require`; use the values your database provider gives you.
 
-Netlify may still provision a platform database when you supply an external connection. It does no harm: `GPROXY_DATABASE_URL` is checked first.
+Without `GPROXY_DATABASE_URL` the site deploys, but every request is answered with status 503 until you add the variable in the site's environment settings and redeploy.
 
 ## Vercel
 
@@ -189,7 +187,6 @@ pnpm --dir deploy/cloudflare check
 
 [cloudflare-auto]: https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fcloudflare-button
 [cloudflare-external]: https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fcloudflare-external
-[netlify-auto]: https://app.netlify.com/start/deploy?repository=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy&branch=dev&create_from_path=deploy%2Fserverless
-[netlify-external]: https://app.netlify.com/start/deploy?repository=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy&branch=dev&create_from_path=deploy%2Fserverless#GPROXY_DATABASE_URL=
+[netlify-auto]: https://app.netlify.com/start/deploy?repository=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy&branch=dev&create_from_path=deploy%2Fserverless#GPROXY_DATABASE_URL=
 [vercel-auto]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fserverless&project-name=gproxy&repository-name=gproxy&env=GPROXY_ADMIN_PASSWORD%2CGPROXY_MASTER_KEY&products=%5B%7B%22type%22%3A%22integration%22%2C%22group%22%3A%22postgres%22%2C%22protocol%22%3A%22storage%22%7D%5D
 [vercel-external]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fserverless&project-name=gproxy&repository-name=gproxy&env=GPROXY_ADMIN_PASSWORD%2CGPROXY_MASTER_KEY%2CGPROXY_DATABASE_URL

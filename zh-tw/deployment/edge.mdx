@@ -13,7 +13,7 @@ GPROXY 為 Cloudflare Workers、Netlify Functions 和 Vercel Functions 提供部
 | 平台 | 平台資料庫 | 既有資料庫 | WebSocket / Realtime |
 | --- | --- | --- | --- |
 | [Cloudflare Workers](#cloudflare-workers) | 部署時建立 D1 | libSQL / Turso | 支援 |
-| [Netlify Functions](#netlify) | Netlify Database | PostgreSQL | 不支援 |
+| [Netlify Functions](#netlify) | 無 | PostgreSQL（必填） | 不支援 |
 | [Vercel Functions](#vercel) | 部署時選擇 PostgreSQL 產品 | PostgreSQL | 支援（平台 Beta） |
 
 三個平台都支援 HTTP 和 SSE 串流呼叫。用戶端需要 WebSocket 或 Realtime 時，請選擇 Cloudflare Workers 或 Vercel，或者改用 [CLI 或容器部署](/zh-tw/download)。
@@ -57,17 +57,15 @@ Turso 位址可以寫成 `libsql://your-db.turso.io`，也可以寫成對應的 
 
 [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)][netlify-auto]
 
-[使用既有 PostgreSQL 資料庫][netlify-external]
+範本不建立資料庫。部署前請先準備一個 PostgreSQL 資料庫，任何代管 PostgreSQL 服務都可以。
 
-部署按鈕使用 Netlify Database。第二個連結開啟同一個範本，並多出一個填寫外部 PostgreSQL 連線的欄位。
-
-1. 開啟所選入口，授權儲存庫，填寫管理員密碼和主金鑰。
-2. 使用 Netlify Database 時，函式讀取平台提供的連線字串，無需填寫。使用既有資料庫時，將 PostgreSQL 連線字串填入 `GPROXY_DATABASE_URL`。
+1. 開啟部署按鈕，授權儲存庫，填寫管理員密碼和主金鑰。
+2. 將 PostgreSQL 連線字串填入 `GPROXY_DATABASE_URL`。
 3. 保留範本的建置指令和 Functions 設定，開始部署。
 
-外部連線字串形如 `postgresql://user:password@db.example.com/gproxy?sslmode=require`，請依資料庫服務商提供的資訊填寫。
+連線字串形如 `postgresql://user:password@db.example.com/gproxy?sslmode=require`，請依資料庫服務商提供的資訊填寫。
 
-即使填寫了外部連線，Netlify 仍可能建立平台資料庫。這不影響使用，因為程式優先讀取 `GPROXY_DATABASE_URL`。
+如果沒有設定 `GPROXY_DATABASE_URL`，網站可以部署成功，但所有請求都會得到 503 狀態碼。在網站的環境變數設定中補上這個變數並重新部署即可。
 
 ## Vercel
 
@@ -189,7 +187,6 @@ pnpm --dir deploy/cloudflare check
 
 [cloudflare-auto]: https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fcloudflare-button
 [cloudflare-external]: https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fcloudflare-external
-[netlify-auto]: https://app.netlify.com/start/deploy?repository=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy&branch=dev&create_from_path=deploy%2Fserverless
-[netlify-external]: https://app.netlify.com/start/deploy?repository=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy&branch=dev&create_from_path=deploy%2Fserverless#GPROXY_DATABASE_URL=
+[netlify-auto]: https://app.netlify.com/start/deploy?repository=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy&branch=dev&create_from_path=deploy%2Fserverless#GPROXY_DATABASE_URL=
 [vercel-auto]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fserverless&project-name=gproxy&repository-name=gproxy&env=GPROXY_ADMIN_PASSWORD%2CGPROXY_MASTER_KEY&products=%5B%7B%22type%22%3A%22integration%22%2C%22group%22%3A%22postgres%22%2C%22protocol%22%3A%22storage%22%7D%5D
 [vercel-external]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fserverless&project-name=gproxy&repository-name=gproxy&env=GPROXY_ADMIN_PASSWORD%2CGPROXY_MASTER_KEY%2CGPROXY_DATABASE_URL

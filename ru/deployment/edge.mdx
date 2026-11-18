@@ -13,7 +13,7 @@ sidebarTitle: "Workers и функции"
 | Платформа | База данных платформы | Существующая база данных | WebSocket / Realtime |
 | --- | --- | --- | --- |
 | [Cloudflare Workers](#cloudflare-workers) | D1, создаётся при развёртывании | libSQL / Turso | Поддерживается |
-| [Netlify Functions](#netlify) | Netlify Database | PostgreSQL | Не поддерживается |
+| [Netlify Functions](#netlify) | Нет | PostgreSQL (обязательно) | Не поддерживается |
 | [Vercel Functions](#vercel) | Продукт PostgreSQL, выбранный при развёртывании | PostgreSQL | Поддерживается (бета-версия платформы) |
 
 Все три платформы обслуживают HTTP и потоковую передачу SSE. Если клиентам нужны WebSocket или Realtime, выберите Cloudflare Workers или Vercel либо запустите [CLI или контейнер](/ru/download).
@@ -57,17 +57,15 @@ URL Turso можно записать как `libsql://your-db.turso.io` или 
 
 [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)][netlify-auto]
 
-[Использовать существующую базу данных PostgreSQL][netlify-external]
+Шаблон не создаёт базу данных. Подготовьте базу PostgreSQL до развёртывания; подойдёт любой поставщик PostgreSQL.
 
-Кнопка развёртывания использует Netlify Database. Вторая ссылка открывает тот же шаблон с полем для подключения к внешней базе PostgreSQL.
-
-1. Откройте нужный вариант, разрешите доступ к репозиторию и введите пароль администратора и мастер-ключ.
-2. С Netlify Database функция сама читает строку подключения платформы, вводить ничего не нужно. Для существующей базы данных укажите её строку подключения PostgreSQL в `GPROXY_DATABASE_URL`.
+1. Нажмите кнопку развёртывания, разрешите доступ к репозиторию и введите пароль администратора и мастер-ключ.
+2. Укажите строку подключения PostgreSQL в `GPROXY_DATABASE_URL`.
 3. Оставьте команду сборки и конфигурацию Functions из шаблона без изменений и запустите развёртывание.
 
-Строка подключения к внешней базе выглядит как `postgresql://user:password@db.example.com/gproxy?sslmode=require`; подставьте значения, которые выдал поставщик базы данных.
+Строка подключения выглядит как `postgresql://user:password@db.example.com/gproxy?sslmode=require`; подставьте значения, которые выдал поставщик базы данных.
 
-Netlify может создать базу данных платформы, даже если указано внешнее подключение. Это ничему не мешает: `GPROXY_DATABASE_URL` проверяется первой.
+Без `GPROXY_DATABASE_URL` сайт развернётся, но на все запросы будет приходить ответ с кодом 503, пока вы не добавите переменную в настройках окружения сайта и не развернёте его заново.
 
 ## Vercel
 
@@ -189,7 +187,6 @@ pnpm --dir deploy/cloudflare check
 
 [cloudflare-auto]: https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fcloudflare-button
 [cloudflare-external]: https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fcloudflare-external
-[netlify-auto]: https://app.netlify.com/start/deploy?repository=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy&branch=dev&create_from_path=deploy%2Fserverless
-[netlify-external]: https://app.netlify.com/start/deploy?repository=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy&branch=dev&create_from_path=deploy%2Fserverless#GPROXY_DATABASE_URL=
+[netlify-auto]: https://app.netlify.com/start/deploy?repository=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy&branch=dev&create_from_path=deploy%2Fserverless#GPROXY_DATABASE_URL=
 [vercel-auto]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fserverless&project-name=gproxy&repository-name=gproxy&env=GPROXY_ADMIN_PASSWORD%2CGPROXY_MASTER_KEY&products=%5B%7B%22type%22%3A%22integration%22%2C%22group%22%3A%22postgres%22%2C%22protocol%22%3A%22storage%22%7D%5D
 [vercel-external]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fserverless&project-name=gproxy&repository-name=gproxy&env=GPROXY_ADMIN_PASSWORD%2CGPROXY_MASTER_KEY%2CGPROXY_DATABASE_URL
