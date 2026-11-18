@@ -164,13 +164,14 @@ Login flows: Authorization code (PKCE). Manual credential kinds: `oauth`.
 | `credential_strategy` | String | No | How the host picks among this provider's credentials. | — |
 | `allowed_headers` | HTTP headers | No | Additional client headers to forward, unioned with the global allow-list and channel defaults. | — |
 
-<Accordion title="Vendor service routes (76)">
+<Accordion title="Vendor service routes (77)">
 
 | Method | Path | Transport | Access classification | Idempotent |
 | --- | --- | --- | --- | --- |
 | `GET` | `/v1/mcp_servers` | HTTP | Restricted | Yes |
 | `GET` | `/mcp-registry/v0/servers` | HTTP | Catalogue | Yes |
 | `GET` | `/api/directory/servers` | HTTP | Catalogue | Yes |
+| `GET` | `/api/directory/server-urls` | HTTP | Catalogue | Yes |
 | `GET` | `/api/hello` | HTTP | Catalogue | Yes |
 | `GET` | `/api/hello/{name}` | HTTP | Catalogue | Yes |
 | `GET` | `/api/oauth/profile` | HTTP | Identity | Yes |

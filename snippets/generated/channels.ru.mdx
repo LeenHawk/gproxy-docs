@@ -164,13 +164,14 @@ GPROXY 4.2.3. [Скачать JSON](/generated/channels.json).
 | `credential_strategy` | Строка | Нет | How the host picks among this provider's credentials. | — |
 | `allowed_headers` | HTTP-заголовки | Нет | Additional client headers to forward, unioned with the global allow-list and channel defaults. | — |
 
-<Accordion title="Сервисные маршруты провайдера (76)">
+<Accordion title="Сервисные маршруты провайдера (77)">
 
 | Метод | Путь | Транспорт | Категория доступа | Идемпотентность |
 | --- | --- | --- | --- | --- |
 | `GET` | `/v1/mcp_servers` | HTTP | Ограничено | Да |
 | `GET` | `/mcp-registry/v0/servers` | HTTP | Каталог | Да |
 | `GET` | `/api/directory/servers` | HTTP | Каталог | Да |
+| `GET` | `/api/directory/server-urls` | HTTP | Каталог | Да |
 | `GET` | `/api/hello` | HTTP | Каталог | Да |
 | `GET` | `/api/hello/{name}` | HTTP | Каталог | Да |
 | `GET` | `/api/oauth/profile` | HTTP | Идентификация | Да |
