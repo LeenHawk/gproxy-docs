@@ -10,6 +10,6 @@
     "generate:reference": "node scripts/generate-reference.mjs"
   },
   "devDependencies": {
-    "mint": "4.3.6"
+    "mint": "4.3.34"
   }
 }
