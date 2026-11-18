@@ -58,7 +58,7 @@ Render 範本是儲存庫根目錄的 `render.yaml` Blueprint。它建立一個�
 Heroku 範本是儲存庫根目錄的 `app.json` 和 `heroku.yml`，會建立一個 Basic Web dyno 和一個 `heroku-postgresql:essential-0` 附加元件。兩者都要付費，部署前請核對方案。
 
 1. 用 `openssl rand -hex 32` 產生主金鑰並保存。
-2. 點選上方按鈕，選擇應用程式名稱和區域，將主金鑰填入 `GPROXY_MASTER_KEY`。
+2. 點選上方按鈕，選擇應用程式名稱和區域，將主金鑰填入 `GPROXY_MASTER_KEY`。這一項可以不填，不填時上游憑證以明文保存在資料庫中。
 3. 核對 dyno 和附加元件後部署。`GPROXY_ADMIN_PASSWORD` 由 Heroku 產生。
 4. 在 **Settings → Reveal Config Vars** 中查看密碼，然後開啟 `/console/`，以 `admin` 登入。
 

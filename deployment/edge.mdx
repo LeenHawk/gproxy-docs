@@ -22,15 +22,17 @@ On Cloudflare the gateway runs as WebAssembly inside the Worker. On Netlify and 
 
 ## Before you deploy
 
-Every template asks for two secrets. Prepare them first and keep a copy.
+Every template asks for an administrator password. The master key is optional.
 
 - `GPROXY_ADMIN_PASSWORD`: the console password, at least 8 characters.
-- `GPROXY_MASTER_KEY`: a 32-byte key that encrypts upstream credentials in the database, written as 64 hex characters or base64. Generate one with `openssl rand -hex 32`.
+- `GPROXY_MASTER_KEY`: optional. A 32-byte key that encrypts upstream credentials in the database, written as 64 hex characters or base64. Generate one with `openssl rand -hex 32`. Without it, upstream credentials are stored unencrypted in the database.
+
+The Cloudflare and Vercel deployment forms do not ask for the master key. To encrypt credentials, add `GPROXY_MASTER_KEY` in the platform's environment variable or secret settings before you add any upstream credentials, then redeploy.
 
 The username is `admin` unless you also set `GPROXY_ADMIN_USER`. The password is applied on every startup: if a user with that name exists, only that user's password is changed; if none does, administrator `0` is re-enabled and given the configured name and password. The full rules are under [Bootstrap](/reference/configuration#bootstrap) in the configuration reference.
 
 <Warning>
-Use the same `GPROXY_MASTER_KEY` for every update and redeployment. Credentials sealed under one key cannot be opened with another, so a new key leaves every stored upstream credential unreadable.
+Once a master key is set, use the same `GPROXY_MASTER_KEY` for every update and redeployment. Credentials sealed under one key cannot be opened with another, so a new key leaves every stored upstream credential unreadable.
 </Warning>
 
 If you connect an existing database rather than a platform one, have its connection details ready as well. Each platform's section says which values it needs.
@@ -45,7 +47,7 @@ The deploy button creates a D1 database. The second link deploys a variant that 
 
 1. Open the entry you want and connect your GitHub or GitLab account.
 2. For D1, choose a database name; Cloudflare creates the database and binds it as `DB`. For an external database, enter `GPROXY_DATABASE_URL` and `GPROXY_LIBSQL_TOKEN`.
-3. Enter the administrator password and the master key. Leave the build command as `npm run build` and the deploy command as `npm run deploy`, then deploy.
+3. Enter the administrator password. Leave the build command as `npm run build` and the deploy command as `npm run deploy`, then deploy.
 
 A Turso URL can be written as `libsql://your-db.turso.io` or as the equivalent HTTPS address. The Worker talks to libSQL over its HTTP interface, so a PostgreSQL connection string does not work here.
 
@@ -59,13 +61,16 @@ To deploy with Wrangler yourself or change the Worker configuration, see [Deploy
 
 The template does not create a database. Prepare a PostgreSQL database before you deploy; any hosted PostgreSQL provider works.
 
-1. Open the deploy button, authorize the repository, and enter the administrator password and the master key.
+1. Open the deploy button, authorize the repository, and enter the administrator password.
 2. Enter the PostgreSQL connection string as `GPROXY_DATABASE_URL`.
-3. Keep the template's build command and Functions configuration, then deploy.
+3. Enter `GPROXY_MASTER_KEY`. You can leave it empty, in which case upstream credentials are stored unencrypted in the database.
+4. Keep the template's build command and Functions configuration, then deploy.
 
 A connection string looks like `postgresql://user:password@db.example.com/gproxy?sslmode=require`; use the values your database provider gives you.
 
-Without `GPROXY_DATABASE_URL` the site deploys, but every request is answered with status 503 until you add the variable in the site's environment settings and redeploy.
+Without `GPROXY_DATABASE_URL` or `GPROXY_ADMIN_PASSWORD` the site deploys, but every request is answered with status 503 and a message that names the missing variable, until you add it in the site's environment settings and redeploy.
+
+Once the database holds credentials stored unencrypted, adding `GPROXY_MASTER_KEY` alone does not enable encryption. Follow [Rotating the master key](/reference/configuration#rotating-the-master-key) and use `GPROXY_MASTER_KEY_NEXT` with `GPROXY_MASTER_KEY_ROTATE` to encrypt what is already stored.
 
 ## Vercel
 
@@ -76,7 +81,7 @@ Without `GPROXY_DATABASE_URL` the site deploys, but every request is answered wi
 The deploy button asks you to attach a new PostgreSQL product. The second link skips that and asks for `GPROXY_DATABASE_URL` instead.
 
 1. Open the entry you want. With the deploy button, select and attach a PostgreSQL product when prompted.
-2. Enter the administrator password and the master key, and for an existing database also `GPROXY_DATABASE_URL`.
+2. Enter the administrator password, and for an existing database also `GPROXY_DATABASE_URL`.
 3. Keep the template's build command and `vercel.json`, then deploy.
 
 The function looks for a connection string in `GPROXY_DATABASE_URL`, then `DATABASE_URL`, then `POSTGRES_URL`. If the product you attached sets a variable with another name, copy its value into `GPROXY_DATABASE_URL`.
@@ -92,7 +97,7 @@ The template uses Node.js Functions. Do not switch it to the Edge Runtime; the f
 
 Clients use the deployment URL as their base URL, for example `https://gateway.example.com/v1`, and authenticate with the API key you created.
 
-On Netlify and Vercel, a request that arrives while the gateway cannot start is answered with status 503 and the message `GPROXY is unavailable. Check the deployment database and secrets in the platform console.` Look at the function logs. The usual causes are a database that is not attached, a connection string that does not start with `postgres://` or `postgresql://`, or a missing password or master key. The executable must report that it is ready within 45 seconds; a database that cannot be reached shows up as a startup timeout. The PostgreSQL account also needs permission to create the `gproxy` schema and the application tables.
+On Netlify and Vercel, if the database connection string or the administrator password is missing, or the connection string does not start with `postgres://` or `postgresql://`, requests are answered with status 503 and a message that starts with `GPROXY is not configured.` and names the variable to set. Any other startup failure is answered with status 503 and the message `GPROXY is unavailable. Check the deployment database and secrets in the platform console.` The cause is in the function logs, for example a master key that is not 32 bytes. The executable must report that it is ready within 45 seconds; a database that cannot be reached shows up as a startup timeout. The PostgreSQL account also needs permission to create the `gproxy` schema and the application tables.
 
 ## Updating
 
@@ -188,5 +193,5 @@ pnpm --dir deploy/cloudflare check
 [cloudflare-auto]: https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fcloudflare-button
 [cloudflare-external]: https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fcloudflare-external
 [netlify-auto]: https://app.netlify.com/start/deploy?repository=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy&branch=dev&create_from_path=deploy%2Fserverless#GPROXY_DATABASE_URL=
-[vercel-auto]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fserverless&project-name=gproxy&repository-name=gproxy&env=GPROXY_ADMIN_PASSWORD%2CGPROXY_MASTER_KEY&products=%5B%7B%22type%22%3A%22integration%22%2C%22group%22%3A%22postgres%22%2C%22protocol%22%3A%22storage%22%7D%5D
-[vercel-external]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fserverless&project-name=gproxy&repository-name=gproxy&env=GPROXY_ADMIN_PASSWORD%2CGPROXY_MASTER_KEY%2CGPROXY_DATABASE_URL
+[vercel-auto]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fserverless&project-name=gproxy&repository-name=gproxy&env=GPROXY_ADMIN_PASSWORD&products=%5B%7B%22type%22%3A%22integration%22%2C%22group%22%3A%22postgres%22%2C%22protocol%22%3A%22storage%22%7D%5D
+[vercel-external]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fserverless&project-name=gproxy&repository-name=gproxy&env=GPROXY_ADMIN_PASSWORD%2CGPROXY_DATABASE_URL

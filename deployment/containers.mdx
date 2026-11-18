@@ -58,7 +58,7 @@ The service's health check is `/healthz` on port `8787`. Free web services sleep
 The Heroku template is `app.json` and `heroku.yml` in the repository root. It creates one Basic web dyno and a `heroku-postgresql:essential-0` add-on. Both are paid; review the plans before you deploy.
 
 1. Generate a master key with `openssl rand -hex 32` and save it.
-2. Use the button above, choose an app name and region, and enter the key as `GPROXY_MASTER_KEY`.
+2. Use the button above, choose an app name and region, and enter the key as `GPROXY_MASTER_KEY`. You can leave it empty, in which case upstream credentials are stored unencrypted in the database.
 3. Review the dyno and the add-on, then deploy. Heroku generates `GPROXY_ADMIN_PASSWORD`.
 4. Read the password under **Settings → Reveal Config Vars**, then sign in as `admin` at `/console/`.
 

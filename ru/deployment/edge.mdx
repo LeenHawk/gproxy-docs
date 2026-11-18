@@ -22,15 +22,17 @@ sidebarTitle: "Workers и функции"
 
 ## Перед развёртыванием
 
-Каждый шаблон запрашивает два секрета. Подготовьте их заранее и сохраните копию.
+Каждый шаблон запрашивает пароль администратора. Мастер-ключ задавать необязательно.
 
 - `GPROXY_ADMIN_PASSWORD`: пароль консоли, не короче 8 символов.
-- `GPROXY_MASTER_KEY`: 32-байтовый ключ, которым шифруются учётные данные провайдеров в базе данных; записывается как 64 шестнадцатеричных символа или в base64. Сгенерировать его можно командой `openssl rand -hex 32`.
+- `GPROXY_MASTER_KEY`: необязательно. 32-байтовый ключ, которым шифруются учётные данные провайдеров в базе данных; записывается как 64 шестнадцатеричных символа или в base64. Сгенерировать его можно командой `openssl rand -hex 32`. Без него учётные данные провайдеров хранятся в базе данных в открытом виде.
+
+Формы развёртывания Cloudflare и Vercel не запрашивают мастер-ключ. Чтобы включить шифрование, добавьте `GPROXY_MASTER_KEY` в настройках переменных окружения или секретов платформы до того, как добавлять учётные данные провайдеров, и разверните проект заново.
 
 Имя пользователя — `admin`, если не задана также переменная `GPROXY_ADMIN_USER`. Пароль применяется при каждом запуске: если пользователь с таким именем существует, меняется только его пароль; если нет, администратор `0` снова включается и получает заданные имя и пароль. Полные правила описаны в разделе [Первоначальная настройка](/ru/reference/configuration#bootstrap) справочника по конфигурации.
 
 <Warning>
-При каждом обновлении и повторном развёртывании используйте один и тот же `GPROXY_MASTER_KEY`. Учётные данные, зашифрованные одним ключом, нельзя расшифровать другим, поэтому с новым ключом все сохранённые учётные данные провайдеров станут нечитаемыми.
+Если мастер-ключ задан, при каждом обновлении и повторном развёртывании используйте один и тот же `GPROXY_MASTER_KEY`. Учётные данные, зашифрованные одним ключом, нельзя расшифровать другим, поэтому с новым ключом все сохранённые учётные данные провайдеров станут нечитаемыми.
 </Warning>
 
 Если вы подключаете существующую базу данных, а не базу платформы, подготовьте и параметры подключения к ней. Какие значения нужны, указано в разделе каждой платформы.
@@ -45,7 +47,7 @@ sidebarTitle: "Workers и функции"
 
 1. Откройте нужный вариант и подключите учётную запись GitHub или GitLab.
 2. Для D1 выберите имя базы данных; Cloudflare создаст базу и привяжет её под именем `DB`. Для внешней базы данных введите `GPROXY_DATABASE_URL` и `GPROXY_LIBSQL_TOKEN`.
-3. Введите пароль администратора и мастер-ключ. Оставьте команду сборки `npm run build` и команду развёртывания `npm run deploy` без изменений и запустите развёртывание.
+3. Введите пароль администратора. Оставьте команду сборки `npm run build` и команду развёртывания `npm run deploy` без изменений и запустите развёртывание.
 
 URL Turso можно записать как `libsql://your-db.turso.io` или как равнозначный адрес HTTPS. Worker обращается к libSQL через его HTTP-интерфейс, поэтому строка подключения PostgreSQL здесь не подойдёт.
 
@@ -59,13 +61,16 @@ URL Turso можно записать как `libsql://your-db.turso.io` или 
 
 Шаблон не создаёт базу данных. Подготовьте базу PostgreSQL до развёртывания; подойдёт любой поставщик PostgreSQL.
 
-1. Нажмите кнопку развёртывания, разрешите доступ к репозиторию и введите пароль администратора и мастер-ключ.
+1. Нажмите кнопку развёртывания, разрешите доступ к репозиторию и введите пароль администратора.
 2. Укажите строку подключения PostgreSQL в `GPROXY_DATABASE_URL`.
-3. Оставьте команду сборки и конфигурацию Functions из шаблона без изменений и запустите развёртывание.
+3. Введите `GPROXY_MASTER_KEY`. Поле можно оставить пустым, тогда учётные данные провайдеров хранятся в базе данных в открытом виде.
+4. Оставьте команду сборки и конфигурацию Functions из шаблона без изменений и запустите развёртывание.
 
 Строка подключения выглядит как `postgresql://user:password@db.example.com/gproxy?sslmode=require`; подставьте значения, которые выдал поставщик базы данных.
 
-Без `GPROXY_DATABASE_URL` сайт развернётся, но на все запросы будет приходить ответ с кодом 503, пока вы не добавите переменную в настройках окружения сайта и не развернёте его заново.
+Без `GPROXY_DATABASE_URL` или `GPROXY_ADMIN_PASSWORD` сайт развернётся, но на все запросы будет приходить ответ с кодом 503 и сообщением, в котором названа недостающая переменная, пока вы не добавите её в настройках окружения сайта и не развернёте его заново.
+
+Если в базе данных уже есть учётные данные, сохранённые в открытом виде, одного добавления `GPROXY_MASTER_KEY` для включения шифрования недостаточно. Выполните шаги из раздела [Ротация мастер-ключа](/ru/reference/configuration#rotating-the-master-key) и зашифруйте уже сохранённые данные с помощью `GPROXY_MASTER_KEY_NEXT` и `GPROXY_MASTER_KEY_ROTATE`.
 
 ## Vercel
 
@@ -76,7 +81,7 @@ URL Turso можно записать как `libsql://your-db.turso.io` или 
 Кнопка развёртывания предлагает подключить новый продукт PostgreSQL. Вторая ссылка пропускает этот шаг и вместо этого запрашивает `GPROXY_DATABASE_URL`.
 
 1. Откройте нужный вариант. При использовании кнопки развёртывания выберите и подключите продукт PostgreSQL, когда появится запрос.
-2. Введите пароль администратора и мастер-ключ, а для существующей базы данных — ещё и `GPROXY_DATABASE_URL`.
+2. Введите пароль администратора, а для существующей базы данных — ещё и `GPROXY_DATABASE_URL`.
 3. Оставьте команду сборки и `vercel.json` из шаблона без изменений и запустите развёртывание.
 
 Функция ищет строку подключения в `GPROXY_DATABASE_URL`, затем в `DATABASE_URL`, затем в `POSTGRES_URL`. Если подключённый продукт задаёт переменную с другим именем, скопируйте её значение в `GPROXY_DATABASE_URL`.
@@ -92,7 +97,7 @@ URL Turso можно записать как `libsql://your-db.turso.io` или 
 
 Клиенты используют URL развёртывания как базовый URL, например `https://gateway.example.com/v1`, и проходят аутентификацию с созданным ключом API.
 
-Если шлюз в Netlify или Vercel не может запуститься, на запросы приходит ответ с кодом 503 и сообщением `GPROXY is unavailable. Check the deployment database and secrets in the platform console.` Изучите журналы функции. Обычные причины: база данных не подключена, строка подключения не начинается с `postgres://` или `postgresql://`, не задан пароль или мастер-ключ. Исполняемый файл должен сообщить о готовности в течение 45 секунд; недоступная база данных проявляется как превышение времени ожидания запуска. Кроме того, учётной записи PostgreSQL нужно право создавать схему `gproxy` и таблицы приложения.
+Если в Netlify или Vercel не задана строка подключения к базе данных или пароль администратора либо строка подключения не начинается с `postgres://` или `postgresql://`, на запросы приходит ответ с кодом 503 и сообщением, которое начинается с `GPROXY is not configured.` и называет переменную, которую нужно задать. При любой другой ошибке запуска приходит ответ с кодом 503 и сообщением `GPROXY is unavailable. Check the deployment database and secrets in the platform console.` Причина записана в журналах функции, например мастер-ключ длиной не 32 байта. Исполняемый файл должен сообщить о готовности в течение 45 секунд; недоступная база данных проявляется как превышение времени ожидания запуска. Кроме того, учётной записи PostgreSQL нужно право создавать схему `gproxy` и таблицы приложения.
 
 ## Обновление
 
@@ -188,5 +193,5 @@ pnpm --dir deploy/cloudflare check
 [cloudflare-auto]: https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fcloudflare-button
 [cloudflare-external]: https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fcloudflare-external
 [netlify-auto]: https://app.netlify.com/start/deploy?repository=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy&branch=dev&create_from_path=deploy%2Fserverless#GPROXY_DATABASE_URL=
-[vercel-auto]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fserverless&project-name=gproxy&repository-name=gproxy&env=GPROXY_ADMIN_PASSWORD%2CGPROXY_MASTER_KEY&products=%5B%7B%22type%22%3A%22integration%22%2C%22group%22%3A%22postgres%22%2C%22protocol%22%3A%22storage%22%7D%5D
-[vercel-external]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fserverless&project-name=gproxy&repository-name=gproxy&env=GPROXY_ADMIN_PASSWORD%2CGPROXY_MASTER_KEY%2CGPROXY_DATABASE_URL
+[vercel-auto]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fserverless&project-name=gproxy&repository-name=gproxy&env=GPROXY_ADMIN_PASSWORD&products=%5B%7B%22type%22%3A%22integration%22%2C%22group%22%3A%22postgres%22%2C%22protocol%22%3A%22storage%22%7D%5D
+[vercel-external]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fserverless&project-name=gproxy&repository-name=gproxy&env=GPROXY_ADMIN_PASSWORD%2CGPROXY_DATABASE_URL

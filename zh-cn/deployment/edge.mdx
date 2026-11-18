@@ -22,15 +22,17 @@ GPROXY 为 Cloudflare Workers、Netlify Functions 和 Vercel Functions 提供部
 
 ## 部署前的准备
 
-每个模板都要求填写两项密钥，请先准备好并妥善保存：
+每个模板都要求填写管理员密码，主密钥可以不设置：
 
 - `GPROXY_ADMIN_PASSWORD`：控制台登录密码，至少 8 个字符。
-- `GPROXY_MASTER_KEY`：32 字节主密钥，用于加密数据库中的上游凭证，写成 64 位十六进制或 base64。可以用 `openssl rand -hex 32` 生成。
+- `GPROXY_MASTER_KEY`：可选。32 字节主密钥，用于加密数据库中的上游凭证，写成 64 位十六进制或 base64。可以用 `openssl rand -hex 32` 生成。不设置时，上游凭证以明文保存在数据库中。
+
+Cloudflare 和 Vercel 的部署表单不询问主密钥。需要加密时，请在添加上游凭证之前，到平台的环境变量或 Secrets 设置中添加 `GPROXY_MASTER_KEY`，然后重新部署。
 
 用户名默认为 `admin`，也可以另设 `GPROXY_ADMIN_USER`。密码在每次启动时生效：存在同名用户时，只修改该用户的密码；没有同名用户时，重新启用 0 号管理员，并改为配置的用户名和密码。完整规则见配置参考中的[首次初始化](/zh-cn/reference/configuration#首次初始化)。
 
 <Warning>
-每次更新和重新部署都要使用同一个 `GPROXY_MASTER_KEY`。用一个密钥加密的凭证无法用另一个密钥解开，换了密钥，库中所有上游凭证都将无法读取。
+设置了主密钥后，每次更新和重新部署都要使用同一个 `GPROXY_MASTER_KEY`。用一个密钥加密的凭证无法用另一个密钥解开，换了密钥，库中所有上游凭证都将无法读取。
 </Warning>
 
 如果连接已有数据库而不是平台数据库，还要准备好连接信息。各平台需要填写哪些值，见下文对应小节。
@@ -45,7 +47,7 @@ GPROXY 为 Cloudflare Workers、Netlify Functions 和 Vercel Functions 提供部
 
 1. 打开所选入口，连接 GitHub 或 GitLab 账户。
 2. 使用 D1 时填写数据库名称，Cloudflare 会创建数据库并以 `DB` 绑定。使用外部数据库时，填写 `GPROXY_DATABASE_URL` 和 `GPROXY_LIBSQL_TOKEN`。
-3. 填写管理员密码和主密钥。构建命令保持 `npm run build`，部署命令保持 `npm run deploy`，然后开始部署。
+3. 填写管理员密码。构建命令保持 `npm run build`，部署命令保持 `npm run deploy`，然后开始部署。
 
 Turso 地址可以写成 `libsql://your-db.turso.io`，也可以写成对应的 HTTPS 地址。Worker 通过 libSQL 的 HTTP 接口访问数据库，因此不能填写 PostgreSQL 连接串。
 
@@ -59,13 +61,16 @@ Turso 地址可以写成 `libsql://your-db.turso.io`，也可以写成对应的 
 
 模板不创建数据库。部署前请先准备一个 PostgreSQL 数据库，任何托管 PostgreSQL 服务都可以。
 
-1. 打开部署按钮，授权仓库，填写管理员密码和主密钥。
+1. 打开部署按钮，授权仓库，填写管理员密码。
 2. 把 PostgreSQL 连接串填入 `GPROXY_DATABASE_URL`。
-3. 保留模板的构建命令和 Functions 配置，开始部署。
+3. 填写 `GPROXY_MASTER_KEY`。这一项可以不填，不填时上游凭证以明文保存在数据库中。
+4. 保留模板的构建命令和 Functions 配置，开始部署。
 
 连接串形如 `postgresql://user:password@db.example.com/gproxy?sslmode=require`，请按数据库服务商提供的信息填写。
 
-如果没有设置 `GPROXY_DATABASE_URL`，站点可以部署成功，但所有请求都会得到 503 状态码。在站点的环境变量设置中补上这个变量并重新部署即可。
+如果没有设置 `GPROXY_DATABASE_URL` 或 `GPROXY_ADMIN_PASSWORD`，站点可以部署成功，但所有请求都会得到 503 状态码，响应消息会指出缺少的变量。在站点的环境变量设置中补上并重新部署即可。
+
+数据库中已有明文保存的凭证后，不能直接加上 `GPROXY_MASTER_KEY` 来启用加密，需要按[轮换主密钥](/zh-cn/reference/configuration#轮换主密钥)的步骤，用 `GPROXY_MASTER_KEY_NEXT` 和 `GPROXY_MASTER_KEY_ROTATE` 给已有数据加密。
 
 ## Vercel
 
@@ -76,7 +81,7 @@ Turso 地址可以写成 `libsql://your-db.turso.io`，也可以写成对应的 
 部署按钮会要求关联一个新的 PostgreSQL 产品；第二个链接跳过这一步，改为要求填写 `GPROXY_DATABASE_URL`。
 
 1. 打开所选入口。使用部署按钮时，按提示选择并关联 PostgreSQL 产品。
-2. 填写管理员密码和主密钥；使用已有数据库时，再填写 `GPROXY_DATABASE_URL`。
+2. 填写管理员密码；使用已有数据库时，再填写 `GPROXY_DATABASE_URL`。
 3. 保留模板的构建命令和 `vercel.json`，开始部署。
 
 函数依次从 `GPROXY_DATABASE_URL`、`DATABASE_URL`、`POSTGRES_URL` 读取连接串。如果所关联的产品使用其他变量名，把它的值复制到 `GPROXY_DATABASE_URL`。
@@ -92,7 +97,7 @@ Turso 地址可以写成 `libsql://your-db.turso.io`，也可以写成对应的 
 
 客户端以部署地址作为服务地址，例如 `https://gateway.example.com/v1`，并使用刚创建的 API key 鉴权。
 
-在 Netlify 和 Vercel 上，如果网关无法启动，请求会得到 503 状态码和消息 `GPROXY is unavailable. Check the deployment database and secrets in the platform console.`。此时查看函数日志，常见原因有：没有关联数据库，连接串不是以 `postgres://` 或 `postgresql://` 开头，或者没有设置密码或主密钥。程序必须在 45 秒内报告就绪，数据库连不上时通常表现为启动超时。PostgreSQL 账户还需要有创建 `gproxy` schema 和应用表的权限。
+在 Netlify 和 Vercel 上，如果缺少数据库连接串或管理员密码，或者连接串不是以 `postgres://` 或 `postgresql://` 开头，请求会得到 503 状态码和以 `GPROXY is not configured.` 开头的消息，消息中写明要设置的变量。其他启动失败得到 503 状态码和消息 `GPROXY is unavailable. Check the deployment database and secrets in the platform console.`，原因记录在函数日志中，例如主密钥不是 32 字节。程序必须在 45 秒内报告就绪，数据库连不上时通常表现为启动超时。PostgreSQL 账户还需要有创建 `gproxy` schema 和应用表的权限。
 
 ## 更新
 
@@ -188,5 +193,5 @@ pnpm --dir deploy/cloudflare check
 [cloudflare-auto]: https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fcloudflare-button
 [cloudflare-external]: https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fcloudflare-external
 [netlify-auto]: https://app.netlify.com/start/deploy?repository=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy&branch=dev&create_from_path=deploy%2Fserverless#GPROXY_DATABASE_URL=
-[vercel-auto]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fserverless&project-name=gproxy&repository-name=gproxy&env=GPROXY_ADMIN_PASSWORD%2CGPROXY_MASTER_KEY&products=%5B%7B%22type%22%3A%22integration%22%2C%22group%22%3A%22postgres%22%2C%22protocol%22%3A%22storage%22%7D%5D
-[vercel-external]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fserverless&project-name=gproxy&repository-name=gproxy&env=GPROXY_ADMIN_PASSWORD%2CGPROXY_MASTER_KEY%2CGPROXY_DATABASE_URL
+[vercel-auto]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fserverless&project-name=gproxy&repository-name=gproxy&env=GPROXY_ADMIN_PASSWORD&products=%5B%7B%22type%22%3A%22integration%22%2C%22group%22%3A%22postgres%22%2C%22protocol%22%3A%22storage%22%7D%5D
+[vercel-external]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev%2Fdeploy%2Fserverless&project-name=gproxy&repository-name=gproxy&env=GPROXY_ADMIN_PASSWORD%2CGPROXY_DATABASE_URL

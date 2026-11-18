@@ -58,7 +58,7 @@ Render 模板是仓库根目录的 `render.yaml` Blueprint。它创建一个免�
 Heroku 模板是仓库根目录的 `app.json` 和 `heroku.yml`，会创建一个 Basic Web dyno 和一个 `heroku-postgresql:essential-0` 插件。两者都要付费，部署前请核对套餐。
 
 1. 用 `openssl rand -hex 32` 生成主密钥并保存。
-2. 点击上方按钮，选择应用名和区域，把主密钥填入 `GPROXY_MASTER_KEY`。
+2. 点击上方按钮，选择应用名和区域，把主密钥填入 `GPROXY_MASTER_KEY`。这一项可以不填，不填时上游凭证以明文保存在数据库中。
 3. 核对 dyno 和插件后部署。`GPROXY_ADMIN_PASSWORD` 由 Heroku 生成。
 4. 在 **Settings → Reveal Config Vars** 中查看密码，然后打开 `/console/`，用 `admin` 登录。
 
