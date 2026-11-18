@@ -15628,6 +15628,18 @@
           "enableUsage": {
             "type": "boolean"
           },
+          "footerText": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "footerUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "hasTokenizerAuthToken": {
             "description": "The vocabulary source token is sealed like a credential secret; only\nits presence is reported.",
             "type": "boolean"
@@ -15841,6 +15853,20 @@
             "default": null,
             "type": [
               "boolean",
+              "null"
+            ]
+          },
+          "footerText": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "footerUrl": {
+            "default": null,
+            "type": [
+              "string",
               "null"
             ]
           },
@@ -48708,6 +48734,18 @@
           "enableUsage": {
             "type": "boolean"
           },
+          "footerText": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "footerUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "hasTokenizerAuthToken": {
             "description": "The vocabulary source token is sealed like a credential secret; only\nits presence is reported.",
             "type": "boolean"
@@ -48828,6 +48866,8 @@
         },
         "required": [
           "instanceName",
+          "footerText",
+          "footerUrl",
           "allowedHeaders",
           "oauthClientAllowlist",
           "connectionProfileId",
@@ -74913,7 +74953,7 @@
   "info": {
     "description": "Forwarding, management, portal and OAuth APIs generated from Rust types. Input and output schemas preserve their respective Serde contracts. Streaming events and WebSocket messages are documented alongside HTTP payloads.",
     "title": "GPROXY HTTP API",
-    "version": "4.2.3"
+    "version": "4.2.4"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -96048,6 +96088,18 @@
                     "fontManagement": {
                       "type": "boolean"
                     },
+                    "footerText": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "footerUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "hash": {
                       "type": "string"
                     },
@@ -96060,6 +96112,8 @@
                   },
                   "required": [
                     "instanceName",
+                    "footerText",
+                    "footerUrl",
                     "version",
                     "hash",
                     "fontManagement"
