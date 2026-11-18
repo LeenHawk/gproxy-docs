@@ -70,7 +70,9 @@ Turso 位址可以寫成 `libsql://your-db.turso.io`，也可以寫成對應的 
 
 如果沒有設定 `GPROXY_DATABASE_URL` 或 `GPROXY_ADMIN_PASSWORD`，網站可以部署成功，但所有請求都會得到 503 狀態碼，回應訊息會指出缺少的變數。在網站的環境變數設定中補上並重新部署即可。
 
-資料庫中已有明文保存的憑證後，不能直接加上 `GPROXY_MASTER_KEY` 來啟用加密，需要依照[輪換主金鑰](/zh-tw/reference/configuration#輪換主金鑰)的步驟，用 `GPROXY_MASTER_KEY_NEXT` 和 `GPROXY_MASTER_KEY_ROTATE` 為既有資料加密。
+函式平台不支援主金鑰輪換。資料庫中已有明文保存的憑證後，不能透過加上 `GPROXY_MASTER_KEY` 為它們加密，需要加密時請在新增上游憑證之前設定。
+
+請將資料庫建在函式執行的地區。Netlify 函式預設執行在 AWS `us-east-2`（美國俄亥俄）；資料庫在其他大洲時，首次啟動要建立全部資料表，可能在平台的請求時限內無法完成。
 
 ## Vercel
 
@@ -97,7 +99,7 @@ Turso 位址可以寫成 `libsql://your-db.turso.io`，也可以寫成對應的 
 
 用戶端以部署位址作為服務位址，例如 `https://gateway.example.com/v1`，並使用剛建立的 API key 驗證。
 
-在 Netlify 和 Vercel 上，如果缺少資料庫連線字串或管理員密碼，或者連線字串不是以 `postgres://` 或 `postgresql://` 開頭，請求會得到 503 狀態碼和以 `GPROXY is not configured.` 開頭的訊息，訊息中寫明要設定的變數。其他啟動失敗會得到 503 狀態碼和訊息 `GPROXY is unavailable. Check the deployment database and secrets in the platform console.`，原因記錄在函式日誌中，例如主金鑰不是 32 位元組。程式必須在 45 秒內回報就緒，資料庫連不上時通常表現為啟動逾時。PostgreSQL 帳戶還需要有建立 `gproxy` schema 和應用程式資料表的權限。
+在 Netlify 和 Vercel 上，如果缺少資料庫連線字串或管理員密碼，或者連線字串不是以 `postgres://` 或 `postgresql://` 開頭，請求會得到 503 狀態碼和以 `GPROXY is not configured.` 開頭的訊息，訊息中寫明要設定的變數。其他啟動失敗會得到 503 狀態碼和訊息 `GPROXY is unavailable. Check the deployment database and secrets in the platform console.`，原因記錄在函式日誌中，例如主金鑰不是 32 位元組。程式必須在 45 秒內回報就緒，資料庫連不上時通常表現為啟動逾時。資料庫與函式不在同一地區時，首次啟動也可能逾時。PostgreSQL 帳戶還需要有建立 `gproxy` schema 和應用程式資料表的權限。
 
 ## 更新
 
