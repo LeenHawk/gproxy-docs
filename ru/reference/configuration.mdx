@@ -57,6 +57,7 @@ compose-файле ни на что бы не влиял.
 | `GPROXY_DATA_DIR` | `--data-dir` | `data`¹ | каталог, относительно которого разрешаются пути: файл SQLite, локальное файловое хранилище, загруженные словари |
 | `GPROXY_PERSISTENCE` | `--persistence` | `sqlite` | `sqlite`, `postgres` или `mysql` |
 | `GPROXY_DSN` | `--dsn` | — | строка подключения; без `--persistence` бэкенд определяется по её схеме |
+| `GPROXY_PLATFORM_ENV` | — | выкл. | если включена, читает `PORT`, когда `GPROXY_PORT` не задана, и `GPROXY_DATABASE_URL` или `DATABASE_URL`, когда не задана `GPROXY_DSN` |
 | `GPROXY_REDIS_URL` | `--redis-url` | — | общий кеш; обязателен, если экземпляров больше одного |
 | `GPROXY_MASTER_KEY` | `--master-key` | — | 32 байта: 64 шестнадцатеричных символа или base64. Если не задан, секреты хранятся открытым текстом |
 | `GPROXY_MASTER_KEY_NEXT` | `--master-key-next` | — | ключ, на который выполняется перешифрование |
