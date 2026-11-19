@@ -14,7 +14,8 @@
 #footer a[href="https://www.jetbrains.com/"],
 #footer a[href="https://www.netlify.com/"],
 #footer a[href="https://neon.com/"],
-#footer a[href="https://www.fastly.com/"] {
+#footer a[href="https://www.fastly.com/"],
+#footer a[href="https://www.vultr.com/"] {
   display: inline-flex;
   align-items: center;
   /* Keep the brand names accessible while displaying only their icons. */
@@ -24,7 +25,8 @@
 #footer a[href="https://www.jetbrains.com/"]::before,
 #footer a[href="https://www.netlify.com/"]::before,
 #footer a[href="https://neon.com/"]::before,
-#footer a[href="https://www.fastly.com/"]::before {
+#footer a[href="https://www.fastly.com/"]::before,
+#footer a[href="https://www.vultr.com/"]::before {
   content: "";
   width: 20px;
   height: 20px;
@@ -46,4 +48,8 @@
 
 #footer a[href="https://www.fastly.com/"]::before {
   background-image: url("/images/sponsors/fastly.png");
+}
+
+#footer a[href="https://www.vultr.com/"]::before {
+  background-image: url("/images/sponsors/vultr.svg");
 }

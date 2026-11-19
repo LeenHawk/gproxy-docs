@@ -336,6 +336,10 @@
           {
             "label": "Fastly",
             "href": "https://www.fastly.com/"
+          },
+          {
+            "label": "Vultr",
+            "href": "https://www.vultr.com/"
           }
         ]
       }
