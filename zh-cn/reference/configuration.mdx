@@ -35,6 +35,7 @@ description: "CLI 配置来源、环境变量、主密钥、首次初始化与�
 | `GPROXY_DATA_DIR` | `--data-dir` | `data`¹ | 相对路径的基准目录：SQLite 文件、本地文件存储、下载的词表 |
 | `GPROXY_PERSISTENCE` | `--persistence` | `sqlite` | `sqlite`、`postgres` 或 `mysql` |
 | `GPROXY_DSN` | `--dsn` | — | 连接串；未指定 `--persistence` 时按其 scheme 选择后端 |
+| `GPROXY_PLATFORM_ENV` | — | 关 | 开启后，未设置 `GPROXY_PORT` 时读取 `PORT`，未设置 `GPROXY_DSN` 时读取 `GPROXY_DATABASE_URL` 或 `DATABASE_URL` |
 | `GPROXY_REDIS_URL` | `--redis-url` | — | 共享 cache；多实例部署必须设置 |
 | `GPROXY_MASTER_KEY` | `--master-key` | — | 32 字节密钥，64 位十六进制或 base64。不设置则明文存放密钥 |
 | `GPROXY_MASTER_KEY_NEXT` | `--master-key-next` | — | 轮换的目标密钥 |

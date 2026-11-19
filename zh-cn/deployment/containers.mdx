@@ -4,7 +4,7 @@ description: "运行 GPROXY 容器镜像，或使用 PostgreSQL 部署到 Render
 sidebarTitle: "Docker 与容器平台"
 ---
 
-本页涉及两种不同的容器。Docker 镜像运行普通的 `gproxy` CLI，SQLite 数据库放在卷中，适合部署在自己管理的主机上。Render 和 Heroku 模板构建的是另一个镜像：由一个小的 Node.js 入口运行原生 PostgreSQL 版本，适合本地磁盘在重启后不保留的平台。Cloudflare Workers、Netlify 和 Vercel 见 [Cloudflare Workers、Netlify 与 Vercel](/zh-cn/deployment/edge)。
+本页的部署方式用的是同一个 Docker 镜像，运行普通的 `gproxy` CLI。在自己管理的主机上，SQLite 数据库放在卷中。Render 和 Heroku 的本地磁盘在重启后不保留，模板让同一个镜像改用 PostgreSQL。Cloudflare Workers、Netlify 和 Vercel 见 [Cloudflare Workers、Netlify 与 Vercel](/zh-cn/deployment/edge)。
 
 ## Docker
 
@@ -62,35 +62,35 @@ Heroku 模板是仓库根目录的 `app.json` 和 `heroku.yml`，会创建一个
 3. 核对 dyno 和插件后部署。`GPROXY_ADMIN_PASSWORD` 由 Heroku 生成。
 4. 在 **Settings → Reveal Config Vars** 中查看密码，然后打开 `/console/`，用 `admin` 登录。
 
-镜像由 `deploy/serverless/Dockerfile` 构建。Node.js 入口监听 Heroku 分配的 `PORT`，也能在 Heroku 指定的运行用户下工作；网关读取插件提供的 `DATABASE_URL`。dyno 的本地文件是临时的，配置、凭证、用量和缓存状态等需要保留的数据都存放在 PostgreSQL 中。
+镜像由 `deploy/container/Dockerfile.heroku` 构建，内容只是引用发布镜像并设置几个环境变量。程序监听 Heroku 分配的 `PORT`，读取插件提供的 `DATABASE_URL`。dyno 的本地文件是临时的，配置、凭证和用量等需要保留的数据都存放在 PostgreSQL 中。
 
 ## 运行 Render 与 Heroku 模板
 
-两个模板构建的是同一个镜像。构建时下载发布中 x86_64 和 aarch64 两种架构的 `gproxy-serverless` 程序，按发布的 `SHA256SUMS` 校验后，与 Node.js 入口一起打包，整个过程不编译任何代码。上文的普通 Docker 镜像只包含 SQLite 驱动，不能代替这个镜像。
+两个模板运行的都是发布镜像 `ghcr.io/leenhawk/gproxy:latest`，即最新稳定版，部署时不编译任何代码。模板设置了 `GPROXY_PLATFORM_ENV=1` 和 `GPROXY_PERSISTENCE=postgres`。
 
 ### 数据库
 
-网关读取 `GPROXY_DATABASE_URL`；未设置时读取平台提供的 `DATABASE_URL`。更新时保留数据库和 `GPROXY_MASTER_KEY`，并备份这两者。
+设置 `GPROXY_PLATFORM_ENV=1` 后，程序在 `GPROXY_DSN` 未设置时读取 `GPROXY_DATABASE_URL`，再未设置时读取平台提供的 `DATABASE_URL`；`GPROXY_PORT` 未设置时读取 `PORT`。更新时保留数据库和 `GPROXY_MASTER_KEY`，并备份这两者。
 
 ### 更新
 
-构建时默认下载最新稳定版（`GPROXY_RELEASE_VERSION=latest`）。升级时清除平台构建缓存并重新部署。需要固定版本时，把 Docker 构建参数 `GPROXY_RELEASE_VERSION` 设为发布标签；该版本必须包含两种架构的 serverless Linux 压缩包和 `SHA256SUMS`。
+重新部署即可拉取最新稳定版。需要固定版本时，把镜像标签从 `latest` 改为 `vX.Y.Z`：Render 改 `render.yaml` 中的镜像地址，Heroku 改 `deploy/container/Dockerfile.heroku` 的 `FROM` 行。
 
 ### 实例数
 
-模板只启动一个应用实例，共享缓存保存在 PostgreSQL 中。
+模板只启动一个应用实例，缓存在进程内存中，重启后清空。运行多个实例时必须设置 `GPROXY_REDIS_URL`。
 
 ### 公开地址
 
-使用 OAuth 或文件发布链接时，把 `GPROXY_PUBLIC_BASE_URL` 设为服务的公开 HTTPS 地址。模板不配置文件存储；需要文件系统或对象存储时，请改用原生 CLI 构建。
+使用 OAuth 或文件发布链接时，把 `GPROXY_PUBLIC_BASE_URL` 设为服务的公开 HTTPS 地址。模板不配置文件存储，本地磁盘上的文件在重启后丢失。
 
 ### 客户端地址
 
-客户端 IP 取自 TCP 连接的对端，可能是平台路由器的地址。转发头中的客户端 IP 不被信任。
+客户端 IP 取自 TCP 连接的对端，可能是平台路由器的地址。转发头中的客户端 IP 默认不被信任；要采用它，把 `GPROXY_TRUSTED_PROXIES` 设为平台路由器的地址。
 
 ### 连接
 
-入口支持 HTTP、SSE 和 WebSocket，但平台路由的超时、空闲连接限制和实例重启依然存在。关闭时，入口先停止接受新连接，再给未结束的 SSE 和 WebSocket 连接最多 25 秒，然后退出。
+程序支持 HTTP、SSE 和 WebSocket，但平台路由的超时、空闲连接限制和实例重启依然存在。
 
 [render-deploy]: https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev
 [heroku-deploy]: https://heroku.com/deploy?template=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev
