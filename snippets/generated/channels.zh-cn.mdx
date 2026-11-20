@@ -341,7 +341,7 @@ GPROXY 4.2.6. [下载 JSON](/generated/channels.json).
 | `credential_strategy` | 字符串 | 否 | How the host picks among this provider's credentials. | — |
 | `allowed_headers` | HTTP 请求头 | 否 | Additional client headers to forward, unioned with the global allow-list and channel defaults. | — |
 
-<Accordion title="厂商服务路由 (76)">
+<Accordion title="厂商服务路由 (77)">
 
 | 方法 | 路径 | 传输方式 | 访问分类 | 幂等 |
 | --- | --- | --- | --- | --- |
@@ -396,6 +396,7 @@ GPROXY 4.2.6. [下载 JSON](/generated/channels.json).
 | `POST` | `/backend-api/files/{file_id}/uploaded` | HTTP | 资源: `codex:file` / 读取／操作单项 | 否 |
 | `GET` | `/backend-api/ps/plugins/list` | HTTP | 目录 | 是 |
 | `GET` | `/backend-api/ps/plugins/search` | HTTP | 目录 | 是 |
+| `GET` | `/backend-api/ps/plugins/tooling-state/turtle` | HTTP | 设置 | 是 |
 | `GET` | `/backend-api/ps/plugins/installed` | HTTP | 资源: `codex:plugin` / 列出 | 是 |
 | `GET` | `/backend-api/ps/plugins/suggested/codex` | HTTP | 目录 | 是 |
 | `GET` | `/backend-api/ps/plugins/workspace/created` | HTTP | 资源: `codex:plugin` / 列出 | 是 |

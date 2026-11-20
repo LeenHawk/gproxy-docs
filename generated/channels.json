@@ -2035,6 +2035,15 @@
         },
         {
           "class": {
+            "class": "settings"
+          },
+          "idempotent": true,
+          "method": "GET",
+          "path": "/backend-api/ps/plugins/tooling-state/turtle",
+          "transport": "http"
+        },
+        {
+          "class": {
             "access": "list",
             "class": "resource",
             "kind": "codex:plugin"

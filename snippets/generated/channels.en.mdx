@@ -341,7 +341,7 @@ Login flows: Authorization code (PKCE) / Device code. Manual credential kinds: `
 | `credential_strategy` | String | No | How the host picks among this provider's credentials. | — |
 | `allowed_headers` | HTTP headers | No | Additional client headers to forward, unioned with the global allow-list and channel defaults. | — |
 
-<Accordion title="Vendor service routes (76)">
+<Accordion title="Vendor service routes (77)">
 
 | Method | Path | Transport | Access classification | Idempotent |
 | --- | --- | --- | --- | --- |
@@ -396,6 +396,7 @@ Login flows: Authorization code (PKCE) / Device code. Manual credential kinds: `
 | `POST` | `/backend-api/files/{file_id}/uploaded` | HTTP | Resource: `codex:file` / Read / act on an item | No |
 | `GET` | `/backend-api/ps/plugins/list` | HTTP | Catalogue | Yes |
 | `GET` | `/backend-api/ps/plugins/search` | HTTP | Catalogue | Yes |
+| `GET` | `/backend-api/ps/plugins/tooling-state/turtle` | HTTP | Settings | Yes |
 | `GET` | `/backend-api/ps/plugins/installed` | HTTP | Resource: `codex:plugin` / List | Yes |
 | `GET` | `/backend-api/ps/plugins/suggested/codex` | HTTP | Catalogue | Yes |
 | `GET` | `/backend-api/ps/plugins/workspace/created` | HTTP | Resource: `codex:plugin` / List | Yes |

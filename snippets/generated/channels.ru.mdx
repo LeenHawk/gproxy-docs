@@ -341,7 +341,7 @@ GPROXY 4.2.6. [Скачать JSON](/generated/channels.json).
 | `credential_strategy` | Строка | Нет | How the host picks among this provider's credentials. | — |
 | `allowed_headers` | HTTP-заголовки | Нет | Additional client headers to forward, unioned with the global allow-list and channel defaults. | — |
 
-<Accordion title="Сервисные маршруты провайдера (76)">
+<Accordion title="Сервисные маршруты провайдера (77)">
 
 | Метод | Путь | Транспорт | Категория доступа | Идемпотентность |
 | --- | --- | --- | --- | --- |
@@ -396,6 +396,7 @@ GPROXY 4.2.6. [Скачать JSON](/generated/channels.json).
 | `POST` | `/backend-api/files/{file_id}/uploaded` | HTTP | Ресурс: `codex:file` / Получить / обработать элемент | Нет |
 | `GET` | `/backend-api/ps/plugins/list` | HTTP | Каталог | Да |
 | `GET` | `/backend-api/ps/plugins/search` | HTTP | Каталог | Да |
+| `GET` | `/backend-api/ps/plugins/tooling-state/turtle` | HTTP | Настройки | Да |
 | `GET` | `/backend-api/ps/plugins/installed` | HTTP | Ресурс: `codex:plugin` / Список | Да |
 | `GET` | `/backend-api/ps/plugins/suggested/codex` | HTTP | Каталог | Да |
 | `GET` | `/backend-api/ps/plugins/workspace/created` | HTTP | Ресурс: `codex:plugin` / Список | Да |
