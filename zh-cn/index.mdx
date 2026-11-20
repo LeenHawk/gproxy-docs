@@ -4,6 +4,10 @@ description: "GPROXY 是一个自行部署的大模型 API 网关，把多个上
 sidebarTitle: "概述"
 ---
 
+import { HomeGet } from "/snippets/home-get.jsx";
+
+<HomeGet locale="zh-CN" />
+
 GPROXY 是一个自行部署的大模型 API 网关。上游账户（API Key、Codex 或 Claude Code 这类 OAuth 登录、浏览器 Cookie）交给 GPROXY 保管，客户端只需要一个网关地址、一个 GPROXY API Key 和你自己定义的模型名。
 
 每个请求到达后，GPROXY 根据模型名选出供应商和凭证；客户端与上游的格式不同时，在 OpenAI、Claude、Gemini 三种格式之间转换；检查调用者的权限、限流和预算；最后记录 token 用量和费用。某个凭证或供应商失败时，请求会换到下一个继续尝试。

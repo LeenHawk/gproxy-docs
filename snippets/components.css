@@ -1,8 +1,9 @@
 /* Styles for the React snippets. Mintlify loads every .css file globally, so
-   every selector is scoped under .gp-download or .gp-video. */
+   every selector is scoped under .gp-download, .gp-home or .gp-video. */
 
 /* ---------- Shared palette (light, then dark) ---------- */
 .gp-download,
+.gp-home,
 .gp-video {
   --gp-accent: rgb(var(--primary, 22 163 74));
   --gp-on-accent: #ffffff;
@@ -19,6 +20,7 @@
   --gp-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 }
 .dark .gp-download,
+.dark .gp-home,
 .dark .gp-video {
   --gp-accent: rgb(var(--primary-light, var(--primary, 74 222 128)));
   --gp-on-accent: #0b0d0e;
@@ -149,6 +151,29 @@ body:has(.gp-download) #header:has(#page-title) { display: none; }
   .gp-download .dl-table td { padding-inline: 0.2rem; }
   .gp-download .dl-primary { padding: 1rem; }
 }
+
+/* ---------- Home page download entry ---------- */
+.gp-home { margin-block: 0.25rem 2rem; color: var(--gp-text); }
+.gp-home :where(p) { margin: 0; }
+.gp-home a:focus-visible,
+.gp-home button:focus-visible { outline: 2px solid var(--gp-accent); outline-offset: 3px; }
+.gp-home .gh-cta { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.gp-home .gh-btn { display: inline-flex; align-items: center; gap: 0.55rem; padding: 0.65rem 1.25rem; border-radius: 10px; font-size: 0.95rem; font-weight: 600; text-decoration: none; color: var(--gp-on-accent); background: var(--gp-accent); border: 1px solid transparent; transition: background 120ms, border-color 120ms; }
+.gp-home .gh-btn:hover { background: color-mix(in srgb, var(--gp-accent) 88%, var(--gp-strong)); }
+.gp-home .gh-btn svg { width: 1rem; height: 1rem; flex-shrink: 0; }
+.gp-home .gh-btn--ghost { color: var(--gp-strong); background: var(--gp-bg); border-color: var(--gp-line); }
+.gp-home .gh-btn--ghost:hover { background: var(--gp-soft); border-color: var(--gp-accent); }
+.gp-home .gh-term { margin-top: 1.25rem; }
+.gp-home .gh-term p { margin-bottom: 0.4rem; font-size: 0.875rem; color: var(--gp-muted); }
+.gp-home .gh-code { display: flex; align-items: center; max-width: 36rem; border-radius: 8px; background: var(--gp-surface); border: 1px solid var(--gp-border); }
+.gp-home .gh-code pre { flex: 1; min-width: 0; margin: 0; padding: 0.6rem 0.8rem; font-family: var(--gp-mono); font-size: 0.82rem; line-height: 1.5; color: var(--gp-strong); background: none; overflow-x: auto; white-space: pre; }
+.gp-home .gh-code code { background: none; padding: 0; border: 0; font: inherit; color: inherit; }
+.gp-home .gh-code button { display: inline-flex; margin-right: 0.35rem; padding: 0.4rem; border: 0; border-radius: 6px; background: none; color: var(--gp-muted); cursor: pointer; }
+.gp-home .gh-code button:hover { color: var(--gp-strong); background: var(--gp-soft); }
+.gp-home .gh-code button svg { width: 1rem; height: 1rem; }
+.gp-home .gh-meta { display: flex; flex-wrap: wrap; gap: 0.25rem 0.6rem; margin-top: 0.9rem; font-size: 0.875rem; color: var(--gp-faint); }
+.gp-home .gh-meta a { color: var(--gp-muted); text-decoration: none; border-bottom: 1px solid var(--gp-line); }
+.gp-home .gh-meta a:hover { color: var(--gp-strong); border-color: var(--gp-accent); }
 
 /* ---------- Video tutorial ---------- */
 .gp-video { margin-block: 1.5rem 2rem; }

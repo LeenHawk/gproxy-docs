@@ -13,7 +13,7 @@ mirrored to GitLab, CNB and git.lin.pub.
   (English at the root, `zh-cn/`, `zh-tw/`, `ru/`) and redirects.
 - Pages are `.mdx` files whose path is their URL. Keep every language's tree
   aligned with the English one.
-- `snippets/`: React components (`download-page.jsx`, `video-tutorial.jsx`,
+- `snippets/`: React components (`download-page.jsx`, `home-get.jsx`, `video-tutorial.jsx`,
   `components.css`) and `snippets/generated/`, the rendered reference tables.
 - `generated/`: the OpenAPI document, configuration JSON Schema and defaults,
   and the channel catalogue, exported from gproxy's Rust code. The HTTP API

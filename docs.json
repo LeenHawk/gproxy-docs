@@ -83,7 +83,20 @@
             "group": "HTTP API",
             "openapi": "generated/openapi.json"
           }
-        ]
+        ],
+        "navbar": {
+          "links": [
+            {
+              "type": "github",
+              "href": "https://github.com/LeenHawk/gproxy"
+            }
+          ],
+          "primary": {
+            "type": "button",
+            "label": "Download",
+            "href": "/download"
+          }
+        }
       },
       {
         "language": "zh-CN",
@@ -158,7 +171,20 @@
             "openapi": "generated/openapi.json"
           }
         ],
-        "default": true
+        "default": true,
+        "navbar": {
+          "links": [
+            {
+              "type": "github",
+              "href": "https://github.com/LeenHawk/gproxy"
+            }
+          ],
+          "primary": {
+            "type": "button",
+            "label": "下载",
+            "href": "/zh-cn/download"
+          }
+        }
       },
       {
         "language": "zh-TW",
@@ -232,7 +258,20 @@
             "group": "HTTP API",
             "openapi": "generated/openapi.json"
           }
-        ]
+        ],
+        "navbar": {
+          "links": [
+            {
+              "type": "github",
+              "href": "https://github.com/LeenHawk/gproxy"
+            }
+          ],
+          "primary": {
+            "type": "button",
+            "label": "下載",
+            "href": "/zh-tw/download"
+          }
+        }
       },
       {
         "language": "ru",
@@ -306,14 +345,34 @@
             "group": "HTTP API",
             "openapi": "generated/openapi.json"
           }
-        ]
+        ],
+        "navbar": {
+          "links": [
+            {
+              "type": "github",
+              "href": "https://github.com/LeenHawk/gproxy"
+            }
+          ],
+          "primary": {
+            "type": "button",
+            "label": "Скачать",
+            "href": "/ru/download"
+          }
+        }
       }
     ]
   },
   "navbar": {
+    "links": [
+      {
+        "type": "github",
+        "href": "https://github.com/LeenHawk/gproxy"
+      }
+    ],
     "primary": {
-      "type": "github",
-      "href": "https://github.com/LeenHawk/gproxy"
+      "type": "button",
+      "label": "Download",
+      "href": "/download"
     }
   },
   "footer": {

@@ -4,6 +4,10 @@ description: "GPROXY 是一個自行部署的大型語言模型 API 閘道，把
 sidebarTitle: "概述"
 ---
 
+import { HomeGet } from "/snippets/home-get.jsx";
+
+<HomeGet locale="zh-TW" />
+
 GPROXY 是一個自行部署的大型語言模型 API 閘道。上游帳號（API Key、Codex 或 Claude Code 這類 OAuth 登入、瀏覽器 Cookie）交給 GPROXY 保管，用戶端只需要一個閘道位址、一個 GPROXY API Key，以及你自己定義的模型名稱。
 
 每個請求到達後，GPROXY 依模型名稱選出供應商和憑證；用戶端與上游的格式不同時，在 OpenAI、Claude、Gemini 三種格式之間轉換；檢查呼叫者的權限、限流和預算；最後記錄 token 用量和費用。某個憑證或供應商失敗時，請求會換到下一個繼續嘗試。
