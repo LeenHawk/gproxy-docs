@@ -35,6 +35,7 @@ description: "CLI 設定來源、環境變數、主金鑰、首次初始化與�
 | `GPROXY_DATA_DIR` | `--data-dir` | `data`¹ | 相對路徑的基準目錄：SQLite 檔案、本機檔案儲存、下載的詞表 |
 | `GPROXY_PERSISTENCE` | `--persistence` | `sqlite` | `sqlite`、`postgres` 或 `mysql` |
 | `GPROXY_DSN` | `--dsn` | — | 連線字串；未指定 `--persistence` 時按其 scheme 選擇後端 |
+| `GPROXY_PLATFORM_ENV` | — | 關 | 開啟後，未設定 `GPROXY_PORT` 時讀取 `PORT`，未設定 `GPROXY_DSN` 時讀取 `GPROXY_DATABASE_URL` 或 `DATABASE_URL` |
 | `GPROXY_REDIS_URL` | `--redis-url` | — | 共享 cache；多實例部署必須設定 |
 | `GPROXY_MASTER_KEY` | `--master-key` | — | 32 位元組金鑰，64 位十六進位或 base64。不設定則明文存放金鑰 |
 | `GPROXY_MASTER_KEY_NEXT` | `--master-key-next` | — | 輪換的目標金鑰 |
