@@ -20,7 +20,7 @@ description: "从源码构建 GPROXY v4 的各个目标（带或不带控制台�
 | Windows（x86_64、aarch64） | ZIP、MSIX | ZIP、MSIX |
 | macOS（x86_64、aarch64） | ZIP、DMG | ZIP、DMG |
 | Android（x86_64、aarch64） | ZIP、Termux DEB | 仅 APK |
-| OpenHarmony / HarmonyOS NEXT | ARM64 / x86_64 ZIP | ARM64 未签名 HAP |
+| OpenHarmony / HarmonyOS NEXT | — | ARM64 HAP |
 
 发布工作流还会发布 serverless 可执行文件（`gproxy-serverless-linux-<arch>-musl`，x86_64 和 aarch64）、Cloudflare Workers 包（`gproxy-edge-cloudflare.zip`），以及 GNU 和 musl 容器镜像。应用包会生成托管在 GitHub 上的构建证明（attestation）。公开的发布附件只包括各个包、`manifest.json` 和 `SHA256SUMS`；单独的校验文件和构建证明属于 CI 内部输入。
 
@@ -31,7 +31,7 @@ description: "从源码构建 GPROXY v4 的各个目标（带或不带控制台�
 - Android 应用：APK 使用 `ANDROID_SIGNING_*` secrets 签名并验证。每个应用的 `<target-triple>-tauri-apk` 条目写入 Ed25519 签名的更新清单，与 CLI ZIP 的更新分开。旧的服务包装 APK 不再构建。
 - Windows：CLI MSIX 使用 Partner Center 分配的独立包身份 `LeenHawk.GPROXYCLI`，并提供控制台命令别名。应用依赖系统的 WebView2 Runtime。
 - macOS：CLI DMG 包含可执行文件和在终端中安装的说明。应用 ZIP 保留桌面资源，macOS 版包含完整的 `.app`。构建只做 ad-hoc 签名，尚未接入 Developer ID 签名和公证。
-- 鸿蒙：使用缓存的工具链镜像和固定版本的实验性 Tauri 分支构建，其他平台使用稳定版 Tauri。HAP 安装前需要自行签名，已在模拟器上验证。已实现持续后台运行，但能否生效取决于设备、系统版本和授予的权限；应用进程退出后代理随之停止。
+- 鸿蒙：使用缓存的工具链镜像和固定版本的实验性 Tauri 分支构建，其他平台使用稳定版 Tauri。GitHub Release 使用华为发布证书签署 ARM64 HAP。已实现持续后台运行，但能否生效取决于设备、系统版本和授予的权限；应用进程退出后代理随之停止。
 
 nightly 附件的文件名固定不变，提交 SHA 记录在更新清单中。
 

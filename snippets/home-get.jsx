@@ -78,7 +78,7 @@ export const HomeGet = ({ locale = 'en' }) => {
   const [copied, setCopied] = useState(false);
   useEffect(() => { setOs(detect()); }, []);
 
-  // The install script has no OpenHarmony build; that platform uses the ZIP.
+  // HarmonyOS uses the application download.
   const command = os === 'windows' ? WINDOWS : os === 'ohos' ? null : UNIX;
   const copyCommand = async () => {
     try {

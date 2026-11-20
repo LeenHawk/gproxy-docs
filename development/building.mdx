@@ -27,7 +27,7 @@ installers:
 | Windows (x86_64, aarch64) | ZIP, MSIX | ZIP, MSIX |
 | macOS (x86_64, aarch64) | ZIP, DMG | ZIP, DMG |
 | Android (x86_64, aarch64) | ZIP, Termux DEB | APK only |
-| OpenHarmony / HarmonyOS NEXT | ARM64 / x86_64 ZIP | ARM64 unsigned HAP |
+| OpenHarmony / HarmonyOS NEXT | — | ARM64 HAP |
 
 The release workflow also publishes the serverless executable
 (`gproxy-serverless-linux-<arch>-musl` for x86_64 and aarch64), the Cloudflare
@@ -62,8 +62,7 @@ Notes per platform:
   complete `.app`. Builds are ad-hoc signed; Developer ID signing and
   notarization are not configured.
 - OpenHarmony: builds use a cached toolchain image and a pinned experimental
-  Tauri branch; other platforms use stable Tauri. The HAP must be signed before
-  it can be installed. It has been verified on an emulator. Continuous
+  Tauri branch; other platforms use stable Tauri. GitHub Release signs the ARM64 HAP with the Huawei release certificate. It has been verified on an emulator. Continuous
   background execution is implemented, but whether it works depends on the
   device, the OS version and the granted permissions; the proxy stops when the
   application process exits.

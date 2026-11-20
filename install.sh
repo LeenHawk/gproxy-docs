@@ -1,5 +1,5 @@
 #!/bin/sh
-# GPROXY CLI installer for Linux, macOS, Android (Termux) and OpenHarmony.
+# GPROXY CLI installer for Linux, macOS and Android (Termux).
 #
 #   curl -fsSL https://gproxy.leenhawk.com/install.sh | sh
 #   curl -fsSL https://gproxy.leenhawk.com/install.sh | sh -s -- --edition headless -y
@@ -39,7 +39,7 @@ Package
                               app: show where to download the Application
   --target TARGET             override platform detection, e.g. linux-x86_64,
                               linux-aarch64-musl, macos-aarch64,
-                              android-aarch64, ohos-x86_64
+                              android-aarch64
   --channel release|beta|dev  update channel (default: release)
   --mirror github|gitlab|cnb  download source (default: cnb for zh-CN, else github)
   --dir DIR                   directory for the gproxy command
@@ -189,9 +189,6 @@ msg() {
     en:app_android) echo 'On Android, install the APK from the download page or F-Droid; this script only installs the Termux CLI.' ;;
     zh-CN:app_android) echo 'Android 请从下载页或 F-Droid 安装 APK；本脚本仅安装 Termux CLI。' ;;
     zh-TW:app_android) echo 'Android 請從下載頁或 F-Droid 安裝 APK；本腳本僅安裝 Termux CLI。' ;;
-    en:no_headless) echo 'There is no headless build for %s; installing the CLI instead.' ;;
-    zh-CN:no_headless) echo '%s 没有 Headless 构建，改为安装 CLI。' ;;
-    zh-TW:no_headless) echo '%s 沒有 Headless 建置，改為安裝 CLI。' ;;
 
     en:pick_mirror) echo 'Download source' ;;
     zh-CN:pick_mirror) echo '下载源' ;;
@@ -466,18 +463,17 @@ detect_target() {
       if [ "$termux" -eq 1 ] || [ "$(uname -o 2>/dev/null)" = Android ]; then
         echo "android-$arch"
       elif uname -a 2>/dev/null | grep -qiE 'ohos|openharmony|harmonyos'; then
-        echo "ohos-$arch"
+        echo "unsupported:$os/$arch"
       elif is_musl; then
         echo "linux-$arch-musl"
       else
         echo "linux-$arch"
       fi ;;
-    HarmonyOS|OpenHarmony|OHOS) echo "ohos-$arch" ;;
     *) echo "unsupported:$os/$arch" ;;
   esac
 }
 
-all_targets='linux-x86_64 linux-aarch64 linux-riscv64 linux-x86_64-musl linux-aarch64-musl linux-riscv64-musl macos-x86_64 macos-aarch64 android-x86_64 android-aarch64 ohos-x86_64 ohos-aarch64'
+all_targets='linux-x86_64 linux-aarch64 linux-riscv64 linux-x86_64-musl linux-aarch64-musl linux-riscv64-musl macos-x86_64 macos-aarch64 android-x86_64 android-aarch64'
 
 valid_target() {
   for t in $all_targets; do [ "$t" = "$1" ] && return 0; done
@@ -550,10 +546,6 @@ case "$edition" in
   *) echo "unknown edition: $edition" >&2; exit 2 ;;
 esac
 
-if [ "$edition" = headless ]; then
-  case "$target" in ohos-*) say no_headless "$target"; edition=cli ;; esac
-fi
-
 # ---------------------------------------------------------------- source
 
 case "$channel" in
@@ -593,8 +585,6 @@ esac
 if [ -z "$bindir" ] && [ "$use_apt" -eq 0 ]; then
   if [ "$(id -u 2>/dev/null || echo 1)" = 0 ]; then bindir=/usr/local/bin; else bindir="$HOME/.local/bin"; fi
 fi
-# OHOS needs its bundled libc++ beside the binary; keep the whole archive.
-[ "$use_apt" -eq 1 ] || libdir="$(dirname "$bindir")/lib/gproxy"
 
 # ---------------------------------------------------------------- instance
 
@@ -709,7 +699,6 @@ if [ "$configure" = 1 ] && [ "$reconfigure" = 1 ] && [ "$interactive" -eq 1 ]; t
     [ -n "$proxy" ] || break
     valid_proxy "$proxy" || { warn bad_proxy; proxy=''; }
   done
-  case "$target" in ohos-*) service=0 ;; esac
   if [ -z "$service" ]; then
     ask choice "$(msg q_service)" ''
     if no_answer "$choice"; then service=0; else service=1; fi
@@ -721,7 +710,6 @@ fi
 [ -n "$db_path$dsn" ] || { dsn="$cur_dsn"; [ -n "$dsn" ] || db_path="$cur_db"; }
 [ -n "$admin_user" ] || admin_user=admin
 [ -n "$service" ] || service=0
-case "$target" in ohos-*) service=0 ;; esac
 valid_port "$listen_port" || die bad_port
 [ -z "$dsn" ] || valid_dsn "$dsn" || die bad_dsn
 [ -z "$proxy" ] || valid_proxy "$proxy" || die bad_proxy
@@ -844,24 +832,11 @@ if [ "$use_apt" -eq 1 ]; then
 else
   extract "$work/$asset" "$work/out"
   mkdir -p "$bindir"
-  case "$target" in
-    ohos-*)
-      rm -rf "$libdir.new"
-      mkdir -p "$libdir.new"
-      cp -R "$work/out/." "$libdir.new/"
-      chmod +x "$libdir.new/gproxy" "$libdir.new/run-gproxy.sh"
-      rm -rf "$libdir"
-      mv "$libdir.new" "$libdir"
-      printf '#!/bin/sh\nexec sh "%s/run-gproxy.sh" "$@"\n' "$libdir" > "$work/wrapper"
-      chmod +x "$work/wrapper"
-      mv -f "$work/wrapper" "$bindir/gproxy" ;;
-    *)
-      chmod +x "$work/out/gproxy"
-      # Copy beside the destination first so the final rename is atomic and a
-      # running gproxy keeps its old inode.
-      cp "$work/out/gproxy" "$bindir/.gproxy.new"
-      mv -f "$bindir/.gproxy.new" "$bindir/gproxy" ;;
-  esac
+  chmod +x "$work/out/gproxy"
+  # Copy beside the destination first so the final rename is atomic and a
+  # running gproxy keeps its old inode.
+  cp "$work/out/gproxy" "$bindir/.gproxy.new"
+  mv -f "$bindir/.gproxy.new" "$bindir/gproxy"
   gproxy="$bindir/gproxy"
 fi
 

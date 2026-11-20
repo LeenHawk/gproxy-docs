@@ -113,7 +113,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
           },
           "ohos": {
               "name": "OpenHarmony / HarmonyOS NEXT",
-              "hint": "CLI в ZIP для ARM64 и x86_64. HAP экспериментальный и требует собственной подписи."
+              "hint": "Экспериментальное приложение для ARM64."
           }
       }
   },
@@ -181,7 +181,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
         windows: { name: 'Windows', hint: 'ZIP needs no installer. MSIX attachments are Store submission packages and may not yet carry a Microsoft signature.' },
         macos: { name: 'macOS', hint: 'Choose ARM64 for Apple Silicon. Apps are ad-hoc signed and not notarized; allow them in System Settings on first launch.' },
         android: { name: 'Android', hint: 'The Application is an APK. The CLI runs inside Termux: install the DEB with apt, or unpack the ZIP and follow TERMUX.txt.' },
-        ohos: { name: 'OpenHarmony / HarmonyOS NEXT', hint: 'CLI ZIPs for ARM64 and x86_64. The HAP is experimental, needs your own signature.' },
+        ohos: { name: 'OpenHarmony / HarmonyOS NEXT', hint: 'Experimental ARM64 application.' },
       },
     },
     'zh-CN': {
@@ -248,7 +248,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
         windows: { name: 'Windows', hint: 'ZIP 无需安装器。MSIX 附件为商店提交包，可能尚未带有 Microsoft 签名。' },
         macos: { name: 'macOS', hint: 'Apple Silicon 请选 ARM64。应用为 ad-hoc 签名、未公证，首次启动需在系统设置中允许。' },
         android: { name: 'Android', hint: '应用版为 APK。CLI 在 Termux 中运行：用 apt 安装 DEB，或解压 ZIP 并按 TERMUX.txt 操作。' },
-        ohos: { name: 'OpenHarmony / HarmonyOS NEXT', hint: '提供 ARM64 与 x86_64 的 CLI ZIP。HAP 为实验性，需自行签名。' },
+        ohos: { name: 'OpenHarmony / HarmonyOS NEXT', hint: '适用于 ARM64 设备的实验性应用。' },
       },
     },
     'zh-TW': {
@@ -315,12 +315,20 @@ export const DownloadPage = ({ locale = 'en' }) => {
         windows: { name: 'Windows', hint: 'ZIP 無需安裝程式。MSIX 附件為商店提交套件，可能尚未帶有 Microsoft 簽章。' },
         macos: { name: 'macOS', hint: 'Apple Silicon 請選 ARM64。應用為 ad-hoc 簽章、未公證，首次啟動需在系統設定中允許。' },
         android: { name: 'Android', hint: '應用版為 APK。CLI 在 Termux 中執行：用 apt 安裝 DEB，或解壓 ZIP 並依 TERMUX.txt 操作。' },
-        ohos: { name: 'OpenHarmony / HarmonyOS NEXT', hint: '提供 ARM64 與 x86_64 的 CLI ZIP。HAP 為實驗性，需自行簽章。' },
+        ohos: { name: 'OpenHarmony / HarmonyOS NEXT', hint: '適用於 ARM64 裝置的實驗性應用程式。' },
       },
     },
   };
 
   const copy = GP_DL_COPY[locale] ?? GP_DL_COPY.en;
+
+  const [source, setSource] = useState(null);
+  // { status: 'loading' | 'ready' | 'offline', release?: object }
+  const [state, setState] = useState({ status: 'loading' });
+  const [guess, setGuess] = useState(null);
+
+  const hap = state.release?.assets.some(pkg => pkg.name === 'gproxy-tauri-ohos-aarch64-unsigned.hap')
+    ? 'gproxy-tauri-ohos-aarch64-unsigned.hap' : 'gproxy-tauri-ohos-aarch64.hap';
 
   const linuxRows = ['x86_64', 'aarch64', 'riscv64'].flatMap((arch) => [
     { arch, variant: 'GNU', app: [{ asset: `gproxy-tauri-linux-${arch}.deb`, label: 'DEB' }, { asset: `gproxy-tauri-linux-${arch}.zip`, label: 'ZIP' }], cli: [{ asset: `gproxy-linux-${arch}.deb`, label: 'DEB' }, { asset: `gproxy-linux-${arch}.zip`, label: 'ZIP' }] },
@@ -331,7 +339,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
     { id: 'windows', store: true, scoop: true, rows: ['x86_64', 'aarch64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-windows-${arch}.msix`, label: 'MSIX' }, { asset: `gproxy-tauri-windows-${arch}.zip`, label: 'ZIP' }], cli: [{ asset: `gproxy-windows-${arch}.msix`, label: 'MSIX' }, { asset: `gproxy-windows-${arch}.zip`, label: 'ZIP' }] })) },
     { id: 'macos', rows: ['aarch64', 'x86_64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-macos-${arch}.dmg`, label: 'DMG' }, { asset: `gproxy-tauri-macos-${arch}.zip`, label: 'ZIP' }], cli: [{ asset: `gproxy-macos-${arch}.dmg`, label: 'DMG' }, { asset: `gproxy-macos-${arch}.zip`, label: 'ZIP' }] })) },
     { id: 'android', fdroid: true, rows: ['aarch64', 'x86_64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-android-${arch}.apk`, label: 'APK' }], cli: [{ asset: `gproxy-android-${arch}.deb`, label: 'Termux DEB' }, { asset: `gproxy-android-${arch}.zip`, label: 'ZIP' }] })) },
-    { id: 'ohos', rows: ['aarch64', 'x86_64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-ohos-${arch}-unsigned.hap`, label: 'HAP' }], cli: [{ asset: `gproxy-ohos-${arch}.zip`, label: 'ZIP' }] })) },
+    { id: 'ohos', rows: [{ arch: 'aarch64', app: [{ asset: hap, label: 'HAP' }], cli: [] }] },
   ];
   // Two independently stacked columns: a grid row would size Linux's neighbours
   // to whichever side is taller and leave a gap on the other.
@@ -351,7 +359,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
     const ua = navigator.userAgent;
     const platform = (navigator.userAgentData?.platform ?? navigator.platform ?? '').toLowerCase();
     const arm = /aarch64|arm64|armv8/i.test(ua);
-    if (/openharmony|harmonyos/i.test(ua)) return { os: 'ohos', arch: arm ? 'aarch64' : 'x86_64' };
+    if (/openharmony|harmonyos/i.test(ua)) return { os: 'ohos', arch: /x86_64|x64/i.test(ua) ? 'x86_64' : 'aarch64' };
     if (/android/i.test(ua)) return { os: 'android', arch: /x86_64|x64/i.test(ua) ? 'x86_64' : 'aarch64' };
     if (/iphone|ipad/i.test(ua)) return null;
     if (platform.startsWith('win') || /windows/i.test(ua)) return { os: 'windows', arch: arm ? 'aarch64' : 'x86_64' };
@@ -451,10 +459,6 @@ export const DownloadPage = ({ locale = 'en' }) => {
     }));
   };
 
-  const [source, setSource] = useState(null);
-  // { status: 'loading' | 'ready' | 'offline', release?: object }
-  const [state, setState] = useState({ status: 'loading' });
-  const [guess, setGuess] = useState(null);
 
   // Initial source from ?source=, and the device guess, are browser-only.
   useEffect(() => {
@@ -632,7 +636,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
                         <tr key={`${row.arch}-${row.variant ?? ''}`}>
                           <th scope="row"><span>{copy.arch[row.arch]}</span>{row.variant ? <span className="dl-variant">{row.variant}</span> : null}</th>
                           <td>{row.app.length ? row.app.map((pkg) => asset(pkg.asset, pkg.label, pkg.tag)) : <span className="dl-none">—</span>}</td>
-                          <td>{row.cli.map((pkg) => asset(pkg.asset, pkg.label))}</td>
+                          <td>{row.cli.length ? row.cli.map((pkg) => asset(pkg.asset, pkg.label)) : <span className="dl-none">—</span>}</td>
                         </tr>
                       ))}
                     </tbody>
