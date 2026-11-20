@@ -4,7 +4,7 @@ description: "Run the GPROXY container image, or deploy to Render or Heroku with
 sidebarTitle: "Docker and container hosts"
 ---
 
-This page covers two different containers. The Docker image runs the ordinary `gproxy` CLI with a SQLite database in a volume, for a host you manage yourself. The Render and Heroku templates build a separate image that runs the native PostgreSQL build behind a small Node.js entry point, for platforms whose local disk does not survive a restart. For Cloudflare Workers, Netlify and Vercel, see [Cloudflare Workers, Netlify, and Vercel](/deployment/edge).
+The deployments on this page use the same Docker image, which runs the ordinary `gproxy` CLI. On a host you manage yourself, the SQLite database is kept in a volume. Render and Heroku do not keep the local disk across restarts, so their templates run the same image with PostgreSQL. For Cloudflare Workers, Netlify and Vercel, see [Cloudflare Workers, Netlify, and Vercel](/deployment/edge).
 
 ## Docker
 
@@ -62,35 +62,35 @@ The Heroku template is `app.json` and `heroku.yml` in the repository root. It cr
 3. Review the dyno and the add-on, then deploy. Heroku generates `GPROXY_ADMIN_PASSWORD`.
 4. Read the password under **Settings → Reveal Config Vars**, then sign in as `admin` at `/console/`.
 
-The image is built from `deploy/serverless/Dockerfile`. The Node.js entry point listens on the `PORT` Heroku assigns and works under the user ID Heroku runs it as; the gateway reads the add-on's `DATABASE_URL`. A dyno's local files are temporary, and everything that matters (configuration, credentials, usage, cache state) is kept in PostgreSQL.
+The image is built from `deploy/container/Dockerfile.heroku`, which only refers to the release image and sets a few environment variables. The program listens on the `PORT` Heroku assigns and reads the add-on's `DATABASE_URL`. A dyno's local files are temporary, and everything that has to be kept (configuration, credentials, usage) is stored in PostgreSQL.
 
 ## Running the Render and Heroku templates
 
-Both templates build the same image. At build time it downloads the release's `gproxy-serverless` executables for x86_64 and aarch64, checks them against the release's `SHA256SUMS`, and packages them with the Node.js entry point. Nothing is compiled. The ordinary Docker image above includes only the SQLite driver, so it cannot take this image's place.
+Both templates run the release image `ghcr.io/leenhawk/gproxy:latest`, the latest stable release. Nothing is compiled at deployment. The templates set `GPROXY_PLATFORM_ENV=1` and `GPROXY_PERSISTENCE=postgres`.
 
 ### Database
 
-The gateway reads `GPROXY_DATABASE_URL`, or the platform's `DATABASE_URL` when that is unset. Keep the database and `GPROXY_MASTER_KEY` across updates and back up both.
+With `GPROXY_PLATFORM_ENV=1`, the program reads `GPROXY_DATABASE_URL` when `GPROXY_DSN` is unset, and the platform's `DATABASE_URL` when that is unset too; it reads `PORT` when `GPROXY_PORT` is unset. Keep the database and `GPROXY_MASTER_KEY` across updates and back up both.
 
 ### Updates
 
-The build downloads the latest stable release by default (`GPROXY_RELEASE_VERSION=latest`). To upgrade, clear the platform's build cache and redeploy. To stay on one version, set the Docker build argument `GPROXY_RELEASE_VERSION` to a release tag; that release must contain both serverless Linux archives and `SHA256SUMS`.
+Redeploy to pull the latest stable release. To stay on one version, change the image tag from `latest` to `vX.Y.Z`: for Render in the image URL in `render.yaml`, for Heroku in the `FROM` line of `deploy/container/Dockerfile.heroku`.
 
 ### Instances
 
-The templates start one application instance. The shared cache is kept in PostgreSQL.
+The templates start one application instance. The cache is kept in process memory and is empty after a restart. To run more than one instance you must set `GPROXY_REDIS_URL`.
 
 ### Public address
 
-Set `GPROXY_PUBLIC_BASE_URL` to the service's public HTTPS origin if you use OAuth or published file links. The templates do not configure file storage; for a filesystem or object storage, run a native CLI build instead.
+Set `GPROXY_PUBLIC_BASE_URL` to the service's public HTTPS origin if you use OAuth or published file links. The templates do not configure file storage, and files on the local disk are lost on restart.
 
 ### Client addresses
 
-The client IP is taken from the TCP peer, which may be the platform's router. Forwarded client-IP headers are not trusted.
+The client IP is taken from the TCP peer, which may be the platform's router. Forwarded client-IP headers are not trusted by default; to use them, set `GPROXY_TRUSTED_PROXIES` to the addresses of the platform's router.
 
 ### Connections
 
-The entry point serves HTTP, SSE and WebSocket. The platform's router timeouts, idle limits and restarts still apply. On shutdown it stops accepting connections and gives open SSE and WebSocket connections up to 25 seconds before it exits.
+The program serves HTTP, SSE and WebSocket. The platform's router timeouts, idle limits and restarts still apply.
 
 [render-deploy]: https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev
 [heroku-deploy]: https://heroku.com/deploy?template=https%3A%2F%2Fgithub.com%2FLeenHawk%2Fgproxy%2Ftree%2Fdev

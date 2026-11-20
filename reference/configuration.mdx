@@ -53,6 +53,7 @@ supported by your binary together with the variable that sets the same value.
 | `GPROXY_DATA_DIR` | `--data-dir` | `data`¹ | directory relative paths resolve against: the SQLite file, local file storage, downloaded vocabularies |
 | `GPROXY_PERSISTENCE` | `--persistence` | `sqlite` | `sqlite`, `postgres` or `mysql` |
 | `GPROXY_DSN` | `--dsn` | — | connection string; without `--persistence`, its scheme selects the backend |
+| `GPROXY_PLATFORM_ENV` | — | off | when on, an unset `GPROXY_PORT` is read from `PORT`, and an unset `GPROXY_DSN` from `GPROXY_DATABASE_URL` or `DATABASE_URL` |
 | `GPROXY_REDIS_URL` | `--redis-url` | — | shared cache; required for more than one instance |
 | `GPROXY_MASTER_KEY` | `--master-key` | — | 32 bytes as 64 hex characters or base64. Unset stores secrets in plaintext |
 | `GPROXY_MASTER_KEY_NEXT` | `--master-key-next` | — | the key to re-seal to |
