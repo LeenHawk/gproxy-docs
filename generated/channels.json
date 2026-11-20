@@ -3885,13 +3885,6 @@
             "required": false
           },
           {
-            "description": "Your WAA signing service. Receives this credential's Google cookies and request contents; no public fallback.",
-            "kind": "string",
-            "name": "proof_server_url",
-            "placeholder": "http://127.0.0.1:8081",
-            "required": true
-          },
-          {
             "description": "IANA timezone sent with the Playground request.",
             "kind": "string",
             "name": "timezone",

@@ -1276,6 +1276,24 @@
         ],
         "type": "string"
       },
+      "Input_AudioMetadata": {
+        "additionalProperties": true,
+        "properties": {
+          "endOffset": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "startOffset": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "Input_AudioMimeType": {
         "enum": [
           "MIME_TYPE_UNSPECIFIED",
@@ -10573,6 +10591,43 @@
           }
         ]
       },
+      "Input_DocumentContentLayer": {
+        "enum": [
+          "CONTENT_LAYER_UNSPECIFIED",
+          "PAGE_IMAGE",
+          "PAGE_TEXT"
+        ],
+        "type": "string"
+      },
+      "Input_DocumentMetadata": {
+        "additionalProperties": true,
+        "properties": {
+          "contentLayers": {
+            "items": {
+              "$ref": "#/components/schemas/Input_DocumentContentLayer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "endPage": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "startPage": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "Input_DocumentSource": {
         "oneOf": [
           {
@@ -12984,13 +13039,87 @@
         ],
         "type": "object"
       },
+      "Input_FunctionResponseFileData": {
+        "additionalProperties": true,
+        "properties": {
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fileUri": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mimeType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "Input_FunctionResponsePart": {
         "additionalProperties": true,
         "properties": {
+          "audioMetadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Input_AudioMetadata"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "documentMetadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Input_DocumentMetadata"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fileData": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Input_FunctionResponseFileData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "inlineData": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Input_Blob"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "spreadsheetMetadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Input_SpreadsheetMetadata"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "videoMetadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Input_VideoMetadata"
               },
               {
                 "type": "null"
@@ -16242,6 +16371,16 @@
               "null"
             ]
           },
+          "processing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Input_InteractionMediaProcessing"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "resolution": {
             "type": [
               "string",
@@ -16264,6 +16403,23 @@
           }
         },
         "type": "object"
+      },
+      "Input_InteractionMediaProcessing": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Input_InteractionProcessingMode"
+          },
+          {
+            "$ref": "#/components/schemas/Input_StaticMediaProcessing"
+          }
+        ]
+      },
+      "Input_InteractionProcessingMode": {
+        "enum": [
+          "static",
+          "agentic"
+        ],
+        "type": "string"
       },
       "Input_InteractionSafetySetting": {
         "additionalProperties": true,
@@ -21438,6 +21594,35 @@
         ],
         "type": "object"
       },
+      "Input_PageProcessingOptions": {
+        "additionalProperties": true,
+        "properties": {
+          "content_layers": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "end_page": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "start_page": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "Input_ParseFailed": {
         "enum": [
           "parse_failed"
@@ -21447,6 +21632,16 @@
       "Input_Part": {
         "additionalProperties": true,
         "properties": {
+          "audioMetadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Input_AudioMetadata"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "audioTranscription": {
             "anyOf": [
               {
@@ -21461,6 +21656,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Input_CodeExecutionResult2"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "documentMetadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Input_DocumentMetadata"
               },
               {
                 "type": "null"
@@ -21548,6 +21753,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Input_SpeechMetadata"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "spreadsheetMetadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Input_SpreadsheetMetadata"
               },
               {
                 "type": "null"
@@ -30220,11 +30435,142 @@
         ],
         "type": "string"
       },
+      "Input_SpreadsheetContentLayer": {
+        "enum": [
+          "CONTENT_LAYER_UNSPECIFIED",
+          "DATA",
+          "FORMULAS",
+          "VISUAL"
+        ],
+        "type": "string"
+      },
+      "Input_SpreadsheetMetadata": {
+        "additionalProperties": true,
+        "properties": {
+          "contentLayers": {
+            "items": {
+              "$ref": "#/components/schemas/Input_SpreadsheetContentLayer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "sheetIndex": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "visibleCells": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Input_SpreadsheetProcessingOptions": {
+        "additionalProperties": true,
+        "properties": {
+          "content_layers": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "sheet_index": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "visible_cells": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "Input_StartSensitivity": {
         "enum": [
           "START_SENSITIVITY_UNSPECIFIED",
           "START_SENSITIVITY_HIGH",
           "START_SENSITIVITY_LOW"
+        ],
+        "type": "string"
+      },
+      "Input_StaticMediaProcessing": {
+        "additionalProperties": true,
+        "properties": {
+          "content_layers": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "end_offset": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fps": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "page_options": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Input_PageProcessingOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "spreadsheet_options": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Input_SpreadsheetProcessingOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "start_offset": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "$ref": "#/components/schemas/Input_StaticProcessingType"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "type": "object"
+      },
+      "Input_StaticProcessingType": {
+        "enum": [
+          "static"
         ],
         "type": "string"
       },
@@ -31622,7 +31968,8 @@
           "MINIMAL",
           "LOW",
           "MEDIUM",
-          "HIGH"
+          "HIGH",
+          "XHIGH"
         ],
         "type": "string"
       },
@@ -34170,6 +34517,15 @@
         ],
         "type": "string"
       },
+      "Input_VideoContentLayer": {
+        "enum": [
+          "CONTENT_LAYER_UNSPECIFIED",
+          "FRAMES",
+          "AUDIO",
+          "TRANSCRIPT"
+        ],
+        "type": "string"
+      },
       "Input_VideoFileMetadata": {
         "additionalProperties": true,
         "properties": {
@@ -34185,6 +34541,15 @@
       "Input_VideoMetadata": {
         "additionalProperties": true,
         "properties": {
+          "contentLayers": {
+            "items": {
+              "$ref": "#/components/schemas/Input_VideoContentLayer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "endOffset": {
             "type": [
               "string",
@@ -36909,6 +37274,24 @@
         "required": [
           "sequence_number"
         ],
+        "type": "object"
+      },
+      "Output_AudioMetadata": {
+        "additionalProperties": true,
+        "properties": {
+          "endOffset": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "startOffset": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       },
       "Output_AudioTranscriptDelta": {
@@ -43990,6 +44373,43 @@
         ],
         "type": "object"
       },
+      "Output_DocumentContentLayer": {
+        "enum": [
+          "CONTENT_LAYER_UNSPECIFIED",
+          "PAGE_IMAGE",
+          "PAGE_TEXT"
+        ],
+        "type": "string"
+      },
+      "Output_DocumentMetadata": {
+        "additionalProperties": true,
+        "properties": {
+          "contentLayers": {
+            "items": {
+              "$ref": "#/components/schemas/Output_DocumentContentLayer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "endPage": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "startPage": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "Output_DomainSecret": {
         "additionalProperties": true,
         "properties": {
@@ -45884,13 +46304,87 @@
         ],
         "type": "object"
       },
+      "Output_FunctionResponseFileData": {
+        "additionalProperties": true,
+        "properties": {
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fileUri": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mimeType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "Output_FunctionResponsePart": {
         "additionalProperties": true,
         "properties": {
+          "audioMetadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_AudioMetadata"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "documentMetadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_DocumentMetadata"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fileData": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_FunctionResponseFileData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "inlineData": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Output_Blob"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "spreadsheetMetadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_SpreadsheetMetadata"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "videoMetadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_VideoMetadata"
               },
               {
                 "type": "null"
@@ -49216,6 +49710,16 @@
               "null"
             ]
           },
+          "processing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_InteractionMediaProcessing"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "resolution": {
             "type": [
               "string",
@@ -49239,6 +49743,16 @@
         },
         "type": "object"
       },
+      "Output_InteractionMediaProcessing": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Output_InteractionProcessingMode"
+          },
+          {
+            "$ref": "#/components/schemas/Output_StaticMediaProcessing"
+          }
+        ]
+      },
       "Output_InteractionModalityTokens": {
         "additionalProperties": true,
         "properties": {
@@ -49256,6 +49770,13 @@
           "tokens"
         ],
         "type": "object"
+      },
+      "Output_InteractionProcessingMode": {
+        "enum": [
+          "static",
+          "agentic"
+        ],
+        "type": "string"
       },
       "Output_InteractionStatus": {
         "enum": [
@@ -57018,9 +57539,48 @@
         ],
         "type": "object"
       },
+      "Output_PageProcessingOptions": {
+        "additionalProperties": true,
+        "properties": {
+          "content_layers": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "end_page": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "start_page": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "Output_Part": {
         "additionalProperties": true,
         "properties": {
+          "audioMetadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_AudioMetadata"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "audioTranscription": {
             "anyOf": [
               {
@@ -57035,6 +57595,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Output_CodeExecutionResult2"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "documentMetadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_DocumentMetadata"
               },
               {
                 "type": "null"
@@ -57122,6 +57692,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Output_SpeechMetadata"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "spreadsheetMetadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_SpreadsheetMetadata"
               },
               {
                 "type": "null"
@@ -69758,6 +70338,137 @@
         ],
         "type": "string"
       },
+      "Output_SpreadsheetContentLayer": {
+        "enum": [
+          "CONTENT_LAYER_UNSPECIFIED",
+          "DATA",
+          "FORMULAS",
+          "VISUAL"
+        ],
+        "type": "string"
+      },
+      "Output_SpreadsheetMetadata": {
+        "additionalProperties": true,
+        "properties": {
+          "contentLayers": {
+            "items": {
+              "$ref": "#/components/schemas/Output_SpreadsheetContentLayer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "sheetIndex": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "visibleCells": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Output_SpreadsheetProcessingOptions": {
+        "additionalProperties": true,
+        "properties": {
+          "content_layers": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "sheet_index": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "visible_cells": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Output_StaticMediaProcessing": {
+        "additionalProperties": true,
+        "properties": {
+          "content_layers": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "end_offset": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fps": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "page_options": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_PageProcessingOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "spreadsheet_options": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Output_SpreadsheetProcessingOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "start_offset": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "$ref": "#/components/schemas/Output_StaticProcessingType"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "type": "object"
+      },
+      "Output_StaticProcessingType": {
+        "enum": [
+          "static"
+        ],
+        "type": "string"
+      },
       "Output_Status": {
         "additionalProperties": true,
         "properties": {
@@ -74289,6 +75000,15 @@
         ],
         "type": "string"
       },
+      "Output_VideoContentLayer": {
+        "enum": [
+          "CONTENT_LAYER_UNSPECIFIED",
+          "FRAMES",
+          "AUDIO",
+          "TRANSCRIPT"
+        ],
+        "type": "string"
+      },
       "Output_VideoFileMetadata": {
         "additionalProperties": true,
         "properties": {
@@ -74304,6 +75024,15 @@
       "Output_VideoMetadata": {
         "additionalProperties": true,
         "properties": {
+          "contentLayers": {
+            "items": {
+              "$ref": "#/components/schemas/Output_VideoContentLayer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "endOffset": {
             "type": [
               "string",
