@@ -83,28 +83,33 @@ cookies.
 
 #### Running the signer
 
-The steps below use `waa-signer` from the
-[aistudio-api](https://github.com/DeconstructedCube/aistudio-api) repository.
-It is a Go program with an embedded SpiderMonkey 152 and needs no browser.
+The signer is `waa-signer`, a Go program from the
+[aistudio-api](https://github.com/DeconstructedCube/aistudio-api) project with
+an embedded SpiderMonkey 152. It needs no browser. Prebuilt binaries are
+published at [waa-signer-build](https://github.com/LeenHawk/waa-signer-build/releases).
 
-1. Install Go 1.22 or later and zig (clang or gcc also work).
-2. Get the source and build it:
+1. Download the archive for your platform from the
+   [releases page](https://github.com/LeenHawk/waa-signer-build/releases):
+
+   | Platform | File |
+   | --- | --- |
+   | Linux x86-64 | `waa-signer-<version>-linux-amd64.tar.gz` |
+   | Linux ARM64 | `waa-signer-<version>-linux-arm64.tar.gz` |
+   | macOS (Apple silicon) | `waa-signer-<version>-darwin-arm64.tar.gz` |
+   | Windows x86-64 | `waa-signer-<version>-windows-amd64.zip` |
+
+   The Linux binaries are statically linked and do not depend on the system
+   libc. The release also carries `SHA256SUMS`; check a download with
+   `sha256sum -c SHA256SUMS --ignore-missing`.
+2. Extract it and start the signer:
 
    ```sh
-   git clone https://github.com/DeconstructedCube/aistudio-api.git
-   cd aistudio-api/waa-signer
-   bash build.sh
+   tar -xzf waa-signer-<version>-linux-amd64.tar.gz
+   cd waa-signer-<version>-linux-amd64
+   ./waa-signer -listen 127.0.0.1:8081 -proxy http://127.0.0.1:7890
    ```
 
-   The script downloads the static SpiderMonkey library for your platform and
-   produces `bin/waa-signer`. On Windows run `build.bat`, which produces
-   `bin\waa-signer.exe`. If the download needs a proxy, set `HTTPS_PROXY`
-   first.
-3. Start it:
-
-   ```sh
-   ./bin/waa-signer -listen 127.0.0.1:8081 -proxy http://127.0.0.1:7890
-   ```
+   On Windows, extract the zip and run `waa-signer.exe` with the same flags.
 
    | Flag | Environment variable | Default | Meaning |
    | --- | --- | --- | --- |
@@ -114,7 +119,7 @@ It is a Go program with an embedded SpiderMonkey 152 and needs no browser.
    | `-timezone` | `AISTUDIO_TIMEZONE` | `America/Los_Angeles` | Time zone of the emulated browser. |
    | `-locale` | `WAA_LOCALE` | `en-US` | Language of the emulated browser. |
 
-4. Check that it is up:
+3. Check that it is up:
 
    ```sh
    curl http://127.0.0.1:8081/health
@@ -125,6 +130,20 @@ It is a Go program with an embedded SpiderMonkey 152 and needs no browser.
 
 For a long-running signer, keep this command under systemd, pm2 or another
 process manager.
+
+The signer can also be built from source. After commit `fcdc53e` the upstream
+project removed the signer's HTTP interface in favour of a stdio interface for
+its own use, so that commit must be checked out. The build needs Go 1.27 and
+zig:
+
+```sh
+git clone https://github.com/DeconstructedCube/aistudio-api.git
+cd aistudio-api
+git checkout fcdc53ee753a9e160686193ac9841bdf97b7227f
+bash waa-signer/build.sh
+```
+
+The program is written to `waa-signer/bin/waa-signer`.
 
 Points to observe:
 

@@ -63,23 +63,27 @@ GPROXY 不生成 Google 要求的 WAA 证明。每次生成请求前，它先把
 
 #### 部署签名服务
 
-下面以 [aistudio-api](https://github.com/DeconstructedCube/aistudio-api) 仓库里的 `waa-signer` 为例。它是一个 Go 程序，内嵌 SpiderMonkey 152，不需要浏览器。
+签名服务使用 `waa-signer`。它是 [aistudio-api](https://github.com/DeconstructedCube/aistudio-api) 项目中的一个 Go 程序，内嵌 SpiderMonkey 152，不需要浏览器。预编译的二进制发布在 [waa-signer-build](https://github.com/LeenHawk/waa-signer-build/releases)。
 
-1. 安装 Go 1.22 或更高版本，以及 zig（也可以用 clang 或 gcc）。
-2. 获取源码并编译：
+1. 在[发布页](https://github.com/LeenHawk/waa-signer-build/releases)下载对应平台的压缩包：
+
+   | 平台 | 文件 |
+   | --- | --- |
+   | Linux x86-64 | `waa-signer-<版本>-linux-amd64.tar.gz` |
+   | Linux ARM64 | `waa-signer-<版本>-linux-arm64.tar.gz` |
+   | macOS（Apple 芯片） | `waa-signer-<版本>-darwin-arm64.tar.gz` |
+   | Windows x86-64 | `waa-signer-<版本>-windows-amd64.zip` |
+
+   Linux 版本是静态链接的，不依赖系统的 libc。发布页同时提供 `SHA256SUMS`，可用 `sha256sum -c SHA256SUMS --ignore-missing` 校验。
+2. 解压并启动：
 
    ```sh
-   git clone https://github.com/DeconstructedCube/aistudio-api.git
-   cd aistudio-api/waa-signer
-   bash build.sh
+   tar -xzf waa-signer-<版本>-linux-amd64.tar.gz
+   cd waa-signer-<版本>-linux-amd64
+   ./waa-signer -listen 127.0.0.1:8081 -proxy http://127.0.0.1:7890
    ```
 
-   脚本会下载对应平台的 SpiderMonkey 静态库，生成 `bin/waa-signer`。Windows 上运行 `build.bat`，生成 `bin\waa-signer.exe`。下载需要代理时，先设置 `HTTPS_PROXY`。
-3. 启动：
-
-   ```sh
-   ./bin/waa-signer -listen 127.0.0.1:8081 -proxy http://127.0.0.1:7890
-   ```
+   Windows 上解压 zip 后运行 `waa-signer.exe`，参数相同。
 
    | 参数 | 环境变量 | 默认值 | 含义 |
    | --- | --- | --- | --- |
@@ -89,7 +93,7 @@ GPROXY 不生成 Google 要求的 WAA 证明。每次生成请求前，它先把
    | `-timezone` | `AISTUDIO_TIMEZONE` | `America/Los_Angeles` | 模拟浏览器的时区。 |
    | `-locale` | `WAA_LOCALE` | `en-US` | 模拟浏览器的语言。 |
 
-4. 确认服务已启动：
+3. 确认服务已启动：
 
    ```sh
    curl http://127.0.0.1:8081/health
@@ -98,6 +102,17 @@ GPROXY 不生成 Google 要求的 WAA 证明。每次生成请求前，它先把
    正常时返回 `{"engine":"spidermonkey-152","ok":true,"status":"ok","workers":0}`。
 
 需要长期运行时，用 systemd、pm2 或其他进程管理工具托管这条启动命令。
+
+也可以从源码编译。上游在提交 `fcdc53e` 之后移除了签名服务的 HTTP 接口，改为只供其自身使用的 stdio 接口，所以必须检出这个提交。编译需要 Go 1.27 和 zig：
+
+```sh
+git clone https://github.com/DeconstructedCube/aistudio-api.git
+cd aistudio-api
+git checkout fcdc53ee753a9e160686193ac9841bdf97b7227f
+bash waa-signer/build.sh
+```
+
+生成的程序是 `waa-signer/bin/waa-signer`。
 
 部署时注意以下几点：
 

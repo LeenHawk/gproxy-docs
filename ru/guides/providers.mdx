@@ -74,28 +74,33 @@ GPROXY не формирует подтверждение WAA, которое т
 
 #### Запуск сервиса подписи
 
-Ниже используется `waa-signer` из репозитория
-[aistudio-api](https://github.com/DeconstructedCube/aistudio-api). Это программа
-на Go со встроенным SpiderMonkey 152; браузер ей не нужен.
+Сервис подписи — `waa-signer`, программа на Go из проекта
+[aistudio-api](https://github.com/DeconstructedCube/aistudio-api) со встроенным
+SpiderMonkey 152. Браузер ей не нужен. Готовые сборки публикуются в
+[waa-signer-build](https://github.com/LeenHawk/waa-signer-build/releases).
 
-1. Установите Go 1.22 или новее и zig (подойдут также clang или gcc).
-2. Получите исходный код и соберите его:
+1. Загрузите архив для своей платформы со
+   [страницы выпусков](https://github.com/LeenHawk/waa-signer-build/releases):
+
+   | Платформа | Файл |
+   | --- | --- |
+   | Linux x86-64 | `waa-signer-<версия>-linux-amd64.tar.gz` |
+   | Linux ARM64 | `waa-signer-<версия>-linux-arm64.tar.gz` |
+   | macOS (Apple silicon) | `waa-signer-<версия>-darwin-arm64.tar.gz` |
+   | Windows x86-64 | `waa-signer-<версия>-windows-amd64.zip` |
+
+   Сборки для Linux статически скомпонованы и не зависят от системной libc.
+   В выпуске есть файл `SHA256SUMS`; проверьте загрузку командой
+   `sha256sum -c SHA256SUMS --ignore-missing`.
+2. Распакуйте архив и запустите сервис:
 
    ```sh
-   git clone https://github.com/DeconstructedCube/aistudio-api.git
-   cd aistudio-api/waa-signer
-   bash build.sh
+   tar -xzf waa-signer-<версия>-linux-amd64.tar.gz
+   cd waa-signer-<версия>-linux-amd64
+   ./waa-signer -listen 127.0.0.1:8081 -proxy http://127.0.0.1:7890
    ```
 
-   Скрипт загружает статическую библиотеку SpiderMonkey для вашей платформы и
-   создаёт `bin/waa-signer`. В Windows запустите `build.bat`, он создаёт
-   `bin\waa-signer.exe`. Если для загрузки нужен прокси, сначала задайте
-   `HTTPS_PROXY`.
-3. Запустите сервис:
-
-   ```sh
-   ./bin/waa-signer -listen 127.0.0.1:8081 -proxy http://127.0.0.1:7890
-   ```
+   В Windows распакуйте zip и запустите `waa-signer.exe` с теми же параметрами.
 
    | Параметр | Переменная окружения | По умолчанию | Назначение |
    | --- | --- | --- | --- |
@@ -105,7 +110,7 @@ GPROXY не формирует подтверждение WAA, которое т
    | `-timezone` | `AISTUDIO_TIMEZONE` | `America/Los_Angeles` | Часовой пояс эмулируемого браузера. |
    | `-locale` | `WAA_LOCALE` | `en-US` | Язык эмулируемого браузера. |
 
-4. Проверьте, что сервис работает:
+3. Проверьте, что сервис работает:
 
    ```sh
    curl http://127.0.0.1:8081/health
@@ -116,6 +121,20 @@ GPROXY не формирует подтверждение WAA, которое т
 
 Для постоянной работы запускайте эту команду под управлением systemd, pm2 или
 другого менеджера процессов.
+
+Сервис можно собрать и из исходного кода. После коммита `fcdc53e` проект
+удалил HTTP-интерфейс сервиса подписи, заменив его интерфейсом stdio для
+собственных нужд, поэтому нужно переключиться именно на этот коммит. Для сборки
+нужны Go 1.27 и zig:
+
+```sh
+git clone https://github.com/DeconstructedCube/aistudio-api.git
+cd aistudio-api
+git checkout fcdc53ee753a9e160686193ac9841bdf97b7227f
+bash waa-signer/build.sh
+```
+
+Программа создаётся в `waa-signer/bin/waa-signer`.
 
 Что нужно учитывать:
 
