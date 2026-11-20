@@ -74,21 +74,102 @@ Worker deployment has the same channel set as a native one.
 It supports Gemini generation, streaming, inline media, function calls and
 model discovery. The API-key channel remains `aistudio`.
 
-1. Run your own WAA proof signer, such as the local `waa-signer` described in
-   [aistudio-api](https://github.com/DeconstructedCube/aistudio-api). Set the
-   provider's `proof_server_url` to its origin, for example
-   `http://127.0.0.1:8081`. The signer must be reachable through the provider's
-   outbound connection and use the intended Google network exit.
-2. Sign in to AI Studio. In Cookie-Editor, export the site's cookies as JSON
-   or Header, including HttpOnly cookies.
+GPROXY does not generate the WAA proof Google requires. Before each
+generation it sends the request contents and the credential's cookies to a
+signing service that you run, then sends the request with the returned proof
+directly to Google. GPROXY has no fallback to a public signer. Setting the
+channel up takes three steps: run the signer, create the provider, import the
+cookies.
+
+#### Running the signer
+
+The steps below use `waa-signer` from the
+[aistudio-api](https://github.com/DeconstructedCube/aistudio-api) repository.
+It is a Go program with an embedded SpiderMonkey 152 and needs no browser.
+
+1. Install Go 1.22 or later and zig (clang or gcc also work).
+2. Get the source and build it:
+
+   ```sh
+   git clone https://github.com/DeconstructedCube/aistudio-api.git
+   cd aistudio-api/waa-signer
+   bash build.sh
+   ```
+
+   The script downloads the static SpiderMonkey library for your platform and
+   produces `bin/waa-signer`. On Windows run `build.bat`, which produces
+   `bin\waa-signer.exe`. If the download needs a proxy, set `HTTPS_PROXY`
+   first.
+3. Start it:
+
+   ```sh
+   ./bin/waa-signer -listen 127.0.0.1:8081 -proxy http://127.0.0.1:7890
+   ```
+
+   | Flag | Environment variable | Default | Meaning |
+   | --- | --- | --- | --- |
+   | `-listen` | `LISTEN_ADDR` | `127.0.0.1:8081` | Listen address. If only `PORT` is set, the signer listens on that port on `0.0.0.0`. |
+   | `-proxy` | `AISTUDIO_PROXY`, `HTTPS_PROXY`, `HTTP_PROXY` | See meaning | Proxy the signer uses to reach Google, HTTP or SOCKS5. When the flag is absent the signer reads the environment variables, then probes local ports `7890` and `10808` for a proxy, and connects directly if it finds none. |
+   | `-state-dir` | `WAA_STATE_DIR` | `aistudio_waa_workers` under the system temporary directory | Cache directory. A temporary directory may be emptied on reboot; set a fixed directory for a long-running signer. |
+   | `-timezone` | `AISTUDIO_TIMEZONE` | `America/Los_Angeles` | Time zone of the emulated browser. |
+   | `-locale` | `WAA_LOCALE` | `en-US` | Language of the emulated browser. |
+
+4. Check that it is up:
+
+   ```sh
+   curl http://127.0.0.1:8081/health
+   ```
+
+   A running signer answers
+   `{"engine":"spidermonkey-152","ok":true,"status":"ok","workers":0}`.
+
+For a long-running signer, keep this command under systemd, pm2 or another
+process manager.
+
+Points to observe:
+
+- The signer has no access control and receives Google session cookies and
+  request contents. Listen on a loopback or private address only, never on a
+  public one.
+- The signer and GPROXY should reach Google from the same exit. If the
+  provider has a proxy, give the same proxy to `-proxy`.
+- GPROXY reaches the signer through the provider's outbound connection. If
+  the provider has a proxy, the request to the signer also goes through it,
+  and `127.0.0.1` then means the proxy's machine. In that case run the signer
+  at an address the proxy can reach.
+- The first signature after a start loads the page and usually takes a few
+  seconds. Later signatures reuse the loaded environment.
+
+#### Creating the provider
+
+In the Console, create a provider with the channel **Google AI Studio
+Playground** and set `proof_server_url` to the signer's address, for example
+`http://127.0.0.1:8081`. Give the origin only, without a path; GPROXY requests
+`<proof_server_url>/v1/proof/mint`.
+
+The same through the admin API:
+
+```sh
+curl -s -X POST http://127.0.0.1:8787/admin/api/providers \
+  -H "Authorization: Bearer $GPROXY_KEY" -H 'content-type: application/json' \
+  -d '{"name":"playground","channel":"playground",
+       "config":{"proof_server_url":"http://127.0.0.1:8081"}}'
+```
+
+#### Importing the cookies
+
+1. Sign in to [AI Studio](https://aistudio.google.com/) in a browser, then open
+   `www.google.com` once. Google issues the rotating session cookies at that
+   point; without them GPROXY cannot rotate the session.
+2. Return to the AI Studio page. In Cookie-Editor, export the site's cookies as
+   JSON or Header, including HttpOnly cookies.
 3. In the provider's credentials, choose **Import credentials → Cookie-Editor /
    Cookie Header**, paste the export, and import. The entire cookie jar becomes
    one credential. For another signed-in Google identity, import
    `{"cookies": [...], "auth_user": "1"}`; the default login index is `0`.
 
-The signer receives Google session cookies and request contents to generate
-a fresh proof. GPROXY has no automatic fallback to a public signer. Generation
-requests go directly from GPROXY to Google.
+Test the credential from its details once, then add the provider to a model
+route.
 
 Import validates the session and discovers its subscription tier. While the
 credential is in use, GPROXY saves the cookies Google replaces in its
@@ -102,6 +183,17 @@ as Gemini `inlineData` rather than `fileData`.
 `countTokens` uses GPROXY's existing local tokenizer and returns `totalTokens`.
 It does not call Google or the WAA signer. The result is a local estimate and
 may differ from Google's official count.
+
+#### Common errors
+
+| Symptom | Cause and action |
+| --- | --- |
+| `Playground requires your own proof_server_url` | `proof_server_url` is empty or does not start with `http://` or `https://`. |
+| The connection to the signer fails or times out | The signer is not running, or cannot be reached through the provider's outbound connection. Request `/health` with `curl`; if a proxy is configured, check from the proxy's machine. |
+| `WAA signing service returned HTTP ...` | The signer received the request and failed. Read the signer's log; the usual cause is that it cannot reach Google. |
+| `WAA signing service did not return a proof` | The signer returned a failure. Read the signer's log. |
+| Google answers 403 `The caller does not have permission` | Google refused the request. Open AI Studio in a browser with the same account and the same exit and send a message; if that fails too, the cause is the account or the exit, not GPROXY. |
+| Google answers 503 `This model is currently experiencing high demand` | Google has no capacity for the model at the moment. Retry later or use another model. |
 
 ### Compatible vendors
 

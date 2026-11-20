@@ -59,15 +59,88 @@ description: "选择渠道、添加供应商与凭证，配置登录、额度查
 
 `playground` 使用 [AI Studio](https://aistudio.google.com/) 的 Google 登录会话，支持 Gemini 生成、流式响应、内联媒体、函数调用和模型发现。API Key 接口仍使用 `aistudio` 渠道。
 
-1. 启动自己的 WAA 签名服务，例如 [aistudio-api](https://github.com/DeconstructedCube/aistudio-api) 中的本地 `waa-signer`。在供应商配置中填写 `proof_server_url`，例如 `http://127.0.0.1:8081`。签名服务必须能通过该供应商的出站连接访问，并使用预期的 Google 网络出口。
-2. 在 AI Studio 登录，用 Cookie-Editor 导出本站的 JSON 或 Header，包含 HttpOnly Cookie。
+GPROXY 不生成 Google 要求的 WAA 证明。每次生成请求前，它先把请求内容和凭证的 Cookie 发给你自己部署的签名服务，拿到证明后再把请求直接发给 Google。GPROXY 不会回退到任何公共签名节点。接入分三步：部署签名服务、创建供应商、导入 Cookie。
+
+#### 部署签名服务
+
+下面以 [aistudio-api](https://github.com/DeconstructedCube/aistudio-api) 仓库里的 `waa-signer` 为例。它是一个 Go 程序，内嵌 SpiderMonkey 152，不需要浏览器。
+
+1. 安装 Go 1.22 或更高版本，以及 zig（也可以用 clang 或 gcc）。
+2. 获取源码并编译：
+
+   ```sh
+   git clone https://github.com/DeconstructedCube/aistudio-api.git
+   cd aistudio-api/waa-signer
+   bash build.sh
+   ```
+
+   脚本会下载对应平台的 SpiderMonkey 静态库，生成 `bin/waa-signer`。Windows 上运行 `build.bat`，生成 `bin\waa-signer.exe`。下载需要代理时，先设置 `HTTPS_PROXY`。
+3. 启动：
+
+   ```sh
+   ./bin/waa-signer -listen 127.0.0.1:8081 -proxy http://127.0.0.1:7890
+   ```
+
+   | 参数 | 环境变量 | 默认值 | 含义 |
+   | --- | --- | --- | --- |
+   | `-listen` | `LISTEN_ADDR` | `127.0.0.1:8081` | 监听地址。只设置环境变量 `PORT` 时会监听 `0.0.0.0` 上的该端口。 |
+   | `-proxy` | `AISTUDIO_PROXY`、`HTTPS_PROXY`、`HTTP_PROXY` | 见说明 | 签名服务访问 Google 使用的代理，支持 HTTP 和 SOCKS5。未指定时读取左列环境变量，再探测本机 `7890` 和 `10808` 端口上的代理，都没有时直连。 |
+   | `-state-dir` | `WAA_STATE_DIR` | 系统临时目录下的 `aistudio_waa_workers` | 缓存目录。临时目录重启后会清空，长期运行时建议指定一个固定目录。 |
+   | `-timezone` | `AISTUDIO_TIMEZONE` | `America/Los_Angeles` | 模拟浏览器的时区。 |
+   | `-locale` | `WAA_LOCALE` | `en-US` | 模拟浏览器的语言。 |
+
+4. 确认服务已启动：
+
+   ```sh
+   curl http://127.0.0.1:8081/health
+   ```
+
+   正常时返回 `{"engine":"spidermonkey-152","ok":true,"status":"ok","workers":0}`。
+
+需要长期运行时，用 systemd、pm2 或其他进程管理工具托管这条启动命令。
+
+部署时注意以下几点：
+
+- 签名服务没有访问控制，并且会收到 Google 会话 Cookie 和请求内容。只监听回环地址或内网地址，不要暴露到公网。
+- 签名服务和 GPROXY 应当从同一个出口访问 Google。给供应商配置了代理时，`-proxy` 填同一个代理。
+- GPROXY 通过供应商的出站连接访问签名服务。供应商配置了代理时，对签名服务的请求也会经过这个代理，此时 `127.0.0.1` 指的是代理所在的机器。这种情况下把签名服务部署在代理能访问到的地址上。
+- 启动后的第一次签名需要加载页面，通常要几秒；之后的签名会复用已加载的环境。
+
+#### 创建供应商
+
+在控制台新建供应商，渠道选 **Google AI Studio Playground**，在 `proof_server_url` 中填写签名服务的地址，例如 `http://127.0.0.1:8081`。只填到端口为止，不要带路径；GPROXY 会请求 `<proof_server_url>/v1/proof/mint`。
+
+通过管理接口创建：
+
+```sh
+curl -s -X POST http://127.0.0.1:8787/admin/api/providers \
+  -H "Authorization: Bearer $GPROXY_KEY" -H 'content-type: application/json' \
+  -d '{"name":"playground","channel":"playground",
+       "config":{"proof_server_url":"http://127.0.0.1:8081"}}'
+```
+
+#### 导入 Cookie
+
+1. 在浏览器中登录 [AI Studio](https://aistudio.google.com/)，再打开一次 `www.google.com`。Google 在这一步才签发可轮换的会话 Cookie，缺少它们时 GPROXY 无法轮换会话。
+2. 回到 AI Studio 页面，用 Cookie-Editor 导出本站的 JSON 或 Header，包含 HttpOnly Cookie。
 3. 打开供应商的凭证页，选择 **导入凭证 → Cookie-Editor / Cookie Header**，粘贴并导入。整组 Cookie 会保存为一个凭证。选择其他已登录的 Google 身份时，可导入 `{"cookies": [...], "auth_user": "1"}`；默认登录序号为 `0`。
 
-签名服务会接收 Google 会话 Cookie 和请求内容，为每次请求生成证明。GPROXY 不会自动回退到公共签名节点；生成请求由 GPROXY 直接发送给 Google。
+导入后在凭证详情中测试一次，再把供应商加入模型路由。
 
 导入时会校验会话并识别订阅等级。使用期间，GPROXY 会保存 Google 在响应中更新的 Cookie，并在有请求时约每 3 小时轮换一次会话 Cookie。被 Google 注销或撤销的登录无法通过轮换恢复，此时需要重新导入 Cookie。目前不支持 Files API 引用、Live WebSocket、批处理和专用语音／视频配置；媒体请使用 Gemini `inlineData`，而不是 `fileData`。
 
 `countTokens` 复用 GPROXY 现有的本地 tokenizer，返回 `totalTokens`，不调用 Google 或 WAA 签名服务。结果是本地估算，可能与 Google 官方计数不同。
+
+#### 常见错误
+
+| 现象 | 原因和处理 |
+| --- | --- |
+| `Playground requires your own proof_server_url` | 没有填写 `proof_server_url`，或者它不是以 `http://`、`https://` 开头。 |
+| 连接签名服务失败或超时 | 签名服务没有启动，或者从供应商的出站连接访问不到它。先用 `curl` 请求 `/health`；配置了代理时，在代理所在的机器上检查。 |
+| `WAA signing service returned HTTP ...` | 签名服务收到了请求但处理失败。查看签名服务的日志，常见原因是它访问不到 Google。 |
+| `WAA signing service did not return a proof` | 签名服务返回了失败结果。查看签名服务的日志。 |
+| Google 返回 403 `The caller does not have permission` | Google 拒绝了这次请求。用同一个账号、同一个出口在浏览器中打开 AI Studio 发一条消息；浏览器里同样失败时，问题在账号或出口，与 GPROXY 无关。 |
+| Google 返回 503 `This model is currently experiencing high demand` | Google 一侧该模型容量不足，稍后重试或换一个模型。 |
 
 ### 接入兼容服务
 
