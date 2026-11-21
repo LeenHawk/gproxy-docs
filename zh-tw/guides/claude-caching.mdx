@@ -99,7 +99,7 @@ GPROXY_MAGIC_STRING_TRIGGER_CACHING_CREATE_1FAS5GV9R5H29T5Y2J9584K6O95M2NBVW52C9
 
 依次在三個位置放置標記：
 
-1. `instructions`。其中的字串被移除，並在 `input` 開頭插入一則帶標記的 developer 訊息，因為 `instructions` 是純字串，無法攜帶標記。
+1. `instructions`。其中的字串被移除，剩餘文字從 `instructions` 移入 `input` 開頭一則帶標記的 developer 訊息。`instructions` 是純字串，無法攜帶標記，而且從 GPT-6.2 起模型把它放在 `input` 之後，不在可快取前綴內。
 2. `prompt.variables`，標記方式與 Chat 的 part 相同。
 3. `input`。裸字串會變成一則帶標記的 user 訊息；如果是 item 陣列，則用 `input_text` 和 `output_text` 類型標記其中的 `content` 與 `output`。
 

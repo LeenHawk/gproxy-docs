@@ -142,9 +142,11 @@ needs a part to sit on; array content has its parts marked in place.
 
 Markers are placed in three places, in this order:
 
-1. `instructions`. A string found there is removed and a marked developer
-   message is inserted at the start of `input`, because `instructions` is a
-   plain string and cannot carry a marker.
+1. `instructions`. A string found there is removed, and the remaining text
+   moves out of `instructions` into a marked developer message at the start
+   of `input`. `instructions` is a plain string and cannot carry a marker,
+   and models starting with GPT-6.2 place it after `input`, outside the
+   cached prefix.
 2. `prompt.variables`, marked the same way as Chat parts.
 3. `input`. A bare string becomes one marked user message; in an array of
    items, `content` and `output` are marked using the `input_text` and
