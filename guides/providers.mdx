@@ -26,7 +26,7 @@ current release.
 | Channel | Upstream | Credential |
 | --- | --- | --- |
 | `aistudio` | Google AI Studio: the native Gemini methods and the `/v1beta/openai` compatibility layer on one origin | `{"api_key"}` |
-| `playground` | AI Studio Playground web session: Gemini generation/streaming and model discovery; requires your own WAA signer | `{"cookie"}` |
+| `playground` | AI Studio Playground web session: Gemini generation/streaming and model discovery; built-in WAA signing, native deployments only | `{"cookie"}` |
 | `antigravity` | A Google account through the Code Assist host the Antigravity editor talks to | OAuth |
 | `aws_bedrock` | AWS Bedrock. The wire depends on the model: `InvokeModel` for Anthropic models (the event stream is translated to Claude SSE), OpenAI-compatible Chat Completions for GPT, Grok, Qwen, DeepSeek and the rest | AWS key pair, or a Bedrock API key |
 | `azure` | Azure OpenAI, and the Anthropic models Azure AI Foundry hosts | `{"api_key"}` |
@@ -66,7 +66,9 @@ current release.
 | `xai` | xAI (Grok): OpenAI Chat and Responses, plus xAI's own TTS, STT and video | `{"api_key"}` |
 
 Every channel builds for native targets and for `wasm32-unknown-unknown`, so a
-Worker deployment has the same channel set as a native one.
+Worker deployment has the same channel set as a native one. The one exception
+is `playground`: its signer cannot run in a Worker, so its generation requests
+work only in a native deployment.
 
 ### AI Studio Playground
 
@@ -74,106 +76,32 @@ Worker deployment has the same channel set as a native one.
 It supports Gemini generation, streaming, inline media, function calls and
 model discovery. The API-key channel remains `aistudio`.
 
-GPROXY does not generate the WAA proof Google requires. Before each
-generation it sends the request contents and the credential's cookies to a
-signing service that you run, then sends the request with the returned proof
-directly to Google. GPROXY has no fallback to a public signer. Setting the
-channel up takes three steps: run the signer, create the provider, import the
-cookies.
+Google requires a WAA proof with every generation request. GPROXY generates
+the proof in process: no separate signing service is needed, and the cookies
+and request contents are not sent to a third party. The signer embeds QuickJS
+and runs only in native deployments; a Cloudflare Worker deployment cannot
+generate content through this channel.
 
-#### Running the signer
-
-The signer is `waa-signer`, a Go program from the
-[aistudio-api](https://github.com/DeconstructedCube/aistudio-api) project with
-an embedded SpiderMonkey 152. It needs no browser. Prebuilt binaries are
-published at [waa-signer-build](https://github.com/LeenHawk/waa-signer-build/releases).
-
-1. Download the archive for your platform from the
-   [releases page](https://github.com/LeenHawk/waa-signer-build/releases):
-
-   | Platform | File |
-   | --- | --- |
-   | Linux x86-64 | `waa-signer-<version>-linux-amd64.tar.gz` |
-   | Linux ARM64 | `waa-signer-<version>-linux-arm64.tar.gz` |
-   | macOS (Apple silicon) | `waa-signer-<version>-darwin-arm64.tar.gz` |
-   | Windows x86-64 | `waa-signer-<version>-windows-amd64.zip` |
-
-   The Linux binaries are statically linked and do not depend on the system
-   libc. The release also carries `SHA256SUMS`; check a download with
-   `sha256sum -c SHA256SUMS --ignore-missing`.
-2. Extract it and start the signer:
-
-   ```sh
-   tar -xzf waa-signer-<version>-linux-amd64.tar.gz
-   cd waa-signer-<version>-linux-amd64
-   ./waa-signer -listen 127.0.0.1:8081 -proxy http://127.0.0.1:7890
-   ```
-
-   On Windows, extract the zip and run `waa-signer.exe` with the same flags.
-
-   | Flag | Environment variable | Default | Meaning |
-   | --- | --- | --- | --- |
-   | `-listen` | `LISTEN_ADDR` | `127.0.0.1:8081` | Listen address. If only `PORT` is set, the signer listens on that port on `0.0.0.0`. |
-   | `-proxy` | `AISTUDIO_PROXY`, `HTTPS_PROXY`, `HTTP_PROXY` | See meaning | Proxy the signer uses to reach Google, HTTP or SOCKS5. When the flag is absent the signer reads the environment variables, then probes local ports `7890` and `10808` for a proxy, and connects directly if it finds none. |
-   | `-state-dir` | `WAA_STATE_DIR` | `aistudio_waa_workers` under the system temporary directory | Cache directory. A temporary directory may be emptied on reboot; set a fixed directory for a long-running signer. |
-   | `-timezone` | `AISTUDIO_TIMEZONE` | `America/Los_Angeles` | Time zone of the emulated browser. |
-   | `-locale` | `WAA_LOCALE` | `en-US` | Language of the emulated browser. |
-
-3. Check that it is up:
-
-   ```sh
-   curl http://127.0.0.1:8081/health
-   ```
-
-   A running signer answers
-   `{"engine":"spidermonkey-152","ok":true,"status":"ok","workers":0}`.
-
-For a long-running signer, keep this command under systemd, pm2 or another
-process manager.
-
-The signer can also be built from source. After commit `fcdc53e` the upstream
-project removed the signer's HTTP interface in favour of a stdio interface for
-its own use, so that commit must be checked out. The build needs Go 1.27 and
-zig:
-
-```sh
-git clone https://github.com/DeconstructedCube/aistudio-api.git
-cd aistudio-api
-git checkout fcdc53ee753a9e160686193ac9841bdf97b7227f
-bash waa-signer/build.sh
-```
-
-The program is written to `waa-signer/bin/waa-signer`.
-
-Points to observe:
-
-- The signer has no access control and receives Google session cookies and
-  request contents. Listen on a loopback or private address only, never on a
-  public one.
-- The signer and GPROXY should reach Google from the same exit. If the
-  provider has a proxy, give the same proxy to `-proxy`.
-- GPROXY reaches the signer through the provider's outbound connection. If
-  the provider has a proxy, the request to the signer also goes through it,
-  and `127.0.0.1` then means the proxy's machine. In that case run the signer
-  at an address the proxy can reach.
-- The first signature after a start loads the page and usually takes a few
-  seconds. Later signatures reuse the loaded environment.
+The first generation for an account initializes the signing environment and is
+slower than the ones that follow.
 
 #### Creating the provider
 
 In the Console, create a provider with the channel **Google AI Studio
-Playground** and set `proof_server_url` to the signer's address, for example
-`http://127.0.0.1:8081`. Give the origin only, without a path; GPROXY requests
-`<proof_server_url>/v1/proof/mint`.
+Playground**. No other configuration is needed.
 
 The same through the admin API:
 
 ```sh
 curl -s -X POST http://127.0.0.1:8787/admin/api/providers \
   -H "Authorization: Bearer $GPROXY_KEY" -H 'content-type: application/json' \
-  -d '{"name":"playground","channel":"playground",
-       "config":{"proof_server_url":"http://127.0.0.1:8081"}}'
+  -d '{"name":"playground","channel":"playground"}'
 ```
+
+By default the channel sends its requests with Firefox's TLS and HTTP/2
+identity, which matches the browser environment the proof declares. A
+connection profile set on the provider or the credential replaces this default
+and is normally not needed.
 
 #### Importing the cookies
 
@@ -200,17 +128,14 @@ speech/video configuration are not supported by this channel yet. Send media
 as Gemini `inlineData` rather than `fileData`.
 
 `countTokens` uses GPROXY's existing local tokenizer and returns `totalTokens`.
-It does not call Google or the WAA signer. The result is a local estimate and
+It does not call Google or generate a proof. The result is a local estimate and
 may differ from Google's official count.
 
 #### Common errors
 
 | Symptom | Cause and action |
 | --- | --- |
-| `Playground requires your own proof_server_url` | `proof_server_url` is empty or does not start with `http://` or `https://`. |
-| The connection to the signer fails or times out | The signer is not running, or cannot be reached through the provider's outbound connection. Request `/health` with `curl`; if a proxy is configured, check from the proxy's machine. |
-| `WAA signing service returned HTTP ...` | The signer received the request and failed. Read the signer's log; the usual cause is that it cannot reach Google. |
-| `WAA signing service did not return a proof` | The signer returned a failure. Read the signer's log. |
+| `Playground is unavailable on this build` | This is a Worker deployment, where the signer cannot run. Use a native deployment. |
 | Google answers 403 `The caller does not have permission` | Google refused the request. Open AI Studio in a browser with the same account and the same exit and send a message; if that fails too, the cause is the account or the exit, not GPROXY. |
 | Google answers 503 `This model is currently experiencing high demand` | Google has no capacity for the model at the moment. Retry later or use another model. |
 

@@ -14,7 +14,7 @@ description: "选择渠道、添加供应商与凭证，配置登录、额度查
 | 渠道 | 上游 | 凭证 |
 | --- | --- | --- |
 | `aistudio` | Google AI Studio：原生 Gemini 方法与 `/v1beta/openai` 兼容层，同一个源 | `{"api_key"}` |
-| `playground` | AI Studio Playground 网页会话：Gemini 生成、流式响应与模型发现；需要自建 WAA 签名服务 | `{"cookie"}` |
+| `playground` | AI Studio Playground 网页会话：Gemini 生成、流式响应与模型发现；内置 WAA 签名，仅原生部署可用 | `{"cookie"}` |
 | `antigravity` | 通过 Antigravity 编辑器使用的 Code Assist 主机访问 Google 账号 | OAuth |
 | `aws_bedrock` | AWS Bedrock。接口随模型而定：Anthropic 模型走 `InvokeModel`（event-stream 转成 Claude SSE），GPT、Grok、Qwen、DeepSeek 等走 OpenAI 兼容的 Chat Completions | AWS 密钥对，或 Bedrock API key |
 | `azure` | Azure OpenAI，以及 Azure AI Foundry 托管的 Anthropic 模型 | `{"api_key"}` |
@@ -53,86 +53,29 @@ description: "选择渠道、添加供应商与凭证，配置登录、额度查
 | `workbuddy` | 通过编辑器插件使用腾讯 Copilot | OAuth |
 | `xai` | xAI（Grok）：OpenAI Chat 与 Responses，以及 xAI 自己的 TTS、STT 和视频 | `{"api_key"}` |
 
-所有渠道都能同时为原生目标和 `wasm32-unknown-unknown` 构建，因此 Worker 部署可用的渠道与原生部署相同。
+所有渠道都能同时为原生目标和 `wasm32-unknown-unknown` 构建，因此 Worker 部署可用的渠道与原生部署相同。唯一的例外是 `playground`：它的签名器不能在 Worker 中运行，生成请求只在原生部署中可用。
 
 ### AI Studio Playground
 
 `playground` 使用 [AI Studio](https://aistudio.google.com/) 的 Google 登录会话，支持 Gemini 生成、流式响应、内联媒体、函数调用和模型发现。API Key 接口仍使用 `aistudio` 渠道。
 
-GPROXY 不生成 Google 要求的 WAA 证明。每次生成请求前，它先把请求内容和凭证的 Cookie 发给你自己部署的签名服务，拿到证明后再把请求直接发给 Google。GPROXY 不会回退到任何公共签名节点。接入分三步：部署签名服务、创建供应商、导入 Cookie。
+Google 要求每次生成请求附带一份 WAA 证明。GPROXY 在进程内生成这份证明，不需要另外部署签名服务，Cookie 和请求内容也不会发给第三方。签名器内嵌 QuickJS，只能在原生部署中运行；Cloudflare Worker 部署不能用这个渠道生成内容。
 
-#### 部署签名服务
-
-签名服务使用 `waa-signer`。它是 [aistudio-api](https://github.com/DeconstructedCube/aistudio-api) 项目中的一个 Go 程序，内嵌 SpiderMonkey 152，不需要浏览器。预编译的二进制发布在 [waa-signer-build](https://github.com/LeenHawk/waa-signer-build/releases)。
-
-1. 在[发布页](https://github.com/LeenHawk/waa-signer-build/releases)下载对应平台的压缩包：
-
-   | 平台 | 文件 |
-   | --- | --- |
-   | Linux x86-64 | `waa-signer-<版本>-linux-amd64.tar.gz` |
-   | Linux ARM64 | `waa-signer-<版本>-linux-arm64.tar.gz` |
-   | macOS（Apple 芯片） | `waa-signer-<版本>-darwin-arm64.tar.gz` |
-   | Windows x86-64 | `waa-signer-<版本>-windows-amd64.zip` |
-
-   Linux 版本是静态链接的，不依赖系统的 libc。发布页同时提供 `SHA256SUMS`，可用 `sha256sum -c SHA256SUMS --ignore-missing` 校验。
-2. 解压并启动：
-
-   ```sh
-   tar -xzf waa-signer-<版本>-linux-amd64.tar.gz
-   cd waa-signer-<版本>-linux-amd64
-   ./waa-signer -listen 127.0.0.1:8081 -proxy http://127.0.0.1:7890
-   ```
-
-   Windows 上解压 zip 后运行 `waa-signer.exe`，参数相同。
-
-   | 参数 | 环境变量 | 默认值 | 含义 |
-   | --- | --- | --- | --- |
-   | `-listen` | `LISTEN_ADDR` | `127.0.0.1:8081` | 监听地址。只设置环境变量 `PORT` 时会监听 `0.0.0.0` 上的该端口。 |
-   | `-proxy` | `AISTUDIO_PROXY`、`HTTPS_PROXY`、`HTTP_PROXY` | 见说明 | 签名服务访问 Google 使用的代理，支持 HTTP 和 SOCKS5。未指定时读取左列环境变量，再探测本机 `7890` 和 `10808` 端口上的代理，都没有时直连。 |
-   | `-state-dir` | `WAA_STATE_DIR` | 系统临时目录下的 `aistudio_waa_workers` | 缓存目录。临时目录重启后会清空，长期运行时建议指定一个固定目录。 |
-   | `-timezone` | `AISTUDIO_TIMEZONE` | `America/Los_Angeles` | 模拟浏览器的时区。 |
-   | `-locale` | `WAA_LOCALE` | `en-US` | 模拟浏览器的语言。 |
-
-3. 确认服务已启动：
-
-   ```sh
-   curl http://127.0.0.1:8081/health
-   ```
-
-   正常时返回 `{"engine":"spidermonkey-152","ok":true,"status":"ok","workers":0}`。
-
-需要长期运行时，用 systemd、pm2 或其他进程管理工具托管这条启动命令。
-
-也可以从源码编译。上游在提交 `fcdc53e` 之后移除了签名服务的 HTTP 接口，改为只供其自身使用的 stdio 接口，所以必须检出这个提交。编译需要 Go 1.27 和 zig：
-
-```sh
-git clone https://github.com/DeconstructedCube/aistudio-api.git
-cd aistudio-api
-git checkout fcdc53ee753a9e160686193ac9841bdf97b7227f
-bash waa-signer/build.sh
-```
-
-生成的程序是 `waa-signer/bin/waa-signer`。
-
-部署时注意以下几点：
-
-- 签名服务没有访问控制，并且会收到 Google 会话 Cookie 和请求内容。只监听回环地址或内网地址，不要暴露到公网。
-- 签名服务和 GPROXY 应当从同一个出口访问 Google。给供应商配置了代理时，`-proxy` 填同一个代理。
-- GPROXY 通过供应商的出站连接访问签名服务。供应商配置了代理时，对签名服务的请求也会经过这个代理，此时 `127.0.0.1` 指的是代理所在的机器。这种情况下把签名服务部署在代理能访问到的地址上。
-- 启动后的第一次签名需要加载页面，通常要几秒；之后的签名会复用已加载的环境。
+某个账号的第一次生成请求需要先初始化签名环境，比之后的请求慢。
 
 #### 创建供应商
 
-在控制台新建供应商，渠道选 **Google AI Studio Playground**，在 `proof_server_url` 中填写签名服务的地址，例如 `http://127.0.0.1:8081`。只填到端口为止，不要带路径；GPROXY 会请求 `<proof_server_url>/v1/proof/mint`。
+在控制台新建供应商，渠道选 **Google AI Studio Playground**。不需要填写其他配置。
 
 通过管理接口创建：
 
 ```sh
 curl -s -X POST http://127.0.0.1:8787/admin/api/providers \
   -H "Authorization: Bearer $GPROXY_KEY" -H 'content-type: application/json' \
-  -d '{"name":"playground","channel":"playground",
-       "config":{"proof_server_url":"http://127.0.0.1:8081"}}'
+  -d '{"name":"playground","channel":"playground"}'
 ```
+
+这个渠道默认以 Firefox 的 TLS 和 HTTP/2 身份发出请求，与证明中声明的浏览器环境一致。给供应商或凭证另外指定连接配置会覆盖这个默认值，一般不需要这样做。
 
 #### 导入 Cookie
 
@@ -144,16 +87,13 @@ curl -s -X POST http://127.0.0.1:8787/admin/api/providers \
 
 导入时会校验会话并识别订阅等级。使用期间，GPROXY 会保存 Google 在响应中更新的 Cookie，并在有请求时约每 3 小时轮换一次会话 Cookie。被 Google 注销或撤销的登录无法通过轮换恢复，此时需要重新导入 Cookie。目前不支持 Files API 引用、Live WebSocket、批处理和专用语音／视频配置；媒体请使用 Gemini `inlineData`，而不是 `fileData`。
 
-`countTokens` 复用 GPROXY 现有的本地 tokenizer，返回 `totalTokens`，不调用 Google 或 WAA 签名服务。结果是本地估算，可能与 Google 官方计数不同。
+`countTokens` 复用 GPROXY 现有的本地 tokenizer，返回 `totalTokens`，不调用 Google，也不生成证明。结果是本地估算，可能与 Google 官方计数不同。
 
 #### 常见错误
 
 | 现象 | 原因和处理 |
 | --- | --- |
-| `Playground requires your own proof_server_url` | 没有填写 `proof_server_url`，或者它不是以 `http://`、`https://` 开头。 |
-| 连接签名服务失败或超时 | 签名服务没有启动，或者从供应商的出站连接访问不到它。先用 `curl` 请求 `/health`；配置了代理时，在代理所在的机器上检查。 |
-| `WAA signing service returned HTTP ...` | 签名服务收到了请求但处理失败。查看签名服务的日志，常见原因是它访问不到 Google。 |
-| `WAA signing service did not return a proof` | 签名服务返回了失败结果。查看签名服务的日志。 |
+| `Playground is unavailable on this build` | 当前是 Worker 部署，签名器无法运行。改用原生部署。 |
 | Google 返回 403 `The caller does not have permission` | Google 拒绝了这次请求。用同一个账号、同一个出口在浏览器中打开 AI Studio 发一条消息；浏览器里同样失败时，问题在账号或出口，与 GPROXY 无关。 |
 | Google 返回 503 `This model is currently experiencing high demand` | Google 一侧该模型容量不足，稍后重试或换一个模型。 |
 
