@@ -112,7 +112,9 @@ and is normally not needed.
    JSON or Header, including HttpOnly cookies.
 3. In the provider's credentials, choose **Import credentials → Cookie-Editor /
    Cookie Header**, paste the export, and import. The entire cookie jar becomes
-   one credential. For another signed-in Google identity, import
+   one credential. To import several accounts at once, paste their exports one
+   after another, or one Cookie header per line; each becomes its own
+   credential. For another signed-in Google identity, import
    `{"cookies": [...], "auth_user": "1"}`; the default login index is `0`.
 
 Test the credential from its details once, then add the provider to a model
