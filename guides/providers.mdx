@@ -119,9 +119,9 @@ Test the credential from its details once, then add the provider to a model
 route.
 
 Import validates the session and discovers its subscription tier. While the
-credential is in use, GPROXY saves the cookies Google replaces in its
-responses and rotates the session cookies about every 3 hours when requests
-arrive. Rotation does not restore a login that Google has signed out or
+credential is enabled, GPROXY saves the cookies Google replaces in its
+responses and rotates the session cookies about every 10 minutes, whether or
+not requests arrive. Rotation does not restore a login that Google has signed out or
 revoked: import fresh cookies in that case.
 Files API references, Live WebSockets, batch jobs, and dedicated
 speech/video configuration are not supported by this channel yet. Send media

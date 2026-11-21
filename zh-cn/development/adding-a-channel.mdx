@@ -83,7 +83,7 @@ sidebarTitle: "新增渠道"
 
 刷新返回完整替换的密钥和过期时间，以及可选的公开 metadata（`None` 表示保留原值）。宿主用同一个版本 CAS 一起保存这三项。密钥不得放进 metadata。
 
-`CredentialRefresh::proactive_refresh_reason` 决定请求时是否续期。默认在访问凭据五分钟内过期，或刷新凭据（密钥中的 `refresh_expires_at_ms`）一天内过期时续期。渠道可以覆写它以匹配上游的节奏；令牌接口接受续期原因时，再实现 `refresh_with_reason`。`response_update` 用于从上游响应头中获取轮换后的凭证；即使不接受任何更新，也必须从响应中删除含密钥的响应头。
+`CredentialRefresh::proactive_refresh_reason` 决定请求时是否续期。默认在访问凭据五分钟内过期，或刷新凭据（密钥中的 `refresh_expires_at_ms`）一天内过期时续期。渠道可以覆写它以匹配上游的节奏；令牌接口接受续期原因时，再实现 `refresh_with_reason`。上游会结束闲置会话的渠道让 `keepalive` 返回 true；原生宿主随后每分钟按同一节奏检查一次没有请求在用的已启用凭证。`response_update` 用于从上游响应头中获取轮换后的凭证；即使不接受任何更新，也必须从响应中删除含密钥的响应头。
 
 用量不需要任何能力：宿主从渠道整形后的标准响应中读取。不报告用量的渠道记为“未报告”，而不是 0。
 

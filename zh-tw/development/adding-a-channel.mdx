@@ -83,7 +83,7 @@ sidebarTitle: "新增渠道"
 
 重新整理返回完整替換的金鑰和過期時間，以及可選的公開 metadata（`None` 表示保留原值）。宿主用同一個版本 CAS 一起儲存這三項。金鑰不得放進 metadata。
 
-`CredentialRefresh::proactive_refresh_reason` 決定請求時是否續期。預設在訪問憑據五分鐘內過期，或重新整理憑據（金鑰中的 `refresh_expires_at_ms`）一天內過期時續期。渠道可以覆寫它以匹配上游的節奏；令牌介面接受續期原因時，再實現 `refresh_with_reason`。`response_update` 用於從上游回應頭中獲取輪換後的憑證；即使不接受任何更新，也必須從回應中刪除含金鑰的回應頭。
+`CredentialRefresh::proactive_refresh_reason` 決定請求時是否續期。預設在訪問憑據五分鐘內過期，或重新整理憑據（金鑰中的 `refresh_expires_at_ms`）一天內過期時續期。渠道可以覆寫它以匹配上游的節奏；令牌介面接受續期原因時，再實現 `refresh_with_reason`。上游會結束閒置工作階段的渠道讓 `keepalive` 返回 true；原生宿主隨後每分鐘按同一節奏檢查一次沒有請求在用的已啟用憑證。`response_update` 用於從上游回應頭中獲取輪換後的憑證；即使不接受任何更新，也必須從回應中刪除含金鑰的回應頭。
 
 用量不需要任何能力：宿主從渠道整形後的標準回應中讀取。不報告用量的渠道記為「未報告」，而不是 0。
 

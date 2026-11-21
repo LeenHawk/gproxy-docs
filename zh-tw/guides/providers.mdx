@@ -85,7 +85,7 @@ curl -s -X POST http://127.0.0.1:8787/admin/api/providers \
 
 匯入後在憑證詳情中測試一次，再把供應商加入模型路由。
 
-匯入時會驗證工作階段並辨識訂閱等級。使用期間，GPROXY 會儲存 Google 在回應中更新的 Cookie，並在有請求時約每 3 小時輪換一次工作階段 Cookie。被 Google 登出或撤銷的登入無法透過輪換恢復，此時需要重新匯入 Cookie。目前不支援 Files API 引用、Live WebSocket、批次作業及專用語音／影片設定；媒體請使用 Gemini `inlineData`，而非 `fileData`。
+匯入時會驗證工作階段並辨識訂閱等級。憑證啟用期間，GPROXY 會儲存 Google 在回應中更新的 Cookie，並約每 10 分鐘輪換一次工作階段 Cookie，沒有請求時也照常輪換。被 Google 登出或撤銷的登入無法透過輪換恢復，此時需要重新匯入 Cookie。目前不支援 Files API 引用、Live WebSocket、批次作業及專用語音／影片設定；媒體請使用 Gemini `inlineData`，而非 `fileData`。
 
 `countTokens` 沿用 GPROXY 現有的本機 tokenizer，回傳 `totalTokens`，不呼叫 Google，也不產生證明。結果為本機估算，可能與 Google 官方計數不同。
 

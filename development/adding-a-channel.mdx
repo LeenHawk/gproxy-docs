@@ -160,6 +160,9 @@ The default renews when the access material expires within five minutes or
 the refresh material (`refresh_expires_at_ms` in the secret) within one day. A
 channel may override it to follow its upstream's schedule, and implement
 `refresh_with_reason` when the token endpoint accepts the reason for renewal.
+A channel whose upstream ends idle sessions returns true from `keepalive`; the
+native host then applies the same schedule once a minute to enabled
+credentials that no request is using.
 `response_update` lets a channel take a rotated credential from an upstream
 response header; it must remove secret headers from the response even when it
 accepts no update.
