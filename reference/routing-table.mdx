@@ -6,8 +6,7 @@ description: "The complete v4 ingress table, the mount grammar, the OAuth and ma
 This page lists every HTTP route an instance serves and the order in which a
 request path is interpreted. Use it when you need to know which URL reaches
 which operation, how a provider or namespace prefix changes that, and how a
-request fails over between providers. The native host and the Workers host
-mount the same table. `gproxy-protocol` itself declares no paths; which URL
+request fails over between providers. `gproxy-protocol` itself declares no paths; which URL
 serves an operation is decided by the ingress layer described here.
 
 For the full request and response schemas of each route, see the
@@ -29,7 +28,7 @@ new route here.
 | `GET` | `/publications/{id}` | a published body. The id is the credential, so no key is required |
 | — | `/admin/api/…` | the management API |
 | — | `/portal/api/…` | the end user's own API |
-| — | everything else | ingress (OAuth issuer, vendor services, data plane, console) |
+| — | everything else | ingress (OAuth issuer, MCP gateway, vendor services, data plane, console) |
 
 ```sh
 curl -s http://127.0.0.1:8787/healthz
@@ -57,11 +56,15 @@ A request that is not one of the gateway routes is interpreted in this order:
 3. The OAuth issuer, at `{mount}/v1/oauth/…`. These paths belong to this
    instance rather than to an upstream, and they answer in the OAuth error
    format, so they are matched before the data plane.
-4. A channel's vendor service route, such as Codex's `/backend-api/…` or Claude
+4. The MCP gateway, at `{mount}/connect/mcp` and
+   `{mount}/connect/mcp/{server}`: the tools of the registered MCP servers. On
+   a provider mount both mean that one server. See
+   [MCP servers](/guides/mcp-servers).
+5. A channel's vendor service route, such as Codex's `/backend-api/…` or Claude
    Code's `/api/…`. Only on a provider or namespace mount, because matching one
    needs a channel and the aggregated mount names none.
-5. The [data plane](#data-plane-endpoints).
-6. The console, with an SPA fallback, if it is enabled.
+6. The [data plane](#data-plane-endpoints).
+7. The console, with an SPA fallback, if it is enabled.
 
 A request that matches none of these gets a 404.
 
@@ -384,7 +387,7 @@ of them. A batch is one revision commit however many rows it names: either
 every item is stored or none is.
 
 Identity families: `users`, `api-keys`, `organizations`, `teams`,
-`permissions`, `rate-limits` and `oauth-clients`. Organization and team
+`permissions`, `rate-limits`, `mcp-scopes` and `oauth-clients`. Organization and team
 memberships have their own endpoints
 (`organizations/{id}/members`, `teams/{id}/members`). Some families differ
 from the six routes:
@@ -403,7 +406,8 @@ from the six routes:
 Configuration families: `providers`, `credentials`, `models`,
 `provider-models`, `routes`, `route-members`, `connection-profiles`,
 `rule-sets`, `rules`, `provider-rule-sets`, `operation-rules`,
-`operation-endpoints`, `quotas`, `price-rules`, `price-rates`, `price-tiers`.
+`operation-endpoints`, `quotas`, `price-rules`, `price-rates`, `price-tiers`,
+`mcp-tool-natures`.
 
 Other management endpoints:
 
@@ -423,6 +427,7 @@ Other management endpoints:
 - Rules: `rule-sets/{id}/rules`, `rule-sets/{id}/rule-presets/{preset}`,
   `rule-presets`.
 - Quotas: `quotas/status`, `quotas/{id}/reset`, `quotas/{id}/limit-reset`.
+- MCP: `mcp-tools/{providerId}`; see [MCP servers](/guides/mcp-servers).
 - Catalogues: `channels`, `tls-presets`, `default-model-catalog`,
   `default-model-catalog/apply-prices`.
 - Tokenizer: `tokenizer-vocabs`, `tokenizer-auth`.

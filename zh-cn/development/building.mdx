@@ -1,6 +1,6 @@
 ---
 title: "从源码构建"
-description: "从源码构建 GPROXY v4 的各个目标（带或不带控制台的 CLI、桌面与移动端应用、Worker），运行 CI 执行的检查，以及发布版本。"
+description: "从源码构建 GPROXY v4 的各个目标（带或不带控制台的 CLI、桌面与移动端应用），运行 CI 执行的检查，以及发布版本。"
 ---
 
 本文说明如何自行构建 GPROXY、各发布包包含什么、CI 对每次改动执行哪些检查，以及版本的发布和签名方式。如果只是想运行 GPROXY，直接从 [Releases](https://github.com/LeenHawk/gproxy/releases) 下载预构建包更简单，选哪个包见[发布包](#发布包)中的表格。
@@ -22,7 +22,7 @@ description: "从源码构建 GPROXY v4 的各个目标（带或不带控制台�
 | Android（x86_64、aarch64） | ZIP、Termux DEB | 仅 APK |
 | OpenHarmony / HarmonyOS NEXT | — | ARM64 HAP |
 
-发布工作流还会发布 serverless 可执行文件（`gproxy-serverless-linux-<arch>-musl`，x86_64 和 aarch64）、Cloudflare Workers 包（`gproxy-edge-cloudflare.zip`），以及 GNU 和 musl 容器镜像。应用包会生成托管在 GitHub 上的构建证明（attestation）。公开的发布附件只包括各个包、`manifest.json` 和 `SHA256SUMS`；单独的校验文件和构建证明属于 CI 内部输入。
+发布工作流还会发布 GNU 和 musl 容器镜像。应用包会生成托管在 GitHub 上的构建证明（attestation）。公开的发布附件只包括各个包、`manifest.json` 和 `SHA256SUMS`；单独的校验文件和构建证明属于 CI 内部输入。
 
 各平台说明：
 
@@ -73,8 +73,6 @@ cargo build -p gproxy --release
 cargo build -p gproxy --release --no-default-features \
   --features embedded-console,memory,fs,codex,claudecode,openai,custom
 ```
-
-该 crate 还有一个面向 serverless 平台的 `gproxy-serverless` 二进制，需要启用 `postgres` feature。
 
 ## 无前端 CLI
 
@@ -142,21 +140,6 @@ TARGET_OS=linux TARGET_TRIPLE=x86_64-unknown-linux-gnu \
 
 产物写入 `dist/release/`。
 
-## Cloudflare Workers
-
-在仓库根目录执行：
-
-```sh
-rustup target add wasm32-unknown-unknown
-cargo install worker-build
-pnpm --dir console install --frozen-lockfile
-pnpm --dir deploy/cloudflare install
-pnpm --dir deploy/cloudflare build
-pnpm --dir deploy/cloudflare check
-```
-
-`worker-build` 负责编译和优化 WebAssembly 模块；`check` 用 Wrangler 做一次部署预演，不会发布。配置和运行限制见[边缘部署](/zh-cn/deployment/edge)；构建带自有渠道的 Worker 见[新增渠道](/zh-cn/development/adding-a-channel#构建-worker)。
-
 ## CI 执行的检查
 
 提交 PR 前请先在本地运行。CI 对每次改动都会执行，分为后端、桌面和 WebAssembly 三个任务。
@@ -169,10 +152,9 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-CI 还会对不属于默认成员的 serverless 二进制和仓库外渠道示例执行 lint：
+CI 还会对不属于默认成员的仓库外渠道示例执行 lint：
 
 ```sh
-cargo clippy -p gproxy --bin gproxy-serverless --no-default-features --features channels,postgres,embedded-console -- -D warnings
 cargo clippy -p gproxy-example-channel -p gproxy-example-native --all-targets -- -D warnings
 ```
 
@@ -183,24 +165,13 @@ cargo clippy -p gproxy-host-tauri --all-targets -- -D warnings
 cargo test -p gproxy-host-tauri
 ```
 
-WebAssembly：检查只覆盖支持该目标的库和宿主，不包括 CLI 和 Tauri。不要对整个 workspace 执行；这两者都会用到 tokio 的 `net` feature，而 mio 无法在该目标上编译。
+WebAssembly：只有无状态的 crate 支持该目标。CI 会在启用 `fetch` 传输和全部渠道 feature 的情况下检查它们，完整的 feature 列表见 `.github/workflows/ci.yml`。
 
 ```sh
 cargo check --target wasm32-unknown-unknown \
-  -p gproxy-protocol -p gproxy-store -p gproxy-seaorm -p gproxy-client \
-  -p gproxy-cache -p gproxy-channel -p gproxy-core -p gproxy-file \
-  -p gproxy-tokenizer -p gproxy-sdk -p gproxy-app -p gproxy-host-axum \
-  -p gproxy-host-edge
-```
-
-CI 还会检查各 crate README 中注明可编译到 wasm 的非默认 feature 集合。由于 cargo 会在同一次调用内合并 feature，每个集合单独调用一次：
-
-```sh
-cargo check --target wasm32-unknown-unknown -p gproxy-sdk --features libsql
-cargo check --target wasm32-unknown-unknown -p gproxy-cache --all-features
-cargo check --target wasm32-unknown-unknown -p gproxy-file --no-default-features --features s3
-cargo check --target wasm32-unknown-unknown -p gproxy-channel --all-features --lib
-cargo check --target wasm32-unknown-unknown -p gproxy-example-edge --lib
+  -p gproxy-protocol -p gproxy-client -p gproxy-client-sdk -p gproxy-upstream -p gproxy-channel \
+  -p gproxy-convert -p gproxy-lite \
+  --features gproxy-client/fetch,gproxy-client/workers
 ```
 
 控制台与文档：

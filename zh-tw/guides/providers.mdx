@@ -53,13 +53,11 @@ description: "選擇渠道、新增供應商與憑證，設定登入、額度查
 | `workbuddy` | 透過編輯器外掛使用騰訊 Copilot | OAuth |
 | `xai` | xAI（Grok）：OpenAI Chat 與 Responses，以及 xAI 自己的 TTS、STT 和影片 | `{"api_key"}` |
 
-所有渠道都能同時為原生目標和 `wasm32-unknown-unknown` 建置，因此 Worker 部署可用的渠道與原生部署相同。唯一的例外是 `playground`：它的簽名器不能在 Worker 中執行，生成請求只在原生部署中可用。
-
 ### AI Studio Playground
 
 `playground` 使用 [AI Studio](https://aistudio.google.com/) 的 Google 登入工作階段，支援 Gemini 生成、串流回應、內嵌媒體、函式呼叫及模型探索。API Key 介面仍使用 `aistudio` 渠道。
 
-Google 要求每次生成請求附帶一份 WAA 證明。GPROXY 在程序內產生這份證明，不需要另外部署簽名服務，Cookie 和請求內容也不會傳給第三方。簽名器內嵌 QuickJS，只能在原生部署中執行；Cloudflare Worker 部署不能用這個渠道生成內容。
+Google 要求每次生成請求附帶一份 WAA 證明。GPROXY 在程序內產生這份證明，不需要另外部署簽名服務，Cookie 和請求內容也不會傳給第三方。簽名器內嵌 QuickJS。
 
 某個帳號的第一次生成請求需要先初始化簽名環境，比之後的請求慢。
 
@@ -93,7 +91,6 @@ curl -s -X POST http://127.0.0.1:8787/admin/api/providers \
 
 | 現象 | 原因和處理 |
 | --- | --- |
-| `Playground is unavailable on this build` | 目前是 Worker 部署，簽名器無法執行。改用原生部署。 |
 | Google 回傳 403 `The caller does not have permission` | Google 拒絕了這次請求。用同一個帳號、同一個出口在瀏覽器中開啟 AI Studio 傳一則訊息；瀏覽器裡同樣失敗時，問題在帳號或出口，與 GPROXY 無關。 |
 | Google 回傳 503 `This model is currently experiencing high demand` | Google 一側該模型容量不足，稍後重試或換一個模型。 |
 

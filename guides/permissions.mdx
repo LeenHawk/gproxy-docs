@@ -43,6 +43,10 @@ The model catalog's `permitted` field tells the caller whether it may use an ent
 
 Vendor service routes are the account, usage and other non-model endpoints a channel declares. They name no model and no operation, so only a rule that covers the whole provider (any model, no operation) allows or denies them.
 
+### MCP servers
+
+Permission rules are not consulted for [MCP servers](/guides/mcp-servers). Tools are allowed by default and restricted with MCP scope rules, which have their own syntax and evaluation; see [Scopes](/guides/mcp-servers#scopes). An OAuth access token needs the scope `gproxy:mcp`.
+
 ## OAuth access tokens
 
 An OAuth access token is a credential a user has handed to another program, so GPROXY restricts it beyond the user's own permissions.

@@ -60,7 +60,7 @@ builder 可以从 `GproxyBuilder::sqlite(path)`、`GproxyBuilder::sqlite_memory(
 
 | 方法 | 默认值 | 用途 |
 | --- | --- | --- |
-| `.cache(cache)` | 原生为 `MemoryCache`，wasm 上为 `StoreCache` | 共享的临时状态与失效通知通道。多实例需要共享的 cache：原生用 Redis，edge 上用基于 D1 或 libSQL 的 `StoreCache`。 |
+| `.cache(cache)` | `MemoryCache` | 共享的临时状态与失效通知通道。多实例需要共享的 cache，也就是 Redis。 |
 | `.channel(channel)` | | 额外注册一个渠道，优先于编译进来的同 id 渠道。 |
 | `.without_default_channels()` | | 只注册通过 `.channel(...)` 传入的渠道。 |
 | `.client_pool(pool)` | `ClientPool::default()` | 出站 client 缓存。 |
@@ -79,20 +79,17 @@ builder 可以从 `GproxyBuilder::sqlite(path)`、`GproxyBuilder::sqlite_memory(
 | --- | --- |
 | 渠道 id（`codex`、`kiro`、`openai`…） | 编译该渠道。除非调用了 `without_default_channels()`，builder 会自动注册它。 |
 | `channels` | workspace 提供的全部渠道 |
-| `postgres` / `mysql` | 额外的数据库驱动，仅原生。原生环境始终可以使用 SQLite。 |
-| `libsql` | 经 Hrana HTTP pipeline 访问 libSQL/Turso，所有目标平台都可用 |
-| `d1` | Cloudflare D1 binding 的标记（wasm 上 binding 始终可用） |
+| `postgres` / `mysql` | 额外的数据库驱动。SQLite 始终可用。 |
+| `libsql` | 经 Hrana HTTP pipeline 访问 libSQL/Turso |
 | `memory`（默认） | 进程内 cache |
 | `redis` | Redis cache，用于多实例 |
-| `fs`（默认） | 本地文件存储，仅原生 |
+| `fs`（默认） | 本地文件存储 |
 | `s3` | S3/R2 存储 |
 | `bundled-vocabulary`（默认） | 内置 DeepSeek 词表，为没有自带词表文件的模型估算 token |
 | `ts` | 为每个 DTO 和每个渠道 descriptor 生成 `ts-rs` 声明 |
-| `client-sdk` | `ClientBackend`：在进程内用这个句柄驱动 `gproxy-client-sdk` 的 `Client`（仅原生平台） |
+| `client-sdk` | `ClientBackend`：在进程内用这个句柄驱动 `gproxy-client-sdk` 的 `Client` |
 
-默认 feature 集合可以为 `wasm32-unknown-unknown` 构建，`libsql` 也可以。
-
-原生构建使用 `reqwest` 传输。需要其他后端的渠道会自行启用：`claudecode`、`kiro`、`antigravity` 等渠道启用 `wreq` 做 TLS 模拟，`codex` 启用与 Codex CLI 指纹一致的原生 `reqwest` 栈。宿主也可以直接在 `gproxy-client` 上启用后端 feature，或者通过 `.client_pool` 传入自己的 client 池。
+构建使用 `reqwest` 传输。需要其他后端的渠道会自行启用：`claudecode`、`kiro`、`antigravity` 等渠道启用 `wreq` 做 TLS 模拟，`codex` 启用与 Codex CLI 指纹一致的原生 `reqwest` 栈。宿主也可以直接在 `gproxy-client` 上启用后端 feature，或者通过 `.client_pool` 传入自己的 client 池。
 
 ## 调用
 
@@ -129,7 +126,7 @@ let (response, usage) = execution.into_parts();
 
 ### 资源获取策略
 
-请求通过 URL 引用资源时，引擎按 `FetchPolicy` 获取该资源。默认的 `DefaultFetchPolicy` 只允许以 http 和 https 访问公网地址；原生直连时会固定已验证的公网 IP。如果配置了代理，而域名需要由代理自行解析，该 URL 会被拒绝。嵌入方可以通过 `.fetch_policy(...)` 显式设置 `AllowlistFetchPolicy`，只允许自己控制的域名，并由代理负责目的地址的限制。wasm 上域名目的地址仍取决于平台的出站访问控制。
+请求通过 URL 引用资源时，引擎按 `FetchPolicy` 获取该资源。默认的 `DefaultFetchPolicy` 只允许以 http 和 https 访问公网地址；原生直连时会固定已验证的公网 IP。如果配置了代理，而域名需要由代理自行解析，该 URL 会被拒绝。嵌入方可以通过 `.fetch_policy(...)` 显式设置 `AllowlistFetchPolicy`，只允许自己控制的域名，并由代理负责目的地址的限制。
 
 ## 登录
 
@@ -212,7 +209,7 @@ CRUD 家族都提供 `list`、`get`、`create`、`update`、`delete` 和 `batch`
 
 使用 `SyncMode::Background` 时，句柄自己运行两个循环，这需要 Tokio runtime 和一个比单次请求活得更久的进程。使用 `SyncMode::Manual` 时，只有宿主调用上述方法才会同步。
 
-wasm 上 cache 默认是基于数据库的 `StoreCache`，同步始终是手动的，因为 isolate 的生命周期不超过一次请求。请在每个请求开始时调用 `tick()`：
+手动模式下，宿主需要同步时调用 `tick()`，例如在每个请求开始时：
 
 ```rust
 // tick() = 取走已投递的通知，然后轮询一次 revision。
@@ -238,4 +235,4 @@ GPROXY_TS_OUT=console/src/generated \
 
 ## sdk 之上的各层
 
-还需要身份功能的应用可以链接 `gproxy-app`。它提供认证、准入、管理面与用户面的操作家族以及 OAuth issuer，不包含传输层。`gproxy-host-axum` 把这些功能以 HTTP 形式提供，`gproxy-host-edge` 在 Cloudflare Worker 中挂载同一个 router，`gproxy-host-tauri` 通过 IPC 提供管理面。上述每个 crate 都可以在各自的层级上被嵌入。
+还需要身份功能的应用可以链接 `gproxy-app`。它提供认证、准入、管理面与用户面的操作家族以及 OAuth issuer，不包含传输层。`gproxy-host-axum` 把这些功能以 HTTP 形式提供，`gproxy-host-tauri` 通过 IPC 提供管理面。上述每个 crate 都可以在各自的层级上被嵌入。

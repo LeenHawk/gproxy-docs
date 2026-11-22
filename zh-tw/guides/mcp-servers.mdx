@@ -1,0 +1,201 @@
+---
+title: "MCP 伺服器"
+description: "把 MCP 伺服器放到 GPROXY 後面：註冊伺服器、登入、讓用戶端只用一個位址和閘道金鑰，並用 scope 限制工具。"
+---
+
+GPROXY 代理 MCP 伺服器（Model Context Protocol，streamable HTTP）的方式與代理模型供應商相同。執行個體管理員把伺服器註冊為供應商，使用者、團隊和組織登入該伺服器，之後任何 MCP 用戶端只憑一把閘道 API Key 就能透過 GPROXY 存取它。本身不支援 OAuth 的用戶端不需要任何修改。
+
+閘道理解工具：它列出工具、依 scope 過濾、把呼叫轉給對應的伺服器，並為每次呼叫寫入稽核記錄。只代理工具，不代理 prompts 和 resources。
+
+## 註冊伺服器
+
+伺服器是 `channel` 為 `mcp` 的供應商，在 `GET /admin/api/channels` 中顯示為「MCP server」。
+
+| 欄位 | 意義 |
+| --- | --- |
+| `name` | 伺服器名稱。它會出現在 URL 中，也用作工具名稱的前綴，因此只使用 `[A-Za-z0-9_-]`。 |
+| `baseUrl` | 伺服器的 MCP 端點，例如 `https://mcp.deepwiki.com/mcp`。必填。 |
+| `config.headers` | 選填。每個請求都附帶的固定標頭，是一個物件，例如 `{"X-Tenant":"acme"}`。 |
+| `config.auth_header` | 選填。貼上的密鑰會原樣放入這個標頭。未設定時以 `Authorization: Bearer <secret>` 傳送。 |
+
+```sh
+curl -s -X POST http://127.0.0.1:8787/admin/api/providers \
+  -H "Authorization: Bearer $GPROXY_KEY" -H 'content-type: application/json' \
+  -d '{"name":"deepwiki","channel":"mcp",
+       "baseUrl":"https://mcp.deepwiki.com/mcp"}'
+```
+
+供應商的代理和連線設定與其他供應商一樣生效。模型、路由、操作規則和重寫規則不適用於 MCP 伺服器。
+
+## 登入
+
+MCP 伺服器的憑證有三種類型：
+
+| 類型 | 密鑰內容 | 用途 |
+| --- | --- | --- |
+| `oauth` | 透過登入取得 | 要求 OAuth 的伺服器 |
+| `api_key` | `{"api_key": "..."}` | 手動貼上的密鑰 |
+| `none` | `{}` | 不需要驗證的伺服器 |
+
+OAuth 使用與其他憑證相同的授權碼登入流程：先呼叫 `POST /admin/api/credential-login/authcode/start`，再呼叫 `/complete`，見[透過登入取得憑證](/zh-tw/guides/providers#透過登入取得憑證)。GPROXY 從伺服器的受保護資源中繼資料（RFC 9728，也會讀取 `WWW-Authenticate` 質詢）和授權伺服器中繼資料（RFC 8414 或 OIDC）找出授權伺服器，動態註冊自己（RFC 7591），並使用 PKCE S256 和 `resource` 參數（RFC 8707）。權杖會在到期前重新整理，收到 `401` 後還會再重新整理一次。
+
+授權後，瀏覽器會跳轉到 `http://127.0.0.1:47821/callback`。這個位址沒有程式監聽，頁面打不開；把網址列裡的完整位址貼回對話方塊即可。
+
+<Warning>
+授權伺服器不支援動態用戶端註冊的伺服器，在目前版本中無法透過 OAuth 登入。
+</Warning>
+
+### 誰可以使用伺服器
+
+只有當呼叫方的金鑰能看到該供應商的一份有效憑證時，它才能使用這台伺服器。這就是一般的[憑證可見範圍](/zh-tw/guides/permissions#憑證可見範圍)規則，由金鑰的綁定決定。
+
+可見的憑證不只一份時，優先使用呼叫方自己的，其次是所屬團隊的，再其次是所屬組織的，最後是共用憑證。一個工作階段會一直使用它開始時選定的憑證。
+
+## 兩個位址
+
+| 位址 | 提供的內容 |
+| --- | --- |
+| `https://<gproxy>/connect/mcp/<name>` | 單一伺服器，工具保留原名。`https://<gproxy>/<name>/connect/mcp` 是同一個位址。 |
+| `https://<gproxy>/connect/mcp` | 呼叫方可用的所有伺服器的彙總。`?servers=a,b` 可以縮小範圍。 |
+
+在彙總位址上，工具名稱為 `<server>__<tool>`。名稱超過 64 個字元，或含有 `[A-Za-z0-9_-]` 以外字元的工具不會在彙總位址上提供，請透過該伺服器自己的位址使用。
+
+## 設定用戶端
+
+用戶端只需要 URL 和閘道金鑰：傳輸方式是 streamable HTTP，金鑰以 `Authorization: Bearer <key>` 或 `x-api-key` 傳送。
+
+Claude Code：
+
+```sh
+claude mcp add --transport http deepwiki https://gproxy.example/connect/mcp/deepwiki \
+  --header "Authorization: Bearer sk-..."
+```
+
+Codex，寫入 `~/.codex/config.toml`：
+
+```toml
+[mcp_servers.deepwiki]
+url = "https://gproxy.example/connect/mcp/deepwiki"
+bearer_token_env_var = "GPROXY_API_KEY"
+```
+
+不使用金鑰、而是透過 OAuth 登入 GPROXY 的用戶端，其權杖需要帶有 OAuth scope `gproxy:mcp`。
+
+<a id="scopes"></a>
+
+## Scope
+
+MCP 預設允許：沒有任何 MCP 規則的使用者或金鑰，可以使用它能看到憑證的每一台伺服器。模型的[權限規則](/zh-tw/guides/permissions#權限規則)不用於 MCP。
+
+一條規則包含主體、scope、動作和優先順序。主體是一個使用者或一把 API Key，不能同時指定兩者。
+
+### Scope 語法
+
+| Scope | 涵蓋範圍 |
+| --- | --- |
+| `mcp:*` | 全部 |
+| `mcp:<server>:*` | 一台伺服器的所有工具 |
+| `mcp:<server>:<tool>` | 一個工具 |
+| `mcp:*:<tool>` | 任意伺服器上的同名工具 |
+| `mcp:<server>:@read` | 該伺服器上性質為 `read` 的工具 |
+| `mcp:<server>:@write` | 該伺服器上性質為 `write` 的工具 |
+| `mcp:<server>:@destructive` | 該伺服器上性質為 `destructive` 的工具 |
+
+`*` 代表整個伺服器部分或整個工具部分，不能當作名稱內部的萬用字元。依性質的寫法同樣可以把伺服器寫成 `*`：`mcp:*:@destructive`。
+
+### 判定方式
+
+- 主體沒有任何規則時，全部允許。
+- 否則依優先順序由高到低逐條檢查，第一條符合的規則決定結果。優先順序相同時 `deny` 優先。
+- 沒有規則符合的工具會被拒絕。
+- 金鑰的規則只能縮小使用者的範圍：先判定使用者的規則，再判定金鑰的規則，兩者都允許才通過。
+- 規則對所有呼叫方生效，執行個體管理員也不例外。
+
+呼叫方無權呼叫的工具不會出現在工具清單中，呼叫它會得到「Unknown tool」。
+
+### 範例
+
+只能唯讀存取一台伺服器：
+
+| Scope | 動作 | 優先順序 |
+| --- | --- | --- |
+| `mcp:deepwiki:@read` | `allow` | 0 |
+
+除破壞性工具外全部允許：
+
+| Scope | 動作 | 優先順序 |
+| --- | --- | --- |
+| `mcp:*` | `allow` | 0 |
+| `mcp:*:@destructive` | `deny` | 10 |
+
+允許一台伺服器，但排除其中一個工具：
+
+| Scope | 動作 | 優先順序 |
+| --- | --- | --- |
+| `mcp:notion:*` | `allow` | 0 |
+| `mcp:notion:delete_page` | `deny` | 10 |
+
+### 管理規則
+
+規則是管理 API 的 `mcp-scopes` 族，供執行個體管理員使用：在 `/admin/api/mcp-scopes` 下列出、建立、批次操作，以及依 ID 讀取、更新或刪除。清單支援 `userId`、`apiKeyId`、`ownerUserId`、`search`、`page` 和 `pageSize`。
+
+| API 欄位 | 意義 |
+| --- | --- |
+| `userId` / `apiKeyId` | 主體，必須且只能指定其中一個；建立後不能修改 |
+| `scope` | 依上述語法書寫的 scope |
+| `action` | `allow` 或 `deny` |
+| `priority` | 數值越大越先檢查，預設 `0` |
+
+```sh
+curl -s -X POST http://127.0.0.1:8787/admin/api/mcp-scopes \
+  -H "Authorization: Bearer $GPROXY_KEY" -H 'content-type: application/json' \
+  -d '{"userId":"<user id>","scope":"mcp:deepwiki:@read","action":"allow"}'
+```
+
+## 工具性質
+
+每個工具的性質是 `read`、`write` 或 `destructive`，取自工具的 MCP annotations，並採用規範中偏保守的預設值：
+
+| Annotations | 性質 |
+| --- | --- |
+| `readOnlyHint: true` | `read` |
+| 否則，`destructiveHint: false` | `write`：會修改資料，但不具破壞性 |
+| 其他情況 | `destructive` |
+
+因此，什麼都沒有宣告的工具是 `destructive`。
+
+管理員可以覆寫個別工具的性質。提供給呼叫方的工具清單會帶有依最終性質產生的 hint。覆寫項目是 `mcp-tool-natures` 族（`/admin/api/mcp-tool-natures`），欄位為 `providerId`、`tool` 和 `nature`；建立後只能修改 `nature`。
+
+`GET /admin/api/mcp-tools/{providerId}` 回傳伺服器的工具，包括宣告的性質、生效的性質和覆寫項目的 ID（如有）。它會即時詢問伺服器，因此供應商需要有 base URL 和一份有效憑證；無法連上伺服器時回傳 `502`。
+
+## 稽核
+
+每次工具呼叫都會在稽核記錄中寫入一筆，動作為 `mcp.tools.call`：
+
+```text
+GET /admin/api/audit?action=mcp.tools.call
+```
+
+| 欄位 | 內容 |
+| --- | --- |
+| `actorUserId`、`actorApiKeyId`、`sourceIp` | 呼叫方 |
+| `entityKind`、`entityId` | `provider` 和伺服器的供應商 ID |
+| `outcome` | `ok` 或 `error` |
+| `detail.server`、`detail.tool` | 伺服器名稱和工具 |
+| `detail.credentialId` | 使用的憑證，或 `null` |
+| `detail.durationMs` | 呼叫耗時 |
+| `detail.outcome` | `ok`、`tool_error`、`input_required`、`refused` 或 `failed` |
+| `detail.arguments`、`detail.result` | 僅在開啟下游本文日誌（設定項 `enableDownstreamLogBody`）時存在。敏感欄位名稱會被遮蔽。 |
+
+另見[用量、日誌與稽核](/zh-tw/guides/observability)。
+
+## 協定行為與限制
+
+- 面向用戶端，GPROXY 支援 MCP 修訂版 2026-07-28（無狀態，沒有 `initialize`）和以工作階段為基礎的修訂版 2024-11-05 至 2025-11-25。
+- 面向伺服器，優先使用 2026-07-28，否則退回 `initialize` 加工作階段，這是 DeepWiki、Notion 等伺服器目前使用的方式（2025-11-25）。
+- 對以工作階段為基礎的伺服器，「呼叫方工作階段 → 上游工作階段和憑證」的對應會持久儲存，因此任何執行個體都可以接續同一個工作階段。
+- 每個回應都是一個 JSON 本文。面向用戶端沒有 SSE 串流，也沒有 GET 串流，進度通知會被丟棄。
+- 伺服器發起的請求（sampling、elicitation）只在用戶端和伺服器都使用 2026-07-28 時，以 `input_required` 結果的形式支援，內容原樣透傳。以工作階段為基礎的伺服器在開啟時不帶用戶端能力，無法發起請求。
+- 伺服器回傳 `401` 時，GPROXY 重新整理一次憑證並重試。仍被拒絕時，用戶端會收到一般的 `502` 和 JSON-RPC 錯誤。伺服器的 `WWW-Authenticate` 不會被轉送，因此用戶端不會自行向伺服器發起 OAuth。
+- 伺服器的工具清單依伺服器和憑證快取 5 分鐘。伺服器新增或移除的工具最久要這麼長的時間才會反映出來。
+- 不代理 prompts 和 resources。

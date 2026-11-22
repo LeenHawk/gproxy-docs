@@ -4,7 +4,7 @@ description: "備份 v3 部署，在原資料庫上啟動 v4，檢查遷移結�
 sidebarTitle: "v3 升級到 v4"
 ---
 
-本文供管理員將 v3 部署升級到 v4 時參考。v4 啟動時會辨識 v3 資料庫並原地轉換，支援 SQLite、PostgreSQL、MySQL 和 D1。資料目錄或連線字串、`GPROXY_MASTER_KEY` 都沿用原值，不需要匯出資料，也不需要重設密碼。
+本文供管理員將 v3 部署升級到 v4 時參考。v4 啟動時會辨識 v3 資料庫並原地轉換，支援 SQLite、PostgreSQL 和 MySQL。資料目錄或連線字串、`GPROXY_MASTER_KEY` 都沿用原值，不需要匯出資料，也不需要重設密碼。
 
 ## 變更內容
 
@@ -52,22 +52,15 @@ sidebarTitle: "v3 升級到 v4"
     mysqldump --single-transaction --databases gproxy > gproxy-v3.sql
     ```
   </Tab>
-  <Tab title="D1">
-    ```sh
-    wrangler d1 export gproxy --remote --output=gproxy-v3.sql
-    ```
-  </Tab>
 </Tabs>
 
 ## 升級步驟
 
 1. 停止所有 v3 執行個體。
-2. 以 v4 執行檔取代 v3，或將容器映像檔換成 v4 標籤。Workers 部署則以原有的 D1 binding 和 Secrets 部署 v4 Worker。
+2. 以 v4 執行檔取代 v3，或將容器映像檔換成 v4 標籤。
 3. 以原來的資料目錄或連線字串、原來的 `GPROXY_MASTER_KEY` 啟動 v4。也可以先單獨執行 `gproxy migrate`，它走同樣的升級流程，完成後結束。
 4. 觀察日誌。SQLite 部署依序會看到 `migrating v3 database to v4`、每張資料表一行 `migrated`、帶有列數、捨棄數和警告數的 `v3 import complete`，最後是帶有備份路徑的 `v3 migration complete`。含義發生變化的內容列在 `Changed on the way in` 下，沒有 v4 對應形式的資料列列在 `NOT migrated` 下。
 5. 日誌顯示服務開始監聽後，登入控制台。
-
-Worker 在部署後的第一個請求中轉換資料庫。轉換未完成的執行個體不處理請求，也不會建立新的管理員，因此轉換結束前請求都會失敗。
 
 ## 遷移過程
 
@@ -77,19 +70,18 @@ Worker 在部署後的第一個請求中轉換資料庫。轉換未完成的執�
 
 轉換失敗時原檔案保持不變，依日誌指出的原因修正（例如還原原來的主金鑰）後重新啟動即可。如果在重新命名之前中斷，原路徑上仍是 v3 資料庫，下次啟動會重新嘗試；重新命名之後，原路徑上是 v4 資料庫，其遷移帳本表明它已是目前版本，之後的啟動都是一般的 v4 啟動，不會重複匯入。
 
-### PostgreSQL、MySQL 與 D1
+### PostgreSQL 與 MySQL
 
 v4 先讀取並檢查 v3 資料，包括主金鑰能否解開憑證，確認無誤後才將每張 v3 資料表重新命名為 `gproxy_v3_<原表名>`，並以原來的資料表名稱建立 v4 資料表。設定、身分資料和歷史用量從重新命名後的資料表中轉換，最後一步完成後執行個體才開始處理請求。
 
-進度記錄在 `gproxy_v3_upgrade` 資料表中，其 `report_json` 欄位保存略過的資料列和含義變化的警告。身分資料和用量分批次寫入，每批次之後記錄檢查點；升級中斷後，下次啟動（Workers 上是下一個請求）會從中斷處繼續。
+進度記錄在 `gproxy_v3_upgrade` 資料表中，其 `report_json` 欄位保存略過的資料列和含義變化的警告。身分資料和用量分批次寫入，每批次之後記錄檢查點；升級中斷後，下次啟動會從中斷處繼續。
 
 各資料庫以不同方式防止第二個處理程序同時遷移：
 
 - PostgreSQL 在整個升級期間持有工作階段層級的 advisory lock，並在一個交易中完成所有 v3 資料表的重新命名。
 - MySQL 持有工作階段鎖（`GET_LOCK`），鎖在 DDL 陳述式隱含提交後依然有效；所有 v3 資料表以一條 `RENAME TABLE` 陳述式重新命名。
-- D1 以交易性 batch 重新命名。遷移租約在每批次寫入時都會檢查，防止另一個 isolate 同時寫入；升級中斷後，租約最多 60 秒後失效。
 
-第二個 PostgreSQL 或 MySQL 執行個體取不到鎖時，會以 `another instance is migrating this database; retry after it finishes` 結束。Workers 上的提示則是等租約釋放後重試。
+第二個 PostgreSQL 或 MySQL 執行個體取不到鎖時，會以 `another instance is migrating this database; retry after it finishes` 結束。
 
 失敗後，v3 資料仍在封存資料表中，v4 資料表裡可能已有部分匯入的資料。修正報告的錯誤後重新啟動，升級會繼續進行。升級完成之前，不要刪除 `gproxy_v3_upgrade`，也不要重新命名封存資料表。
 
@@ -113,7 +105,7 @@ v3 無法讀取 v4 資料庫，轉換到一半的資料庫兩個版本都無法�
     3. 將 `gproxy.db.v3-*.bak`（或自己備份中的 `gproxy.db`）複製為 `gproxy.db`。
     4. 重新安裝 v3 執行檔或換回 v3 映像檔標籤，以原來的參數和主金鑰啟動。
   </Tab>
-  <Tab title="PostgreSQL、MySQL 與 D1">
+  <Tab title="PostgreSQL 與 MySQL">
     1. 停止所有執行個體。
     2. 將升級前的備份還原到一個空資料庫中。
     3. 以原來的主金鑰讓 v3 連線還原後的資料庫並啟動。

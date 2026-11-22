@@ -1,6 +1,6 @@
 ---
 title: "Building from Source"
-description: "Build every GPROXY v4 target from source (the CLI with and without the console, the desktop and mobile application, the Worker), run the checks CI runs, and publish a release."
+description: "Build every GPROXY v4 target from source (the CLI with and without the console and the desktop and mobile application), run the checks CI runs, and publish a release."
 ---
 
 This page describes how to build GPROXY yourself, what each published package
@@ -29,11 +29,8 @@ installers:
 | Android (x86_64, aarch64) | ZIP, Termux DEB | APK only |
 | OpenHarmony / HarmonyOS NEXT | — | ARM64 HAP |
 
-The release workflow also publishes the serverless executable
-(`gproxy-serverless-linux-<arch>-musl` for x86_64 and aarch64), the Cloudflare
-Workers bundle (`gproxy-edge-cloudflare.zip`), and GNU and musl container
-images. Application packages receive build provenance attestations hosted on
-GitHub. Public release attachments are limited to the packages,
+The release workflow also publishes GNU and musl container images. Application
+packages receive build provenance attestations hosted on GitHub. Public release attachments are limited to the packages,
 `manifest.json` and `SHA256SUMS`; individual checksum files and build
 provenance remain internal CI inputs.
 
@@ -116,9 +113,6 @@ A smaller build with four channels and no external database drivers:
 cargo build -p gproxy --release --no-default-features \
   --features embedded-console,memory,fs,codex,claudecode,openai,custom
 ```
-
-The crate also has a `gproxy-serverless` binary for the serverless platforms;
-it requires the `postgres` feature.
 
 ## Headless CLI
 
@@ -207,25 +201,6 @@ TARGET_OS=linux TARGET_TRIPLE=x86_64-unknown-linux-gnu \
 
 The packages are written to `dist/release/`.
 
-## Cloudflare Workers
-
-From the repository root:
-
-```sh
-rustup target add wasm32-unknown-unknown
-cargo install worker-build
-pnpm --dir console install --frozen-lockfile
-pnpm --dir deploy/cloudflare install
-pnpm --dir deploy/cloudflare build
-pnpm --dir deploy/cloudflare check
-```
-
-`worker-build` compiles and optimizes the WebAssembly module. `check` runs a
-Wrangler deployment dry run without publishing anything. See
-[Edge deployment](/deployment/edge) for configuration and runtime limits, and
-[Adding a channel](/development/adding-a-channel#building-the-worker) for
-building a Worker that carries a channel of your own.
-
 ## Checks CI runs
 
 Run these before you open a pull request. CI runs them on every change, split
@@ -239,11 +214,10 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-CI additionally lints the serverless binary and the out-of-tree channel
-example, which are not default members:
+CI additionally lints the out-of-tree channel example, which is not a default
+member:
 
 ```sh
-cargo clippy -p gproxy --bin gproxy-serverless --no-default-features --features channels,postgres,embedded-console -- -D warnings
 cargo clippy -p gproxy-example-channel -p gproxy-example-native --all-targets -- -D warnings
 ```
 
@@ -254,28 +228,15 @@ cargo clippy -p gproxy-host-tauri --all-targets -- -D warnings
 cargo test -p gproxy-host-tauri
 ```
 
-WebAssembly: the check covers the libraries and hosts that support the target,
-not the CLI or Tauri. Do not run it on the whole workspace; both of those reach
-tokio's `net` feature, and mio does not build for this target.
+WebAssembly: only the stateless crates support the target. CI checks them with
+the `fetch` transport and every channel feature enabled; the full feature list
+is in `.github/workflows/ci.yml`.
 
 ```sh
 cargo check --target wasm32-unknown-unknown \
-  -p gproxy-protocol -p gproxy-store -p gproxy-seaorm -p gproxy-client \
-  -p gproxy-cache -p gproxy-channel -p gproxy-core -p gproxy-file \
-  -p gproxy-tokenizer -p gproxy-sdk -p gproxy-app -p gproxy-host-axum \
-  -p gproxy-host-edge
-```
-
-CI also checks the non-default feature sets that the crate READMEs document as
-wasm-clean, one invocation each, because cargo unifies features within a single
-invocation:
-
-```sh
-cargo check --target wasm32-unknown-unknown -p gproxy-sdk --features libsql
-cargo check --target wasm32-unknown-unknown -p gproxy-cache --all-features
-cargo check --target wasm32-unknown-unknown -p gproxy-file --no-default-features --features s3
-cargo check --target wasm32-unknown-unknown -p gproxy-channel --all-features --lib
-cargo check --target wasm32-unknown-unknown -p gproxy-example-edge --lib
+  -p gproxy-protocol -p gproxy-client -p gproxy-client-sdk -p gproxy-upstream -p gproxy-channel \
+  -p gproxy-convert -p gproxy-lite \
+  --features gproxy-client/fetch,gproxy-client/workers
 ```
 
 Console and docs:

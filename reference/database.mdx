@@ -11,16 +11,13 @@ than one instance or plan backups.
 ## Database
 
 The database holds all configuration, identities, usage and logs. The native
-binary (`gproxy`) opens SQLite, PostgreSQL or MySQL; the Cloudflare Workers
-host opens D1 or libSQL.
+binary (`gproxy`) opens SQLite, PostgreSQL or MySQL.
 
 | Backend | Connection | Availability |
 | --- | --- | --- |
 | SQLite (default) | `<data-dir>/gproxy.db`, or a file path or `sqlite://` URL in `--dsn` | native binary, always compiled in |
 | PostgreSQL | `postgres://…` in `--dsn` | native binary, `postgres` feature (on by default) |
 | MySQL | `mysql://…` in `--dsn` | native binary, `mysql` feature (on by default) |
-| D1 | the Worker's D1 binding (`DB` by default) | Workers host |
-| libSQL / Turso | a `libsql://` or `https://` URL in `GPROXY_DATABASE_URL`, token in `GPROXY_LIBSQL_TOKEN` | Workers host |
 
 MySQL must be 8.0.13 or later, which is the first version that accepts JSON
 default expressions. The PostgreSQL and MySQL drivers are built with TLS
@@ -44,12 +41,7 @@ and then lose all of it.
 
 A backend that the build does not include is refused at startup, with an
 error that names the feature that provides it. You find out when the process
-starts, not at the first request. The native binary also refuses D1 and
-libSQL, which only the Workers host can open; see
-[Cloudflare Workers](/deployment/edge) for its bindings. In the Workers host,
-`GPROXY_DATABASE_URL` takes precedence over the D1 binding. libSQL reaches the
-database over HTTP with the same fetch transport the Worker uses for upstream
-calls.
+starts, not at the first request.
 
 ### Schema synchronization
 
@@ -76,16 +68,14 @@ Synchronization does not:
 - change a column's type, convert its data, or change an existing foreign key.
 
 Those changes need an explicit migration, and GPROXY does not guarantee that a
-migration runs in a single transaction on every native backend.
+migration runs in a single transaction on every backend.
 
-The synchronization report lists warnings, for example type differences on
-D1. An empty list does not prove that every change was applied. Read the
+The synchronization report lists warnings. An empty list does not prove that every change was applied. Read the
 diagnostics in the log before you treat a startup as complete.
 
 ### Store API and batches
 
-Native SeaORM connections and Cloudflare D1 are accessed through the same
-store API. Every entity accessor goes through one generic repository, so
+Every backend is accessed through the same store API. Every entity accessor goes through one generic repository, so
 ordinary CRUD is not written per table, and each method runs as one atomic
 batch. Creating the store does not open a database or change the schema.
 
@@ -93,8 +83,8 @@ Some properties of this API that callers rely on:
 
 - Reads return results in input order, keep duplicates, and return `None` for
   a missing id, so a caller can match each result to its request.
-- A key predicate is split so that each statement stays under D1's limit of
-  100 bound parameters. The parts still run in the same batch. SQL written by a
+- A key predicate is split so that each statement stays within the
+  connection's bound-parameter limit, or 1,000 where the driver reports none. The parts still run in the same batch. SQL written by a
   caller is not split, and the database's own request and size limits still
   apply.
 - An SQL error rolls back a transactional write. A conditional write that
@@ -109,9 +99,8 @@ Some properties of this API that callers rely on:
 Money and limits are stored as scaled integers, not floating point. One unit
 is `0.000000001`, and the representable range is about ±9.2 billion.
 
-The SQL columns are `BIGINT`. The entities pass these values across D1's
-JavaScript boundary as text, so that comparison, ordering and addition stay
-numeric inside the database; JSON uses decimal strings for the same reason.
+The SQL columns are `BIGINT`, so that comparison, ordering and addition stay
+numeric inside the database; JSON carries the values as decimal strings.
 
 Arithmetic is done in a decimal type and rounded once, on the complete
 settlement, with ties rounded to even. Before a counter is incremented,
@@ -127,13 +116,11 @@ durable ledger; anything that must survive goes to the database.
 | --- | --- | --- |
 | Memory | default in the native binary (`memory` feature) | nothing; one process |
 | Redis / Valkey | `GPROXY_REDIS_URL`; the binary must be built with the `redis` feature | all instances using the same Redis |
-| Database | default in the Workers host | all isolates using the same database |
 
 The native binary connects to Redis at startup and exits if it cannot. Rate
 limits are counted in the cache, so an instance that cannot reach Redis would
 otherwise accept traffic only to reject each rate-limited request. The
-database-backed cache is only for the Workers host; the native binary refuses
-it. The default feature set, which release binaries use, does not include
+default feature set, which release binaries use, does not include
 `redis` or `s3`; a deployment that needs either builds its own binary (see
 [Building](/development/building)).
 
@@ -171,8 +158,8 @@ the operator would not see it.
 
 ### Running more than one instance
 
-Several instances need a shared cache: Redis for native instances, or the
-database-backed cache on Workers. With a per-process cache each instance
+Several instances need a shared cache, which is Redis. With a per-process
+cache each instance
 counts its own rate limits, each refreshes the same OAuth token, and none of
 them sees the others' configuration invalidations.
 
@@ -183,18 +170,6 @@ case.
 If several deployments or environments use one Redis server, give each its
 own namespace (the default is `gproxy`). The notification channel name
 includes the database number, because Redis Pub/Sub ignores `SELECT`.
-
-### Database-backed cache
-
-A Workers isolate has no long-lived process and no Redis, so the Workers host
-keeps the cache in three tables of its D1 or libSQL database. Expiry is
-compared in SQL, so all isolates on one database agree on which entries are
-live.
-
-This backend has no notification transport. A subscription yields the initial
-resync hint and nothing after it. Instead, the Workers host reads the
-configuration revision at the start of every request; that is its whole
-synchronization mechanism.
 
 ## Configuration synchronization
 
@@ -236,10 +211,10 @@ serving.
 
 File storage is optional and disabled until you configure a backend.
 
-| Backend | Selected by | Native binary | Workers host |
-| --- | --- | --- | --- |
-| Local filesystem | `--file-storage-dir` (`fs` feature, on by default) | yes | no |
-| S3-compatible, including R2 | the `[file_storage]` block (`s3` feature) | yes | yes |
+| Backend | Selected by |
+| --- | --- |
+| Local filesystem | `--file-storage-dir` (`fs` feature, on by default) |
+| S3-compatible, including R2 | the `[file_storage]` block (`s3` feature) |
 
 It stores the bodies of publications (the bytes served at
 `/publications/{id}`) and downloaded tokenizer vocabularies. File metadata and
@@ -261,7 +236,6 @@ host where it returns 404.
   online backup. Keep the master key together with the copy; credential
   secrets in a sealed database cannot be read without it.
 - PostgreSQL and MySQL: use the database's own dump tools.
-- D1 and libSQL / Turso: use the platform's snapshots.
 - Logical export: `gproxy export --out config.json --include-secrets`. The
   export contains configuration, not history; identities, usage and captures
   are not included. See

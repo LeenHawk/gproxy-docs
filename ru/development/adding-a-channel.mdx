@@ -1,6 +1,6 @@
 ---
 title: "Добавление канала"
-description: "Как устроен канал v4: контракт BaseChannel, необязательные трейты возможностей, шаги от Cargo-фичи до зарегистрированного канала и выпуск канала вне этого репозитория."
+description: "Как устроен канал v4: контракт UpstreamKind и BaseChannel, необязательные трейты возможностей, шаги от Cargo-фичи до зарегистрированного канала и выпуск канала вне этого репозитория."
 ---
 
 Это руководство для тех, кто хочет подключить к GPROXY ещё не поддерживаемый
@@ -18,14 +18,15 @@ upstream: каналом в этом репозитории или канало�
 Канал может находиться в одном из двух мест:
 
 - В этом репозитории, как модуль `gproxy-channel` за собственной Cargo-фичей,
-  добавленный через pull request. Тогда он доступен всем хостам, включая
-  Workers. См. [Добавление канала в этот репозиторий](#adding-a-channel-to-this-repository).
-- В вашем крейте, как тип, реализующий `BaseChannel` по публичному контракту и
-  подключённый к нативному бинарнику или Worker, которые в остальном совпадают
-  со стандартными. В этом репозитории ничего менять не нужно. См.
+  добавленный через pull request. Тогда он доступен всем хостам.
+  См. [Добавление канала в этот репозиторий](#adding-a-channel-to-this-repository).
+- В вашем крейте, как тип, реализующий `UpstreamKind` и `BaseChannel` по
+  публичному контракту и
+  подключённый к бинарнику, который в остальном совпадает
+  со стандартным. В этом репозитории ничего менять не нужно. См.
   [Вне этого репозитория](#outside-this-repository).
 
-Трейт и способ его реализации в обоих случаях одинаковы, различается только
+Трейты и способ их реализации в обоих случаях одинаковы, различается только
 регистрация. По умолчанию ни один конкретный канал не компилируется.
 
 <a id="when-you-need-a-channel"></a>
@@ -45,8 +46,39 @@ upstream-сервису: путь, зависящий от операции; т�
 
 ## Контракт BaseChannel
 
-`BaseChannel` — единственный обязательный трейт, а `id` — его единственный
-обязательный метод. У каждой операции протокола есть свой асинхронный метод с
+Канал реализует два трейта в двух блоках `impl`:
+
+- `gproxy_upstream::UpstreamKind` содержит идентичность и сторону учётной
+  записи: `id`, а также `display_name`, `login_modes`, `credential_kinds`,
+  `validate_credential_secret`, `initial_credential_expiry`,
+  `default_connection`, `default_connection_for`, `credential_refresh`,
+  `oauth_authorization_code` и `oauth_device_code`. Обязателен только `id`.
+- `gproxy_channel::channel::BaseChannel` расширяет `UpstreamKind` и содержит
+  сторону моделей: дескриптор, подготовку запроса, операции, квоты, расход и
+  сервисы. Обязательных методов в нём нет.
+
+```rust
+use gproxy_channel::channel::BaseChannel;
+use gproxy_upstream::UpstreamKind;
+
+pub struct Acme;
+
+impl UpstreamKind for Acme {
+    fn id(&self) -> &'static str {
+        "acme"
+    }
+    // plus the account-side methods the channel overrides
+}
+
+impl BaseChannel for Acme {
+    // descriptor, native_dialects, prepare, operations, quota, services
+}
+```
+
+Сторона учётной записи вынесена в крейт `gproxy-upstream`, потому что на ней
+строятся и MCP-серверы; см. [Архитектуру](/ru/development/architecture#workspace-crates).
+
+У каждой операции протокола есть свой асинхронный метод с
 реализацией по умолчанию: собрать запрос через `prepare` (HTTP) или
 `prepare_connect` (WebSocket) и отправить его через клиент, назначенный хостом.
 
@@ -64,7 +96,10 @@ the host selects provider, credential, client
     or the channel's own multi-call flow through the same client
 ```
 
-Хост передаёт заимствованные представления, по возможности публичные:
+Хост передаёт заимствованные представления, по возможности публичные.
+`ProviderView`, `CredentialView` и `CredentialContext` находятся в
+`gproxy_upstream`, а `PrepareContext` и `OperationContext` — в
+`gproxy_channel::channel`.
 
 - `ProviderView`: `id`, `channel`, необязательный `base_url` и JSON `config`,
   который канал разбирает в собственные типизированные настройки.
@@ -108,7 +143,7 @@ the host selects provider, credential, client
 - Переопределение адреса — это полный URL метода. Оно заменяет и базовый URL,
   и путь канала по умолчанию; к нему ничего не дописывается.
 - Ответ с кодом не 2xx возвращается как ответ: со статусом, заголовками и
-  лениво читаемым телом. Вариант ошибки предназначен для вызовов возможностей
+  лениво читаемым телом. Ошибка (`gproxy_upstream::UpstreamError`) предназначена для вызовов возможностей
   (вход, обновление, квоты) и для промежуточного обмена внутри
   многошаговой операции, где неудачный ответ не является возвращаемым.
 - `RefreshRejected` означает, что upstream окончательно отклонил учётные
@@ -128,7 +163,9 @@ the host selects provider, credential, client
 ## Необязательные возможности
 
 Каждая возможность — отдельный трейт за методом доступа, который по умолчанию
-возвращает `None`. Канал реализует те, что есть у его upstream, и они не
+возвращает `None`. Методы доступа для входа и обновления (`credential_refresh`,
+`oauth_authorization_code`, `oauth_device_code`) принадлежат `UpstreamKind`, а
+их трейты находятся в `gproxy_upstream`; остальные — методы `BaseChannel`. Канал реализует те, что есть у его upstream, и они не
 зависят друг от друга: канал может сообщать окна квот, не предлагая сброса.
 
 | Метод доступа | Назначение |
@@ -159,7 +196,8 @@ upstream это указал, сколько ждать. Реализация п
 ### Учётные данные и обновление
 
 Секреты, которые у оператора уже есть, проходят через обычный API создания и
-изменения учётных данных. Проверяйте их формат в `validate_credential_secret`.
+изменения учётных данных. Проверяйте их формат в `validate_credential_secret`
+(этот метод и `initial_credential_expiry` принадлежат `UpstreamKind`).
 Если перед первым использованием нужен сетевой обмен (например, ключ
 сервисного аккаунта ещё не обменян на токен), верните `Some(0)` из
 `initial_credential_expiry` и реализуйте обмен через `CredentialRefresh`.
@@ -196,8 +234,9 @@ upstream и реализовать `refresh_with_reason`, если эндпои�
 учётных данных; по нему консоль показывает соответствующий переключатель).
 
 Состояние между запросами хост ограничивает одним провайдером и одними
-учётными данными и записывает через compare-and-swap. Состояние привязки по
-умолчанию отклоняет любую запись, так что канал получает состояние, только если
+учётными данными и записывает через compare-and-swap
+(`gproxy_upstream::UpstreamState`). Состояние привязки по умолчанию, `NoState`,
+отклоняет любую запись, так что канал получает состояние, только если
 его предоставил хост.
 
 <a id="login-state-provider-state"></a>
@@ -269,7 +308,8 @@ upstream и реализовать `refresh_with_reason`, если эндпои�
    справочник API поставщика или исходники CLI в `samples/`. Код другого
    канала источником не считается.
 
-4. Реализуйте `BaseChannel`. Минимум — `id`, `native_dialects` и `prepare`.
+4. Реализуйте `UpstreamKind` и `BaseChannel`. Минимум — `id` в первом и
+   `native_dialects` и `prepare` во втором.
    Структура — единичная и без состояния, так что один экземпляр обслуживает
    все провайдеры этого канала.
 
@@ -291,11 +331,12 @@ upstream и реализовать `refresh_with_reason`, если эндпои�
    заголовки CLI. Передайте эти заголовки идентичности в список отбрасываемых
    у функции пересылки, чтобы клиент не мог их подделать. Если upstream
    распознаёт клиентов по отпечатку, верните подключение по умолчанию из
-   `default_connection`; явно заданный профиль у учётных данных или провайдера
+   `default_connection` (метод `UpstreamKind`); явно заданный профиль у учётных данных или провайдера
    всё равно имеет приоритет.
 
 6. Реализуйте возможности отдельными типами и возвращайте их из методов
-   доступа. У каждого трейта свои правила: обновление возвращает полную замену,
+   доступа: вход и обновление — в `impl UpstreamKind`, остальное — в
+   `impl BaseChannel`. У каждого трейта свои правила: обновление возвращает полную замену,
    а не слияние; измерения квоты берутся из сведений о тарифе в метаданных
    учётных данных, а не из сети; наблюдатель расхода делает накопительные
    снимки, а его `finish` получает от хоста признак, завершился ли поток
@@ -323,7 +364,6 @@ upstream и реализовать `refresh_with_reason`, если эндпои�
    | --- | --- |
    | `crates/gproxy-sdk/Cargo.toml` | `acme = ["gproxy-channel/acme"]`, а также `"acme"` в список `channels` |
    | `crates/gproxy/Cargo.toml` | `acme = ["gproxy-sdk/acme"]` |
-   | `crates/gproxy-host-edge/Cargo.toml` | `acme = ["gproxy-sdk/acme"]` |
    | `crates/gproxy-app/src/v3/channels.rs` | id в `V4_CHANNELS` (и длину массива), чтобы импорт v3 его принимал |
 
    Повторяющийся id отклоняется при регистрации. Провайдер, ссылающийся на
@@ -347,8 +387,8 @@ cargo test   -p gproxy-channel --all-features
 В `gproxy-channel` по умолчанию не включён ни один канал, поэтому этим
 командам нужен `--all-features`; без него не скомпилируется ни один канал.
 Каждый канал должен собираться и для нативных целей, и для
-`wasm32-unknown-unknown`, благодаря чему хост Workers несёт полный набор
-каналов. Замечания линтера исправляйте в коде, а не через `#[allow]`.
+`wasm32-unknown-unknown`: `gproxy-channel` можно использовать без шлюза, и CI
+проверяет его для этой цели. Замечания линтера исправляйте в коде, а не через `#[allow]`.
 
 После слияния больше ничего не требуется: провайдеры нового канала появляются
 в `GET /admin/api/channels` вместе с дескриптором канала, и консоль строит по
@@ -359,13 +399,12 @@ cargo test   -p gproxy-channel --all-features
 
 ## Вне этого репозитория
 
-Канал может жить в собственном крейте и выпускаться без форка, для любого из
-двух хостов. Нативный бинарник при этом остаётся стандартным `gproxy` (те же
-команды, флаги, консоль и база данных), а Worker — стандартным GPROXY Worker;
-в каждом ваш канал зарегистрирован рядом со встроенными.
-`examples/channel-plugin` содержит полный рабочий набор из трёх крейтов: канал с
+Канал может жить в собственном крейте и выпускаться без форка. Бинарник при
+этом остаётся стандартным `gproxy` (те же команды, флаги, консоль и база
+данных), а ваш канал зарегистрирован рядом со встроенными.
+`examples/channel-plugin` содержит полную рабочую пару крейтов: канал с
 API-ключом, совместимый с OpenAI, в одном файле, и короткую точку входа для
-каждого хоста. CI собирает пример при каждом изменении, так что он
+бинарника. CI собирает пример при каждом изменении, так что он
 соответствует текущему контракту.
 
 <a id="project-layout"></a>
@@ -374,14 +413,12 @@ API-ключом, совместимый с OpenAI, в одном файле, и
 
 ```text
 my-gproxy/
-  channel/    the channel: a unit struct implementing BaseChannel, no host
+  channel/    the channel: a unit struct implementing UpstreamKind and BaseChannel, no host
   native/     the gproxy binary, carrying it
-  edge/       the Cloudflare Worker, carrying it (only if you deploy there)
 ```
 
-Канал вынесен в отдельный крейт, чтобы от него могли зависеть оба хоста. Сам
-он не должен зависеть от нативного хоста: `gproxy` не собирается под wasm, и
-тогда не собрался бы и Worker.
+Канал вынесен в отдельный крейт: он зависит от публичного контракта, а не от
+хоста.
 
 ```rust
 // native/src/main.rs
@@ -396,33 +433,7 @@ fn main() -> ExitCode {
 аргументы, создаёт среду выполнения и запускается. Программа со своей средой
 выполнения вызывает вместо него `gproxy::run_with(cli, channels)`.
 
-```rust
-// edge/src/lib.rs
-#[cfg(target_arch = "wasm32")]
-mod entry {
-    use std::sync::Arc;
-
-    use worker::{Context, Env, HttpRequest, event};
-
-    #[event(fetch)]
-    async fn fetch(
-        request: HttpRequest,
-        env: Env,
-        ctx: Context,
-    ) -> worker::Result<gproxy_host_edge::Response> {
-        gproxy_host_edge::fetch_with(request, env, ctx, || vec![Arc::new(my_channel::Acme)])
-            .await
-    }
-}
-```
-
-`fetch_with` — это весь стандартный обработчик fetch. В модуле Worker может
-быть только один `#[event(fetch)]`, поэтому крейт edge зависит от
-`gproxy-host-edge` без фичи `entry`, которая и объявляет стандартный
-обработчик. Замыкание выполняется один раз на isolate, когда первый запрос
-собирает экземпляр.
-
-В обоих хостах канал, чей `id` совпадает со встроенным, заменяет встроенный.
+Канал, чей `id` совпадает со встроенным, заменяет встроенный.
 Так выпускают исправленную копию существующего канала.
 
 <a id="dependencies"></a>
@@ -435,6 +446,7 @@ mod entry {
 # channel/Cargo.toml
 [dependencies]
 gproxy-channel = { path = "../../gproxy/crates/gproxy-channel" }
+gproxy-upstream = { path = "../../gproxy/crates/gproxy-upstream" }
 gproxy-protocol = { path = "../../gproxy/crates/gproxy-protocol", features = ["exhaustive"] }
 http = "1"
 serde = { version = "1", features = ["derive"] }
@@ -449,21 +461,10 @@ gproxy = { path = "../../gproxy/crates/gproxy", features = ["channels", "memory"
 ```
 
 ```toml
-# edge/Cargo.toml
-[lib]
-crate-type = ["cdylib", "rlib"]
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-my-channel = { path = "../channel" }
-gproxy-host-edge = { path = "../../gproxy/crates/gproxy-host-edge", default-features = false, features = ["channels", "d1", "libsql"] }
-worker = { version = "0.8", default-features = false, features = ["http"] }
-```
-
-```toml
 # Cargo.toml, the workspace root
 [workspace]
 resolver = "3"
-members = ["channel", "native", "edge"]
+members = ["channel", "native"]
 
 # Copied from the checkout's root Cargo.toml: a patch applies only in the
 # workspace that declares it, and the build depends on these.
@@ -481,43 +482,23 @@ btls-sys = { git = "https://github.com/0x676e67/btls", rev = "609f955e6de4df4a21
 консоль встраивается в бинарник из `crates/gproxy-host-axum/assets/web`, а этот
 каталог не хранится в репозитории. Сначала выполните `pnpm install && pnpm build`
 в `console/` рабочей копии или уберите `embedded-console` из фич, чтобы собрать
-бинарник без консоли. Сборка Worker ниже тоже берёт консоль из рабочей копии.
+бинарник без консоли.
 
-Списки фич `gproxy` и `gproxy-host-edge` работают так же, как в стандартных
-сборках: `channels` включает все встроенные каналы, а можно перечислить только
+Список фич `gproxy` работает так же, как в стандартной
+сборке: `channels` включает все встроенные каналы, а можно перечислить только
 те, что нужны развёртыванию.
-
-<a id="building-the-worker"></a>
-
-### Сборка Worker
-
-`deploy/cloudflare` из рабочей копии собирает любой крейт Worker, а не только
-стандартный. Укажите на свой крейт абсолютным путём и разверните как обычно:
-
-```sh
-cd ../gproxy/deploy/cloudflare
-pnpm install
-GPROXY_EDGE_CRATE=/absolute/path/to/my-gproxy/edge pnpm run build
-pnpm run deploy
-```
-
-Команда запускает `worker-build` в вашем крейте, удаляет отладочные секции и
-копирует Worker к `wrangler.toml` рабочей копии, ресурсам консоли и файлу их
-заголовков. Всё из [руководства по edge-развёртыванию](/ru/deployment/edge)
-(привязка D1, секреты, `GPROXY_CONFIG`) применяется без изменений.
-
-Канал для Worker должен собираться под `wasm32-unknown-unknown`, как и все
-встроенные каналы. На практике это значит: без сетевого `tokio`, без доступа к
-файловой системе, `web-time` вместо `std::time::Instant`, и все запросы — через
-клиент, предоставленный хостом. Проверка:
-`cargo check --target wasm32-unknown-unknown -p my-channel`.
 
 <a id="the-public-contract"></a>
 
 ### Публичный контракт
 
-Всё, что канал реализует или получает, публично в `gproxy_channel::channel`:
-`BaseChannel`, типы контекстов и представлений, все трейты возможностей, типы
+Всё, что канал реализует или получает, публично в двух крейтах.
+`gproxy_upstream` — сторона учётной записи: `UpstreamKind`, `ProviderView`,
+`CredentialView`, `CredentialContext`, `LoginMode`, `ConfigKey`, `ConfigKeyKind`, `UpstreamError`,
+`UpstreamFuture`, `UpstreamState`, а также трейты входа и обновления
+(`OAuthAuthorizationCode`, `OAuthDeviceCode`, `CredentialRefresh`) с их типами.
+`gproxy_channel::channel` — сторона моделей: `BaseChannel`, `PrepareContext`,
+`OperationContext`, трейты квот, расхода, отказов и сервисов, типы
 дескриптора (включая `HOST_CONFIG_KEYS`) и вспомогательные функции для
 запросов: `forwardable` и `HeaderAllowlist` для клиентских заголовков,
 `insert_configured` для статического заголовка, заданного оператором,
@@ -549,7 +530,7 @@ pnpm run deploy
   обновлений работает.
 - Контракт следует версии gproxy. На практике изменения только добавляются
   (большинство типов протокола помечены `#[non_exhaustive]`, а новые методы
-  `BaseChannel` имеют реализации по умолчанию), но собирайте под ту версию,
+  `UpstreamKind` и `BaseChannel` имеют реализации по умолчанию), но собирайте под ту версию,
   которую запускаете. Пишите
   `ChannelCapabilities { quota_query: true, ..Default::default() }`, а не
   перечисляйте все поля, чтобы новая возможность не сломала сборку.
@@ -570,11 +551,13 @@ pnpm run deploy
 2. Добавьте фичу в `crates/gproxy-channel/Cargo.toml`, строку в `channels!` в
    `src/channels/mod.rs` и фичу в каждый `cfg(any(...))` в
    `src/channels/shared/`, который использует канал.
-3. Напишите `src/channels/<id>.rs` или `src/channels/<id>/`; переопределите
-   `descriptor`.
-4. Пробросьте фичу в четыре места из шага 9: `crates/gproxy-sdk/Cargo.toml`
-   (фича и список `channels`), `crates/gproxy/Cargo.toml`,
-   `crates/gproxy-host-edge/Cargo.toml` и `V4_CHANNELS` в
+3. Напишите `src/channels/<id>.rs` или `src/channels/<id>/`: один
+   `impl UpstreamKind` (`id` и сторона учётной записи) и один
+   `impl BaseChannel` (сторона моделей); переопределите `descriptor`. Тип
+   ошибки — `gproxy_upstream::UpstreamError`.
+4. Пробросьте фичу в три места из шага 9: `crates/gproxy-sdk/Cargo.toml`
+   (фича и список `channels`), `crates/gproxy/Cargo.toml`
+   и `V4_CHANNELS` в
    `crates/gproxy-app/src/v3/channels.rs` (увеличьте длину массива).
 5. Если канал учитывает `allow_paid_usage` или обслуживает WebSocket,
    установите `paid_usage` / `websocket` в возможностях его дескриптора.
@@ -590,20 +573,20 @@ pnpm run deploy
 
 Канал вне репозитория:
 
-1. Скопируйте `examples/channel-plugin` за пределы рабочей копии: `channel/`
-   всегда, `native/` и `edge/` — для нужных хостов. Добавьте корневой
+1. Скопируйте `examples/channel-plugin` (`channel/` и `native/`) за пределы
+   рабочей копии. Добавьте корневой
    `Cargo.toml` workspace, показанный выше, с таблицей `[patch.crates-io]`, и
    скопируйте `Cargo.lock`.
 2. В `Cargo.toml` каждого крейта задайте собственные `version` и
    `edition = "2024"` вместо ключей `*.workspace = true` и замените каждую
    зависимость `workspace = true` зависимостью по пути, как показано выше.
+   Крейт канала зависит и от `gproxy-channel`, и от `gproxy-upstream`.
 3. Переименуйте пакеты, бинарник, структуру и `ID`. Выберите id, который не
    использует ни один встроенный канал, если только цель не в том, чтобы его
    заменить.
-4. Реализуйте только через `gproxy_channel::channel`; не используйте
+4. Реализуйте только через `gproxy_upstream` и `gproxy_channel::channel`; не
+   используйте
    `channels::shared`.
-5. Выполните `cargo clippy --all-targets -- -D warnings`; для Worker также
-   `cargo check --target wasm32-unknown-unknown -p <channel> -p <edge>`.
-6. Запустите нативный бинарник на новом `GPROXY_DATA_DIR` или Worker через
-   `wrangler dev --local` из `deploy/cloudflare` после описанной выше сборки и
+5. Выполните `cargo clippy --all-targets -- -D warnings`.
+6. Запустите нативный бинарник на новом `GPROXY_DATA_DIR` и
    убедитесь, что `GET /admin/api/channels` содержит этот id.

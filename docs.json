@@ -26,7 +26,7 @@
             "pages": [
               "download",
               "deployment/containers",
-              "deployment/edge",
+              "deployment/lite",
               {
                 "group": "Upgrading",
                 "pages": [
@@ -51,6 +51,7 @@
               "guides/models",
               "guides/users-and-keys",
               "guides/permissions",
+              "guides/mcp-servers",
               "guides/rules",
               "guides/claude-caching",
               "guides/cli-clients",
@@ -113,7 +114,7 @@
             "pages": [
               "zh-cn/download",
               "zh-cn/deployment/containers",
-              "zh-cn/deployment/edge",
+              "zh-cn/deployment/lite",
               {
                 "group": "版本升级",
                 "pages": [
@@ -138,6 +139,7 @@
               "zh-cn/guides/models",
               "zh-cn/guides/users-and-keys",
               "zh-cn/guides/permissions",
+              "zh-cn/guides/mcp-servers",
               "zh-cn/guides/rules",
               "zh-cn/guides/claude-caching",
               "zh-cn/guides/cli-clients",
@@ -201,7 +203,7 @@
             "pages": [
               "zh-tw/download",
               "zh-tw/deployment/containers",
-              "zh-tw/deployment/edge",
+              "zh-tw/deployment/lite",
               {
                 "group": "版本升級",
                 "pages": [
@@ -226,6 +228,7 @@
               "zh-tw/guides/models",
               "zh-tw/guides/users-and-keys",
               "zh-tw/guides/permissions",
+              "zh-tw/guides/mcp-servers",
               "zh-tw/guides/rules",
               "zh-tw/guides/claude-caching",
               "zh-tw/guides/cli-clients",
@@ -288,7 +291,7 @@
             "pages": [
               "ru/download",
               "ru/deployment/containers",
-              "ru/deployment/edge",
+              "ru/deployment/lite",
               {
                 "group": "Обновление версий",
                 "pages": [
@@ -313,6 +316,7 @@
               "ru/guides/models",
               "ru/guides/users-and-keys",
               "ru/guides/permissions",
+              "ru/guides/mcp-servers",
               "ru/guides/rules",
               "ru/guides/claude-caching",
               "ru/guides/cli-clients",
@@ -416,6 +420,22 @@
     "indexing": "navigable"
   },
   "redirects": [
+    {
+      "source": "/deployment/edge",
+      "destination": "/deployment/lite"
+    },
+    {
+      "source": "/zh-cn/deployment/edge",
+      "destination": "/zh-cn/deployment/lite"
+    },
+    {
+      "source": "/zh-tw/deployment/edge",
+      "destination": "/zh-tw/deployment/lite"
+    },
+    {
+      "source": "/ru/deployment/edge",
+      "destination": "/ru/deployment/lite"
+    },
     {
       "source": "/introduction/what-is-gproxy",
       "destination": "/introduction/concepts"

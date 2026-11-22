@@ -1,6 +1,6 @@
 ---
 title: "Сборка из исходного кода"
-description: "Сборка всех целей GPROXY v4 из исходного кода (CLI с консолью и без неё, настольное и мобильное приложение, Worker), проверки CI и публикация релиза."
+description: "Сборка всех целей GPROXY v4 из исходного кода (CLI с консолью и без неё, настольное и мобильное приложение), проверки CI и публикация релиза."
 ---
 
 Здесь описано, как собрать GPROXY самостоятельно, что содержит каждый
@@ -31,10 +31,7 @@ description: "Сборка всех целей GPROXY v4 из исходного
 | Android (x86_64, aarch64) | ZIP, Termux DEB | только APK |
 | OpenHarmony / HarmonyOS NEXT | — | ARM64 HAP |
 
-Рабочий процесс выпуска также публикует исполняемый файл для serverless
-(`gproxy-serverless-linux-<arch>-musl` для x86_64 и aarch64), пакет для
-Cloudflare Workers (`gproxy-edge-cloudflare.zip`) и контейнерные образы GNU и
-musl. Для пакетов приложения создаются аттестации происхождения сборки,
+Рабочий процесс выпуска также публикует контейнерные образы GNU и musl. Для пакетов приложения создаются аттестации происхождения сборки,
 размещённые на GitHub. Публичные вложения релиза ограничены пакетами,
 `manifest.json` и `SHA256SUMS`; отдельные файлы контрольных сумм и данные о
 происхождении сборки остаются внутренними входными данными CI.
@@ -125,9 +122,6 @@ HTTP-хоста и хоста Tauri, и следующая сборка Rust е�
 cargo build -p gproxy --release --no-default-features \
   --features embedded-console,memory,fs,codex,claudecode,openai,custom
 ```
-
-В крейте есть также бинарник `gproxy-serverless` для serverless-платформ; ему
-нужна фича `postgres`.
 
 <a id="headless-cli"></a>
 
@@ -222,27 +216,6 @@ TARGET_OS=linux TARGET_TRIPLE=x86_64-unknown-linux-gnu \
 
 Пакеты записываются в `dist/release/`.
 
-<a id="cloudflare-workers"></a>
-
-## Cloudflare Workers
-
-Из корня репозитория:
-
-```sh
-rustup target add wasm32-unknown-unknown
-cargo install worker-build
-pnpm --dir console install --frozen-lockfile
-pnpm --dir deploy/cloudflare install
-pnpm --dir deploy/cloudflare build
-pnpm --dir deploy/cloudflare check
-```
-
-`worker-build` компилирует и оптимизирует модуль WebAssembly. `check` выполняет
-пробное развёртывание Wrangler без публикации. Настройка и ограничения среды
-выполнения описаны в разделе [Edge-развёртывание](/ru/deployment/edge), а сборка
-Worker с собственным каналом — в разделе
-[Добавление канала](/ru/development/adding-a-channel#building-the-worker).
-
 <a id="checks-ci-runs"></a>
 
 ## Проверки CI
@@ -258,11 +231,10 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-Дополнительно CI проверяет линтером бинарник serverless и пример внешнего
-канала, которые не входят в участников по умолчанию:
+Дополнительно CI проверяет линтером пример внешнего канала, который не входит
+в участников по умолчанию:
 
 ```sh
-cargo clippy -p gproxy --bin gproxy-serverless --no-default-features --features channels,postgres,embedded-console -- -D warnings
 cargo clippy -p gproxy-example-channel -p gproxy-example-native --all-targets -- -D warnings
 ```
 
@@ -273,28 +245,15 @@ cargo clippy -p gproxy-host-tauri --all-targets -- -D warnings
 cargo test -p gproxy-host-tauri
 ```
 
-WebAssembly: проверка охватывает библиотеки и хосты, поддерживающие эту цель,
-но не CLI и не Tauri. Не запускайте её для всего workspace: оба используют фичу
-`net` из tokio, а mio под эту цель не собирается.
+WebAssembly: эту цель поддерживают только крейты без состояния. CI проверяет
+их с транспортом `fetch` и всеми feature каналов; полный список feature — в
+`.github/workflows/ci.yml`.
 
 ```sh
 cargo check --target wasm32-unknown-unknown \
-  -p gproxy-protocol -p gproxy-store -p gproxy-seaorm -p gproxy-client \
-  -p gproxy-cache -p gproxy-channel -p gproxy-core -p gproxy-file \
-  -p gproxy-tokenizer -p gproxy-sdk -p gproxy-app -p gproxy-host-axum \
-  -p gproxy-host-edge
-```
-
-CI также проверяет наборы фич не по умолчанию, которые README крейтов
-называют совместимыми с wasm, отдельным вызовом для каждого, поскольку cargo
-объединяет фичи в пределах одного вызова:
-
-```sh
-cargo check --target wasm32-unknown-unknown -p gproxy-sdk --features libsql
-cargo check --target wasm32-unknown-unknown -p gproxy-cache --all-features
-cargo check --target wasm32-unknown-unknown -p gproxy-file --no-default-features --features s3
-cargo check --target wasm32-unknown-unknown -p gproxy-channel --all-features --lib
-cargo check --target wasm32-unknown-unknown -p gproxy-example-edge --lib
+  -p gproxy-protocol -p gproxy-client -p gproxy-client-sdk -p gproxy-upstream -p gproxy-channel \
+  -p gproxy-convert -p gproxy-lite \
+  --features gproxy-client/fetch,gproxy-client/workers
 ```
 
 Консоль и документация:

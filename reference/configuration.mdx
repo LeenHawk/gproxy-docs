@@ -200,9 +200,8 @@ Some fields have no flag or variable because they are not something a
 container would override: `session_ttl_secs`, the whole `[oauth]` block, and
 the S3 details.
 
-The same document is read by the other hosts: the Workers host reads it as
-JSON in `GPROXY_CONFIG`, and the desktop application reads it as `gproxy.toml`
-in its data directory. There is one schema for all of them. Every field, variant
+The desktop application reads the same document as `gproxy.toml` in its data
+directory. There is one schema for both. Every field, variant
 and default is listed in [Configuration schema](/reference/configuration-schema).
 
 ## Secrets at rest

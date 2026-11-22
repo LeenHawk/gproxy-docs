@@ -14,7 +14,7 @@ GPROXY 是一個自行部署的大型語言模型 API 閘道。上游帳號（AP
 
 GPROXY 不執行模型，推論由上游服務完成。它也無法替上游補上缺少的能力：把請求轉換成另一種格式，並不會讓一個不支援工具呼叫或圖片輸入的模型變得支援。
 
-它可以作為附 Web 控制台的原生服務（CLI 或容器）執行，也可以作為內建控制台的桌面或手機應用程式使用，或者搭配託管資料庫部署在 Cloudflare Workers、Netlify 和 Vercel 上。Rust 程式也可以把它當作函式庫嵌入。
+它可以作為附 Web 控制台的原生服務（CLI 或容器）執行，也可以作為內建控制台的桌面或手機應用程式使用。Rust 程式也可以把它當作函式庫嵌入。
 
 ## 一個例子
 
@@ -32,7 +32,7 @@ curl http://127.0.0.1:8787/v1/chat/completions \
 ## 本手冊的組織
 
 - [基本概念](/zh-tw/introduction/concepts)說明全書通用的術語：渠道、供應商、憑證、模型路由、閘道 API Key 和規則。
-- 「安裝與升級」介紹各平台的[安裝套件](/zh-tw/download)、[容器](/zh-tw/deployment/containers)、[託管部署](/zh-tw/deployment/edge)，以及從舊版本升級，最常用的是[從 v3 升級到 v4](/zh-tw/deployment/v3-to-v4)。
+- 「安裝與升級」介紹各平台的[安裝套件](/zh-tw/download)和[容器](/zh-tw/deployment/containers)，以及從舊版本升級，最常用的是[從 v3 升級到 v4](/zh-tw/deployment/v3-to-v4)。
 - 「入門」中的[快速開始](/zh-tw/getting-started/quick-start)從一個新實例做到第一個請求成功，[第一個請求](/zh-tw/getting-started/first-request)再用每種協定各送一次。
 - 「管理指南」是日常使用的說明：[供應商與憑證](/zh-tw/guides/providers)、[模型路由](/zh-tw/guides/models)、[使用者與金鑰](/zh-tw/guides/users-and-keys)、[權限與限額](/zh-tw/guides/permissions)、[重寫規則](/zh-tw/guides/rules)、[提示快取](/zh-tw/guides/claude-caching)、[CLI 用戶端](/zh-tw/guides/cli-clients)、[控制台](/zh-tw/guides/console)和[用量與日誌](/zh-tw/guides/observability)。
 - 「參考」列出設定項、端點、計價規則、儲存後端、渠道目錄和 HTTP API。

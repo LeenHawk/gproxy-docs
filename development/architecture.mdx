@@ -36,14 +36,14 @@ users. See [Embedding the SDK](/development/embedding).
 `gproxy-app` is the product layer: who is calling and what they may reach. It owns users,
 gateway API keys, organizations, teams, permissions, rate limits, the OAuth
 issuer and audit, together with the operations that write them. It has no
-router, no runtime and no CLI, so the same code runs behind the native axum
-server and inside a Cloudflare Worker.
+router, no runtime and no CLI, so the same code runs behind the axum server
+and inside the desktop application.
 
 ### host
 
 A host turns a transport into typed calls on the app and turns the results back
-into bytes. There are three: the axum HTTP server, the Cloudflare Workers
-host, and the Tauri desktop and Android application.
+into bytes. There are two: the axum HTTP server, and the Tauri desktop and
+Android application.
 
 Each layer passes a narrowed answer down and the layers below do not revisit
 it. The engine receives a resolved target and a permitted credential set; it
@@ -59,21 +59,24 @@ AGPL-3.0-or-later.
 | --- | --- | --- | --- |
 | `gproxy-protocol` | MIT | Connection modelling (`WireRequest`, `WireResponse`, bodies, framing, sockets), the operation registry, the OpenAI / Claude / Gemini wire types, pairwise conversion, and the host-capability interfaces protocol adaptation needs | Know that channels exist; match URL paths |
 | `gproxy-protocol-macros` | MIT | The `WireBuilder` and `DeclaredFields` derives used by the wire types | |
-| `gproxy-channel` | AGPL | `BaseChannel`, the optional ability traits, and the upstream adapters, one Cargo feature per channel | Depend on the engine or the store; pick a transport backend |
+| `gproxy-upstream` | AGPL | The account side of an upstream: provider and credential views, sign-in, credential refresh, cross-request state, caller identity and generic OAuth (`UpstreamKind`) | Know what the upstream is asked to do (models, tools) |
+| `gproxy-channel` | AGPL | The model side of an upstream: `BaseChannel`, the optional ability traits, and the upstream adapters, one Cargo feature per channel | Depend on the engine or the store; pick a transport backend |
+| `gproxy-convert` | AGPL | What an engine does with one request once it knows the provider: the ingress path table, passthrough-or-convert routing, native endpoints, request preparation, and one driver per protocol family running protocol's adaptation flows over a `Host` (upstream, state store, resource access) | Select a provider or a credential; store anything |
+| `gproxy-lite` | AGPL | The engine for serverless platforms: one access key, providers and credentials from a JSON configuration, all state behind one key-value interface with compare-and-exchange, sign-in endpoints; also the WebAssembly module `deploy/lite` loads | Have a database, users, quotas, pricing or a console; depend on the engine, the store or the hosts |
+| `gproxy-mcp` | AGPL | MCP servers as upstreams: the client towards servers, the endpoint towards callers, scopes, tool nature and the audit record; uses `rmcp`'s types | Own credentials, storage or the HTTP route |
 | `gproxy-client` | MIT | The outbound transport contract (`OutboundClient`) and its `reqwest` / `wreq` implementations, plus the wasm `fetch` and Workers backends | Read the database, pick a credential, convert a protocol |
-| `gproxy-core` | AGPL | The engine: the provider execution snapshot, credential selection, refresh and health inside a permitted set, conversion, rewriting, budgets, pricing, settlement and observation | Resolve a route, check a permission, run a server |
+| `gproxy-core` | AGPL | The engine: the provider execution snapshot, credential selection, refresh and health inside a permitted set, conversion (the drivers of `gproxy-convert` over its own store), rewriting, budgets, pricing, settlement and observation | Resolve a route, check a permission, run a server |
 | `gproxy-store` | MIT | SeaORM entities, batch repositories, schema migration; database backend chosen by feature | |
 | `gproxy-cache` | MIT | TTL state, atomic counters, permits and leases, cross-instance invalidation; Memory and Redis backends | Hold business entities; fall back to local state when the backend fails |
-| `gproxy-seaorm` | MIT | SeaORM batch reads and writes, the D1 binding, type mapping, schema sync | Hold business entities |
+| `gproxy-seaorm` | MIT | SeaORM batch reads and writes, type mapping, schema sync | Hold business entities |
 | `gproxy-tokenizer` | MIT | String to token count against a local shared vocabulary | Parse requests, download, run background work |
 | `gproxy-file` | MIT | Optional local or S3/R2 content storage over OpenDAL | Track file metadata or ownership |
 | `gproxy-sdk` | AGPL | The handle: assembly, `manage()`, `login()`, resolution, sessions, `call()`, `query()`, sync | Contain HTTP server code or identity |
 | `gproxy-client-sdk` | MIT | The caller-side client for programs that call a GPROXY instance, with a versioned language-model IR | |
-| `gproxy-app` | AGPL | Identity, admission, the admin and portal operation families, the OAuth issuer | Contain a transport |
-| `gproxy-host-axum` | AGPL | The route table: HTTP path to operation | Make product decisions of its own |
-| `gproxy-host-edge` | AGPL | The Workers `fetch` handler, which mounts the `gproxy-host-axum` router | Keep a second route table |
+| `gproxy-app` | AGPL | Identity, admission, the admin and portal operation families, the OAuth issuer, the MCP gateway | Contain a transport |
+| `gproxy-host-axum` | AGPL | The native HTTP host: mounts, authentication and the router around the ingress table of `gproxy-convert` | Make product decisions of its own |
 | `gproxy-host-tauri` | AGPL | The desktop and Android application: Tauri IPC for the management and user surfaces, plus an in-process `gproxy-host-axum` data plane on loopback for CLI clients | Implement a data plane of its own |
-| `gproxy` | AGPL | The command line (`gproxy`, and `gproxy-serverless` with the `postgres` feature): environment, configuration file, socket, terminal | Do anything a library could do |
+| `gproxy` | AGPL | The command line (`gproxy`): environment, configuration file, socket, terminal | Do anything a library could do |
 
 `gproxy-host-tauri` is a workspace member but not a default member, so
 `cargo check` and `cargo test` without `--workspace` skip it. Building it needs
@@ -85,15 +88,28 @@ the webkit2gtk, gtk and libsoup development headers. See
 Dependencies point downward only:
 
 ```text
-gproxy, gproxy-host-edge, gproxy-host-tauri
+gproxy, gproxy-host-tauri
         └─ gproxy-host-axum
-              └─ gproxy-app
+              └─ gproxy-app ─ gproxy-mcp
                     └─ gproxy-sdk
                           └─ gproxy-core
-                                ├─ gproxy-channel ─ gproxy-client ─ gproxy-protocol
-                                ├─ gproxy-store ─ gproxy-cache, gproxy-seaorm
-                                └─ gproxy-tokenizer, gproxy-file
+                                ├─ gproxy-convert ─ gproxy-channel ─ gproxy-upstream ─ gproxy-client ─ gproxy-protocol
+                                ├─ gproxy-store ─ gproxy-seaorm
+                                └─ gproxy-cache, gproxy-tokenizer, gproxy-file
+
+gproxy-lite
+        └─ gproxy-convert ─ gproxy-channel ─ gproxy-upstream ─ gproxy-client ─ gproxy-protocol
 ```
+
+`gproxy-lite` is a second, smaller engine on the same stateless crates. It
+shares no code with `gproxy-core` except through them: both run the drivers of
+`gproxy-convert`, each over its own implementation of the three capabilities
+(`Upstream`, `StateStore`, `ResourceAccess`).
+
+`gproxy-upstream` is the base both kinds of upstream build on: `gproxy-channel`
+adds the model side and `gproxy-mcp` the tool side. `gproxy-mcp` depends on
+`gproxy-upstream`, `gproxy-client` and `gproxy-protocol`, not on the engine;
+`gproxy-app` joins it to the instance.
 
 `gproxy-client-sdk` is used by programs that call a GPROXY instance. It
 depends only on `gproxy-protocol`, `gproxy-client` and `gproxy-file`, not on
@@ -147,10 +163,6 @@ A data-plane request through the native server goes like this:
 8. The host writes the response. For a streamed response it keeps `Admitted`
    alive until the last byte is written, because a concurrency permit counts
    requests in flight and the stream is still in flight after `call()` returns.
-
-The edge host runs the same router, so steps 1 to 8 are identical there; it
-only adds a `tick()` before step 1 (see
-[Configuration writes and reload](#configuration-writes-and-reload)).
 
 ## Model resolution and the plan
 
@@ -266,14 +278,11 @@ at most one poll interval. Reloads are serialized and monotonic: an older
 revision never replaces a newer one, and a failed reload leaves the previous
 snapshot serving.
 
-With `SyncMode::Background` (the native default) the handle runs its own
-subscription and poll loops. On wasm there is no process between requests, so
-synchronization is manual: the edge host calls `tick()` at the start of each
-request, which applies pending notifications and then polls the revision once.
+With `SyncMode::Background` (the default) the handle runs its own
+subscription and poll loops.
 
-A multi-instance deployment needs a cache the instances share: Redis natively,
-or the database-backed `StoreCache` over D1 or libSQL at the edge. The default
-`MemoryCache` is process-local.
+A multi-instance deployment needs a cache the instances share, which is Redis.
+The default `MemoryCache` is process-local.
 
 ## Settlement and metering
 
@@ -302,34 +311,15 @@ replace it.
 
 ## Building for WebAssembly
 
-`gproxy-app` and the axum router both build for `wasm32-unknown-unknown`.
-That is why `gproxy-host-edge` mounts the same `Router` instead of keeping its
-own route table. axum's server parts (`http1`, `http2`, `tokio`) are Cargo
-features, and `Router` itself is target-independent, so what the wasm build
-leaves out is socket handling, not routes.
+Only the stateless crates build for `wasm32-unknown-unknown`:
+`gproxy-protocol`, `gproxy-client` (with its `fetch` transport),
+`gproxy-client-sdk`, `gproxy-upstream`, `gproxy-channel`, `gproxy-convert` and
+`gproxy-lite`. CI checks them on that target. `gproxy-mcp`, the engine, the
+store, the app and the hosts are native-only.
 
-The obstacle is `Send`. On wasm the engine is deliberately `!Send`: a JS
-transport handle belongs to the isolate that created it, and
-`gproxy-client`'s `ClientBounds` is `Send + Sync` natively and empty on wasm.
-axum, however, requires `Send + Sync` router state and `Send` handler futures.
-Two bridges reconcile this, both relying on a Worker isolate being
-single-threaded:
-
-- `gproxy_app::App` holds its sdk handle in a `send_wrapper::SendWrapper`.
-- `gproxy_host_axum::send` wraps each handler body (and each streamed response
-  body). Natively it is the identity function; on wasm it is a `SendWrapper`,
-  which panics if polled from another thread.
-
-A handler that forgets `send` fails to compile on the wasm target, and the
-error names the handler. This is why the wrapper sits at each handler and not
-behind a `cfg` on the router: a route that cannot compile for the edge cannot
-quietly be missing there.
-
-On wasm the default cache is `StoreCache` and sync is always manual (see
-above). Native-only features (PostgreSQL, MySQL, local file storage, proxies,
-TLS emulation) are not available; `libsql` and the D1 binding are the edge
-databases. For building and deploying the Worker, see
-[Building from source](/development/building).
+`gproxy-lite` is the one that is deployed as WebAssembly: `deploy/lite/build.sh`
+builds it into a module that the JavaScript shell of each serverless platform
+loads. See [Cloudflare Workers, Netlify, and Vercel](/deployment/lite).
 
 ## Design rules
 
@@ -344,7 +334,6 @@ When you change the code, keep these properties:
 - Snapshot publication is monotonic; a reload never goes backwards.
 - Assembly does not fail because of one bad row. The row is skipped, counted
   and logged.
-- The edge host has no route table of its own.
 - Frontend types are generated from Rust (see
   [Type export](/development/embedding#typescript-type-export)) and never
   written by hand.

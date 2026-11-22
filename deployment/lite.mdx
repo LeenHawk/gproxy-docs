@@ -1,0 +1,195 @@
+---
+title: "Cloudflare Workers, Netlify, and Vercel"
+description: "Run gproxy-lite, the single-tenant engine without a database, on a serverless platform."
+sidebarTitle: "Serverless (gproxy-lite)"
+---
+
+The full gateway needs a process and a database, so it runs natively or in a container. Serverless platforms run `gproxy-lite` instead: a separate, thin engine built from the same channels and the same protocol conversion, compiled to one WebAssembly module with a small JavaScript shell per platform.
+
+## What it is and what it leaves out
+
+`gproxy-lite` serves one operator. It has:
+
+- every channel of the full gateway, including the ones that sign in with OAuth;
+- every operation over HTTP, in every dialect: content generation (streamed or not), token counting, embeddings, images, model listing, compaction, files and video, passed through when the upstream speaks the client's dialect and converted when it does not;
+- WebSocket operations on Cloudflare, relayed to an upstream that speaks them.
+
+It does not have:
+
+- users, organizations, teams, API keys or permissions: one access key admits every request;
+- budgets, quotas, pricing, usage records, rate limits or an audit log;
+- several credentials per provider, credential selection or retry on another credential;
+- routes, aliases and tiers: a request names its provider;
+- rewrite rules and per-operation routing rules: routing is the channel's default;
+- the console, the management API and multi-instance synchronization;
+- MCP servers and channel service routes (usage pages, quota queries);
+- a local model catalogue and tokenizer: an operation the upstream does not have is refused, not estimated;
+- stored files: a converted image request cannot be answered with a URL, only with `b64_json`;
+- conversion of a Responses WebSocket client onto an HTTP upstream.
+
+If you need any of these, run the [container](/deployment/containers).
+
+## Configuration
+
+The whole configuration is one JSON document in the environment variable `GPROXY_LITE_CONFIG`. It contains the access key and upstream credentials, so store it as a secret.
+
+```json
+{
+  "access_key": "what clients send as their API key",
+  "providers": [
+    { "name": "openai", "channel": "openai", "credential": "sk-..." },
+    {
+      "name": "local",
+      "channel": "custom",
+      "base_url": "https://llm.example.com",
+      "config": { "dialects": ["openai_chat"] },
+      "credential": "upstream-key"
+    },
+    {
+      "name": "vertex",
+      "channel": "vertex",
+      "credential": { "kind": "service_account", "secret": { "type": "service_account" } }
+    },
+    { "name": "codex", "channel": "codex" }
+  ]
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `access_key` | The key clients present: as a bearer token, in `x-api-key`, in `x-goog-api-key` or in `?key=`. |
+| `providers[].name` | Letters, digits, `.`, `_` and `-`. It is the path prefix and the model prefix. `lite` is reserved. |
+| `providers[].channel` | A channel id, as in the [channel catalog](/reference/channel-catalog). |
+| `providers[].base_url`, `config` | The channel's own settings, the same as a provider's in the full gateway. |
+| `providers[].credential` | A pasted API key as a string, or `{ "kind", "secret" }` for a secret in the channel's own shape. Leave it out for a channel you sign in to. |
+
+A configuration the engine cannot use (unknown channel, duplicate name, a credential the channel does not accept) is refused at start, and every request answers `500` with the reason.
+
+## Addressing a provider
+
+- `/{provider}/v1/...` sends to that provider. The model is the upstream's own name.
+- Without the prefix, the model field reads `provider/model`.
+- With a single provider configured, the prefix may be left out.
+
+With several providers configured, `GET /v1/models` without a prefix lists the models of all of them, each id prefixed with its provider.
+
+```sh
+curl https://your-deployment.example/v1/chat/completions \
+  -H "Authorization: Bearer $ACCESS_KEY" -H "Content-Type: application/json" \
+  -d '{"model":"openai/gpt-5.5","messages":[{"role":"user","content":"Hi"}]}'
+```
+
+## Signing in to an OAuth channel
+
+A provider without a `credential` is signed in through three paths, all behind the access key. No browser redirect has to reach the deployment.
+
+<Steps>
+  <Step title="Start">
+    ```sh
+    curl -X POST https://your-deployment.example/lite/login/start \
+      -H "Authorization: Bearer $ACCESS_KEY" -H "Content-Type: application/json" \
+      -d '{"provider":"codex"}'
+    ```
+
+    The answer carries a `session` and either an `authorize_url` to open in a browser or, for a device login, a `user_code` and a `verification_uri`. A channel with both flows takes `"mode": "authorization_code"` or `"device_code"`.
+  </Step>
+  <Step title="Authorize">
+    Open the URL and approve. An authorization code login ends on a page that does not load (a `localhost` address) or that shows a code: copy the whole address, or the code.
+  </Step>
+  <Step title="Complete">
+    ```sh
+    curl -X POST https://your-deployment.example/lite/login/complete \
+      -H "Authorization: Bearer $ACCESS_KEY" -H "Content-Type: application/json" \
+      -d '{"session":"...","callback_url":"http://localhost:1455/auth/callback?code=...&state=..."}'
+    ```
+
+    Send either `callback_url` or `code`, not both. For a device login send only the `session`, and repeat while the answer is `{"status":"pending"}`, waiting `interval_secs` in between. `{"status":"ready"}` means the credential is stored.
+  </Step>
+</Steps>
+
+`GET /lite/status` lists every provider with the state of its credential: `none`, `configured`, `signed_in` or `dead`. A `dead` credential is one the upstream refused to renew; `reason` says why, and only signing in again replaces it.
+
+## Staying signed in
+
+A credential that expires is renewed when a request finds it about to expire, again if the upstream answers `401`, and on a schedule, so that a sign-in outlives a period without requests. Every template runs the schedule once a day, at 04:00 UTC. `POST /lite/renew`, behind the access key, does the same on demand and answers with what happened to each provider that has something to renew:
+
+```json
+{
+  "renewals": [
+    { "provider": "codex", "outcome": "renewed" },
+    { "provider": "claude", "outcome": "not_due" },
+    { "provider": "kiro", "outcome": "no_credential" },
+    { "provider": "gemini", "outcome": "failed", "reason": "..." }
+  ]
+}
+```
+
+A run in which a renewal failed is recorded as failed in the platform's logs.
+
+| Platform | What runs it | Where the schedule is | Limits |
+| --- | --- | --- | --- |
+| Cloudflare Workers | A Cron Trigger and the Worker's `scheduled` handler | `[triggers] crons` in `wrangler.toml` | Any interval down to one minute on every plan. The Free plan allows five Cron Triggers per account. |
+| Netlify | The Scheduled Function `renew` | `[functions."renew"] schedule` in `netlify.toml` | Every plan. It runs only on the published deploy, for at most 30 seconds, and has no URL. |
+| Vercel | A Cron Job that requests `GET /lite/renew` | `crons` in `vercel.json` | Hobby: at most once a day, started anywhere within the hour; a more frequent expression fails the deployment. Pro: down to one minute. |
+
+On Vercel, set the environment variable `CRON_SECRET` to a random string of at least 16 characters and deploy again. Vercel sends it as the bearer token of the scheduled request, and the function accepts that request only with it. Without `CRON_SECRET` the scheduled request is refused and nothing is renewed on schedule.
+
+Once a day is enough for refresh tokens, which live for days or longer. Where the schedule does not run, or runs less often than a session lives (the `playground` channel rotates its cookies every ten minutes), requests still renew the credential, and one left unused for too long has to sign in again.
+
+Renewals of one credential never overlap, because some upstreams revoke every token of a sign-in when a refresh token is presented twice. A renewal first takes a lease: a store entry created only if absent, which expires after 30 seconds. Another instance that finds the lease taken waits up to 10 seconds for the renewed credential and uses it. If the holder dies, the lease expires and the next renewal takes it. A renewal that outlasts its lease can still overlap with the next one; the stored result is then decided by compare-and-exchange.
+
+## State
+
+Everything the engine remembers is in one key-value store per deployment: credentials that were signed in or renewed, pending sign-ins, and the state protocol conversion keeps between requests. A pasted credential stays in the configuration and is written to the store only when the channel renews it. Credentials are stored as the upstream issued them, without the master-key encryption of the full gateway, so restrict who can read the store.
+
+| Platform | Store | Compare-and-exchange |
+| --- | --- | --- |
+| Cloudflare Workers | One Durable Object with SQLite storage | Atomic: the object runs one call at a time and its storage is strongly consistent. |
+| Netlify | Netlify Blobs, read with strong consistency | Atomic for writes (`onlyIfMatch`, `onlyIfNew`). Blobs has no conditional delete, so a delete writes a tombstone and the key remains; a released lease is such a tombstone, which the next renewal overwrites. |
+| Vercel | Upstash Redis from the Marketplace | Atomic: one Lua script on a single primary. |
+
+## Deploying
+
+The templates are in `deploy/lite` of the [repository](https://github.com/LeenHawk/gproxy). Build the module first; this needs Rust with the `wasm32-unknown-unknown` target and `wasm-bindgen-cli` at the version in `Cargo.lock`:
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.130
+sh deploy/lite/build.sh
+```
+
+Every channel is compiled in. The module is 10.7 MB, 4.0 MB compressed with gzip.
+
+<Tabs>
+  <Tab title="Cloudflare Workers">
+    ```sh
+    cd deploy/lite/cloudflare
+    wrangler secret put GPROXY_LITE_CONFIG
+    wrangler deploy
+    ```
+
+    The Worker declares its Durable Object in `wrangler.toml`; there is nothing to create first. For a local run, copy `dev.vars.example` to `.dev.vars` and start `wrangler dev`.
+  </Tab>
+  <Tab title="Netlify">
+    ```sh
+    cd deploy/lite/netlify
+    npm install
+    netlify env:set GPROXY_LITE_CONFIG '{"access_key":"..."}' --secret
+    netlify deploy --prod
+    ```
+
+    The engine runs as a Netlify Function. A function runs for at most 60 seconds, streaming included, so a longer generation is cut off. WebSocket requests are answered `501`.
+  </Tab>
+  <Tab title="Vercel">
+    Add Upstash Redis to the project from the Marketplace; it sets `KV_REST_API_URL` and `KV_REST_API_TOKEN`. Then:
+
+    ```sh
+    cd deploy/lite/vercel
+    vercel env add GPROXY_LITE_CONFIG
+    vercel env add CRON_SECRET
+    vercel deploy --prod
+    ```
+
+    The engine runs as a Node.js function with a maximum duration of 300 seconds. WebSocket requests are answered `501`.
+  </Tab>
+</Tabs>

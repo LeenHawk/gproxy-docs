@@ -65,11 +65,6 @@ current release.
 | `workbuddy` | Tencent Copilot through its editor plugin | OAuth |
 | `xai` | xAI (Grok): OpenAI Chat and Responses, plus xAI's own TTS, STT and video | `{"api_key"}` |
 
-Every channel builds for native targets and for `wasm32-unknown-unknown`, so a
-Worker deployment has the same channel set as a native one. The one exception
-is `playground`: its signer cannot run in a Worker, so its generation requests
-work only in a native deployment.
-
 ### AI Studio Playground
 
 `playground` uses a Google session from [AI Studio](https://aistudio.google.com/).
@@ -78,9 +73,7 @@ model discovery. The API-key channel remains `aistudio`.
 
 Google requires a WAA proof with every generation request. GPROXY generates
 the proof in process: no separate signing service is needed, and the cookies
-and request contents are not sent to a third party. The signer embeds QuickJS
-and runs only in native deployments; a Cloudflare Worker deployment cannot
-generate content through this channel.
+and request contents are not sent to a third party. The signer embeds QuickJS.
 
 The first generation for an account initializes the signing environment and is
 slower than the ones that follow.
@@ -137,7 +130,6 @@ may differ from Google's official count.
 
 | Symptom | Cause and action |
 | --- | --- |
-| `Playground is unavailable on this build` | This is a Worker deployment, where the signer cannot run. Use a native deployment. |
 | Google answers 403 `The caller does not have permission` | Google refused the request. Open AI Studio in a browser with the same account and the same exit and send a message; if that fails too, the cause is the account or the exit, not GPROXY. |
 | Google answers 503 `This model is currently experiencing high demand` | Google has no capacity for the model at the moment. Retry later or use another model. |
 

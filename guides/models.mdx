@@ -122,8 +122,8 @@ and health) is reordered, according to the route's strategy:
   are spread out rather than batched.
 - `failover` leaves the sorted order as it is.
 
-Rotation uses a counter rather than a random draw, so native and wasm builds
-behave the same and a sequence can be reproduced. The counters are kept in
+Rotation uses a counter rather than a random draw, so a sequence can be
+reproduced. The counters are kept in
 process memory and are not shared between instances; a restart starts the
 rotation again from the first candidate.
 

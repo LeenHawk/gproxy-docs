@@ -14,7 +14,7 @@ GPROXY 是一个自行部署的大模型 API 网关。上游账户（API Key、C
 
 GPROXY 不运行模型，推理由上游服务完成。它也不能替上游补上缺失的能力：把请求转换成另一种格式，并不会让一个不支持工具调用或图像输入的模型变得支持。
 
-它可以作为带 Web 控制台的原生服务（CLI 或容器）运行，也可以作为内置控制台的桌面或手机应用使用，或者配合托管数据库部署在 Cloudflare Workers、Netlify 和 Vercel 上。Rust 程序还可以把它当作库嵌入。
+它可以作为带 Web 控制台的原生服务（CLI 或容器）运行，也可以作为内置控制台的桌面或手机应用使用。Rust 程序还可以把它当作库嵌入。
 
 ## 一个例子
 
@@ -32,7 +32,7 @@ curl http://127.0.0.1:8787/v1/chat/completions \
 ## 本手册的组织
 
 - [基本概念](/zh-cn/introduction/concepts)解释全书通用的术语：渠道、供应商、凭证、模型路由、网关 API Key 和规则。
-- “安装与升级”介绍各平台的[安装包](/zh-cn/download)、[容器](/zh-cn/deployment/containers)、[托管部署](/zh-cn/deployment/edge)，以及从旧版本升级，最常用的是[从 v3 升级到 v4](/zh-cn/deployment/v3-to-v4)。
+- “安装与升级”介绍各平台的[安装包](/zh-cn/download)和[容器](/zh-cn/deployment/containers)，以及从旧版本升级，最常用的是[从 v3 升级到 v4](/zh-cn/deployment/v3-to-v4)。
 - “入门”中的[快速开始](/zh-cn/getting-started/quick-start)从一个新实例做到第一个请求成功，[第一个请求](/zh-cn/getting-started/first-request)再用每种协议各发一遍。
 - “管理指南”是日常使用的说明：[供应商与凭证](/zh-cn/guides/providers)、[模型路由](/zh-cn/guides/models)、[用户与密钥](/zh-cn/guides/users-and-keys)、[权限与限额](/zh-cn/guides/permissions)、[重写规则](/zh-cn/guides/rules)、[提示缓存](/zh-cn/guides/claude-caching)、[CLI 客户端](/zh-cn/guides/cli-clients)、[控制台](/zh-cn/guides/console)和[用量与日志](/zh-cn/guides/observability)。
 - “参考”列出配置项、端点、计价规则、存储后端、渠道目录和 HTTP API。

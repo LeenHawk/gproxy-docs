@@ -43,6 +43,10 @@ sidebarTitle: "權限、限流與配額"
 
 供應商服務路由是渠道宣告的帳戶、用量等非模型端點。它們沒有模型，也沒有操作，因此只有涵蓋整個供應商的規則（任意模型、不限操作）才能允許或拒絕它們。
 
+### MCP 伺服器
+
+權限規則不用於 [MCP 伺服器](/zh-tw/guides/mcp-servers)。工具預設允許，由 MCP scope 規則限制，其語法和判定方式與權限規則不同，見 [Scope](/zh-tw/guides/mcp-servers#scopes)。OAuth 存取權杖需要帶有 scope `gproxy:mcp`。
+
 ## OAuth 存取權杖
 
 OAuth 存取權杖是使用者交給其他程式使用的憑據，因此 GPROXY 會在使用者本身的權限之外，對它另加限制。

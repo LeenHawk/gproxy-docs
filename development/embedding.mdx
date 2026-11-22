@@ -90,7 +90,7 @@ Other builder methods:
 
 | Method | Default | Purpose |
 | --- | --- | --- |
-| `.cache(cache)` | `MemoryCache` natively, `StoreCache` on wasm | Shared transient state and invalidation transport. More than one instance needs a shared cache: Redis natively, `StoreCache` over D1 or libSQL at the edge. |
+| `.cache(cache)` | `MemoryCache` | Shared transient state and invalidation transport. More than one instance needs a shared cache, which is Redis. |
 | `.channel(channel)` | | Register an extra channel. It wins over a compiled-in channel with the same id. |
 | `.without_default_channels()` | | Register only the channels passed with `.channel(...)`. |
 | `.client_pool(pool)` | `ClientPool::default()` | The outbound client cache. |
@@ -109,21 +109,17 @@ Other builder methods:
 | --- | --- |
 | a channel id (`codex`, `kiro`, `openai`, …) | Compile that channel in. The builder registers it unless `without_default_channels()` is called. |
 | `channels` | Every channel the workspace ships |
-| `postgres` / `mysql` | Extra database drivers, native only. SQLite is always available natively. |
-| `libsql` | libSQL/Turso over the Hrana HTTP pipeline, on every target |
-| `d1` | Marker for a Cloudflare D1 binding (the binding is always available on wasm) |
+| `postgres` / `mysql` | Extra database drivers. SQLite is always available. |
+| `libsql` | libSQL/Turso over the Hrana HTTP pipeline |
 | `memory` (default) | The process-local cache |
 | `redis` | Redis cache, for more than one instance |
-| `fs` (default) | Local file storage, native only |
+| `fs` (default) | Local file storage |
 | `s3` | S3/R2 storage |
 | `bundled-vocabulary` (default) | DeepSeek's vocabulary for token estimation on models without their own vocabulary file |
 | `ts` | `ts-rs` declarations for every DTO and every channel descriptor |
-| `client-sdk` | `ClientBackend`, which serves a `gproxy-client-sdk` `Client` from this handle in process (native only) |
+| `client-sdk` | `ClientBackend`, which serves a `gproxy-client-sdk` `Client` from this handle in process |
 
-The default feature set compiles for `wasm32-unknown-unknown`, and so does
-`libsql`.
-
-Native builds use the `reqwest` transport. Channels that need another backend
+Builds use the `reqwest` transport. Channels that need another backend
 turn it on themselves: `claudecode`, `kiro`, `antigravity` and others enable
 `wreq` for TLS emulation, and `codex` enables the native `reqwest` stack that
 matches the Codex CLI's fingerprint. A host can also enable a backend feature
@@ -187,8 +183,7 @@ public addresses only; native direct connections pin vetted public IP
 addresses. Domain URLs are refused when a proxy would resolve them
 independently. An embedding host can set `AllowlistFetchPolicy` through
 `.fetch_policy(...)` for hostnames it controls, which leaves destination
-enforcement to its proxy. On wasm, hostname destinations still depend on the
-platform's egress controls.
+enforcement to its proxy.
 
 ## Login
 
@@ -322,9 +317,8 @@ With `SyncMode::Background` the handle runs both loops itself; this needs a
 Tokio runtime and a process that outlives requests. With `SyncMode::Manual`
 nothing happens unless the host calls the methods above.
 
-On wasm, the cache defaults to the database-backed `StoreCache` and
-synchronization is always manual, because an isolate does not outlive its
-request. Call `tick()` at the start of each request:
+In manual mode, call `tick()` whenever the host wants to synchronize, for
+example at the start of each request:
 
 ```rust
 // tick() = drain the delivered notifications, then poll the revision once.
@@ -367,6 +361,5 @@ fails if a re-exported type is missing from the list.
 An application that also needs identity links `gproxy-app`. It adds
 authentication, admission, the admin and portal operation families and the
 OAuth issuer, and has no transport. `gproxy-host-axum` exposes those over HTTP,
-`gproxy-host-edge` mounts the same router in a Cloudflare Worker, and
-`gproxy-host-tauri` serves the management surfaces over IPC. Each of these
+and `gproxy-host-tauri` serves the management surfaces over IPC. Each of these
 crates can be embedded at its own level.
