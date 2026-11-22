@@ -62,7 +62,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
       "containerBody": "Образы для amd64, arm64 и riscv64 доступны в Docker Hub (gproxy2/gproxy), GitHub, GitLab и CNB. Стабильные версии используют теги vX.Y.Z, бета-версии — staging, сборки для разработки — nightly.",
       "containerGuide": "Руководство по контейнерам",
       "hosted": "Облачные платформы",
-      "hostedBody": "Разверните GPROXY на Cloudflare Workers, Netlify или Vercel без локальной среды сборки, с D1, libSQL или PostgreSQL.",
+      "hostedBody": "Разверните GPROXY на Render или Heroku по шаблону из репозитория, без локальной среды сборки.",
       "hostedGuide": "Облачное развёртывание",
       "source": "Сборка из исходного кода",
       "sourceBody": "Обычный cargo build создаёт CLI. Для приложения и версии без интерфейса предусмотрены отдельные короткие инструкции.",
@@ -148,7 +148,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
       containerBody: 'Images on Docker Hub (gproxy2/gproxy), GitHub, GitLab and CNB registries for amd64, arm64 and riscv64. Stable versions use vX.Y.Z tags; beta is staging and development snapshots are nightly.',
       containerGuide: 'Container guide',
       hosted: 'Hosted platforms',
-      hostedBody: 'Deploy to Cloudflare Workers, Netlify or Vercel without a local toolchain, with D1, libSQL or PostgreSQL behind it.',
+      hostedBody: 'Deploy to Render or Heroku from the repository templates, without a local toolchain.',
       hostedGuide: 'Hosted deployments',
       source: 'Build from source',
       sourceBody: 'A plain cargo build produces the CLI; the Application and the headless edition each have a short recipe.',
@@ -215,7 +215,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
       containerBody: '镜像发布在 Docker Hub（gproxy2/gproxy）、GitHub、GitLab 与 CNB 镜像仓库，支持 amd64、arm64、riscv64。稳定版使用 vX.Y.Z 标签，beta 为 staging，开发快照为 nightly。',
       containerGuide: '容器部署指南',
       hosted: '托管平台',
-      hostedBody: '无需本地工具链即可部署到 Cloudflare Workers、Netlify 或 Vercel，后端可选 D1、libSQL 或 PostgreSQL。',
+      hostedBody: '无需本地工具链，用仓库里的模板部署到 Render 或 Heroku。',
       hostedGuide: '托管平台部署',
       source: '从源码构建',
       sourceBody: '一条 cargo build 即可得到 CLI；应用版与无头版各有简短的构建步骤。',
@@ -282,7 +282,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
       containerBody: '映像發布在 Docker Hub（gproxy2/gproxy）、GitHub、GitLab 與 CNB 映像倉庫，支援 amd64、arm64、riscv64。穩定版使用 vX.Y.Z 標籤，beta 為 staging，開發快照為 nightly。',
       containerGuide: '容器部署指南',
       hosted: '託管平台',
-      hostedBody: '無需本機工具鏈即可部署到 Cloudflare Workers、Netlify 或 Vercel，後端可選 D1、libSQL 或 PostgreSQL。',
+      hostedBody: '無需本機工具鏈，用儲存庫裡的範本部署到 Render 或 Heroku。',
       hostedGuide: '託管平台部署',
       source: '從原始碼建置',
       sourceBody: '一條 cargo build 即可得到 CLI；應用版與無頭版各有簡短的建置步驟。',
@@ -717,7 +717,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
         <article className="dl-card">
           <h3>{copy.hosted}</h3>
           <p>{copy.hostedBody}</p>
-          <a className="dl-link" href={`${prefix}/deployment/edge`}>{copy.hostedGuide} →</a>
+          <a className="dl-link" href={`${prefix}/deployment/containers`}>{copy.hostedGuide} →</a>
         </article>
         <article className="dl-card">
           <h3>{copy.source}</h3>

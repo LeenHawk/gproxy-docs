@@ -159,7 +159,7 @@ cli_client_ids = []
 
 部分字段没有对应的参数或环境变量，因为容器部署一般不会覆盖它们：`session_ttl_secs`、整个 `[oauth]` 块，以及 S3 的具体参数。
 
-其他宿主读取的也是同一份文档：Workers 宿主从 `GPROXY_CONFIG` 中以 JSON 形式读取，桌面应用读取数据目录下的 `gproxy.toml`。各宿主共用一套结构，全部字段、变体和默认值见[配置结构](/zh-cn/reference/configuration-schema)。
+桌面应用读取的也是同一份文档，即数据目录下的 `gproxy.toml`。两者共用一套结构，全部字段、变体和默认值见[配置结构](/zh-cn/reference/configuration-schema)。
 
 ## 静态加密
 

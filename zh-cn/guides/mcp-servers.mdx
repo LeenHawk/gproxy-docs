@@ -1,0 +1,201 @@
+---
+title: "MCP 服务器"
+description: "把 MCP 服务器放到 GPROXY 后面：注册服务器、登录、让客户端只用一个地址和网关密钥，并用 scope 限制工具。"
+---
+
+GPROXY 代理 MCP 服务器（Model Context Protocol，streamable HTTP）的方式与代理模型供应商相同。实例管理员把服务器注册为供应商，用户、团队和组织登录该服务器，之后任何 MCP 客户端只凭一把网关 API Key 就能通过 GPROXY 访问它。自己不支持 OAuth 的客户端无需任何改动。
+
+网关理解工具：它列出工具、按 scope 过滤、把调用转给对应的服务器，并为每次调用写审计记录。只代理工具，不代理 prompts 和 resources。
+
+## 注册服务器
+
+服务器是 `channel` 为 `mcp` 的供应商，在 `GET /admin/api/channels` 中显示为“MCP server”。
+
+| 字段 | 含义 |
+| --- | --- |
+| `name` | 服务器名称。它出现在 URL 中，也用作工具名前缀，因此只使用 `[A-Za-z0-9_-]`。 |
+| `baseUrl` | 服务器的 MCP 端点，例如 `https://mcp.deepwiki.com/mcp`。必填。 |
+| `config.headers` | 可选。每个请求都附带的固定请求头，是一个对象，例如 `{"X-Tenant":"acme"}`。 |
+| `config.auth_header` | 可选。粘贴的密钥原样放入这个请求头。不设置时以 `Authorization: Bearer <secret>` 发送。 |
+
+```sh
+curl -s -X POST http://127.0.0.1:8787/admin/api/providers \
+  -H "Authorization: Bearer $GPROXY_KEY" -H 'content-type: application/json' \
+  -d '{"name":"deepwiki","channel":"mcp",
+       "baseUrl":"https://mcp.deepwiki.com/mcp"}'
+```
+
+供应商的代理和连接配置与其他供应商一样生效。模型、路由、操作规则和重写规则对 MCP 服务器不适用。
+
+## 登录
+
+MCP 服务器的凭证有三种类型：
+
+| 类型 | 密钥内容 | 用途 |
+| --- | --- | --- |
+| `oauth` | 通过登录取得 | 要求 OAuth 的服务器 |
+| `api_key` | `{"api_key": "..."}` | 手动粘贴的密钥 |
+| `none` | `{}` | 不需要认证的服务器 |
+
+OAuth 使用与其他凭证相同的授权码登录流程：先调用 `POST /admin/api/credential-login/authcode/start`，再调用 `/complete`，见[通过登录获取凭证](/zh-cn/guides/providers#通过登录获取凭证)。GPROXY 从服务器的受保护资源元数据（RFC 9728，也会读取 `WWW-Authenticate` 质询）和授权服务器元数据（RFC 8414 或 OIDC）发现授权服务器，动态注册自己（RFC 7591），并使用 PKCE S256 和 `resource` 参数（RFC 8707）。令牌会在到期前刷新，收到 `401` 后还会再刷新一次。
+
+授权后，浏览器会跳转到 `http://127.0.0.1:47821/callback`。这个地址没有程序监听，页面打不开；把地址栏里的完整地址粘贴回对话框即可。
+
+<Warning>
+授权服务器不支持动态客户端注册的服务器，在当前版本中无法通过 OAuth 登录。
+</Warning>
+
+### 谁可以使用服务器
+
+只有当调用方的密钥能看到该供应商的一份有效凭证时，它才能使用这台服务器。这就是通常的[凭证可见范围](/zh-cn/guides/permissions#凭证可见范围)规则，由密钥的绑定决定。
+
+可见的凭证不止一份时，优先使用调用方自己的，其次是所属团队的，再次是所属组织的，最后是共享凭证。一个会话始终使用它开始时选定的凭证。
+
+## 两个地址
+
+| 地址 | 提供的内容 |
+| --- | --- |
+| `https://<gproxy>/connect/mcp/<name>` | 单台服务器，工具保持原名。`https://<gproxy>/<name>/connect/mcp` 是同一个地址。 |
+| `https://<gproxy>/connect/mcp` | 调用方可用的所有服务器的聚合。`?servers=a,b` 可以缩小范围。 |
+
+在聚合地址上，工具名为 `<server>__<tool>`。名称超过 64 个字符，或含有 `[A-Za-z0-9_-]` 以外字符的工具不会在聚合地址上提供，请通过该服务器自己的地址使用。
+
+## 配置客户端
+
+客户端只需要 URL 和网关密钥：传输方式是 streamable HTTP，密钥以 `Authorization: Bearer <key>` 或 `x-api-key` 发送。
+
+Claude Code：
+
+```sh
+claude mcp add --transport http deepwiki https://gproxy.example/connect/mcp/deepwiki \
+  --header "Authorization: Bearer sk-..."
+```
+
+Codex，写入 `~/.codex/config.toml`：
+
+```toml
+[mcp_servers.deepwiki]
+url = "https://gproxy.example/connect/mcp/deepwiki"
+bearer_token_env_var = "GPROXY_API_KEY"
+```
+
+不使用密钥、而是通过 OAuth 登录 GPROXY 的客户端，其令牌需要带有 OAuth scope `gproxy:mcp`。
+
+<a id="scopes"></a>
+
+## Scope
+
+MCP 默认允许：没有任何 MCP 规则的用户或密钥，可以使用它能看到凭证的每一台服务器。模型的[权限规则](/zh-cn/guides/permissions#权限规则)不用于 MCP。
+
+一条规则包含主体、scope、动作和优先级。主体是一个用户或一把 API Key，不能同时指定两者。
+
+### Scope 语法
+
+| Scope | 覆盖范围 |
+| --- | --- |
+| `mcp:*` | 全部 |
+| `mcp:<server>:*` | 一台服务器的所有工具 |
+| `mcp:<server>:<tool>` | 一个工具 |
+| `mcp:*:<tool>` | 任意服务器上的同名工具 |
+| `mcp:<server>:@read` | 该服务器上性质为 `read` 的工具 |
+| `mcp:<server>:@write` | 该服务器上性质为 `write` 的工具 |
+| `mcp:<server>:@destructive` | 该服务器上性质为 `destructive` 的工具 |
+
+`*` 代表整个服务器部分或整个工具部分，不能作为名称内部的通配符。按性质的写法同样可以把服务器写成 `*`：`mcp:*:@destructive`。
+
+### 判定方式
+
+- 主体没有任何规则时，全部允许。
+- 否则按优先级从高到低依次检查，第一条匹配的规则决定结果。优先级相同时 `deny` 优先。
+- 没有规则匹配的工具被拒绝。
+- 密钥的规则只能收窄用户的范围：先判定用户的规则，再判定密钥的规则，两者都允许才通过。
+- 规则对所有调用方生效，实例管理员也不例外。
+
+调用方无权调用的工具不会出现在工具列表中，调用它会得到“Unknown tool”。
+
+### 示例
+
+只能只读访问一台服务器：
+
+| Scope | 动作 | 优先级 |
+| --- | --- | --- |
+| `mcp:deepwiki:@read` | `allow` | 0 |
+
+除破坏性工具外全部允许：
+
+| Scope | 动作 | 优先级 |
+| --- | --- | --- |
+| `mcp:*` | `allow` | 0 |
+| `mcp:*:@destructive` | `deny` | 10 |
+
+允许一台服务器，但排除其中一个工具：
+
+| Scope | 动作 | 优先级 |
+| --- | --- | --- |
+| `mcp:notion:*` | `allow` | 0 |
+| `mcp:notion:delete_page` | `deny` | 10 |
+
+### 管理规则
+
+规则是管理 API 的 `mcp-scopes` 族，供实例管理员使用：在 `/admin/api/mcp-scopes` 下列出、创建、批量操作，以及按 ID 读取、更新或删除。列表支持 `userId`、`apiKeyId`、`ownerUserId`、`search`、`page` 和 `pageSize`。
+
+| API 字段 | 含义 |
+| --- | --- |
+| `userId` / `apiKeyId` | 主体，必须且只能指定其中一个；创建后不能修改 |
+| `scope` | 按上述语法书写的 scope |
+| `action` | `allow` 或 `deny` |
+| `priority` | 数值越大越先检查，默认 `0` |
+
+```sh
+curl -s -X POST http://127.0.0.1:8787/admin/api/mcp-scopes \
+  -H "Authorization: Bearer $GPROXY_KEY" -H 'content-type: application/json' \
+  -d '{"userId":"<user id>","scope":"mcp:deepwiki:@read","action":"allow"}'
+```
+
+## 工具性质
+
+每个工具的性质是 `read`、`write` 或 `destructive`，取自工具的 MCP annotations，并采用规范中偏保守的默认值：
+
+| Annotations | 性质 |
+| --- | --- |
+| `readOnlyHint: true` | `read` |
+| 否则，`destructiveHint: false` | `write`：会修改数据，但不是破坏性的 |
+| 其他情况 | `destructive` |
+
+因此，什么都没有声明的工具是 `destructive`。
+
+管理员可以覆盖单个工具的性质。提供给调用方的工具列表带有按最终性质生成的 hint。覆盖项是 `mcp-tool-natures` 族（`/admin/api/mcp-tool-natures`），字段为 `providerId`、`tool` 和 `nature`；创建后只能修改 `nature`。
+
+`GET /admin/api/mcp-tools/{providerId}` 返回服务器的工具，包括声明的性质、生效的性质和覆盖项的 ID（如有）。它会实时询问服务器，因此供应商需要有 base URL 和一份有效凭证；服务器无法访问时返回 `502`。
+
+## 审计
+
+每次工具调用都会在审计记录中写入一条，动作为 `mcp.tools.call`：
+
+```text
+GET /admin/api/audit?action=mcp.tools.call
+```
+
+| 字段 | 内容 |
+| --- | --- |
+| `actorUserId`、`actorApiKeyId`、`sourceIp` | 调用方 |
+| `entityKind`、`entityId` | `provider` 和服务器的供应商 ID |
+| `outcome` | `ok` 或 `error` |
+| `detail.server`、`detail.tool` | 服务器名称和工具 |
+| `detail.credentialId` | 使用的凭证，或 `null` |
+| `detail.durationMs` | 调用耗时 |
+| `detail.outcome` | `ok`、`tool_error`、`input_required`、`refused` 或 `failed` |
+| `detail.arguments`、`detail.result` | 仅在开启下游正文日志（设置项 `enableDownstreamLogBody`）时存在。敏感字段名会被脱敏。 |
+
+另见[用量、日志与审计](/zh-cn/guides/observability)。
+
+## 协议行为与限制
+
+- 面向客户端，GPROXY 支持 MCP 修订版 2026-07-28（无状态，没有 `initialize`）和基于会话的修订版 2024-11-05 至 2025-11-25。
+- 面向服务器，优先使用 2026-07-28，否则回退到 `initialize` 加会话，这是 DeepWiki、Notion 等服务器目前使用的方式（2025-11-25）。
+- 对基于会话的服务器，“调用方会话 → 上游会话和凭证”的映射会持久保存，因此任何实例都可以继续同一个会话。
+- 每个响应都是一个 JSON 正文。面向客户端没有 SSE 流，也没有 GET 流，进度通知会被丢弃。
+- 服务器发起的请求（sampling、elicitation）只在客户端和服务器都使用 2026-07-28 时以 `input_required` 结果的形式支持，内容原样透传。基于会话的服务器在打开时不带客户端能力，无法发起请求。
+- 服务器返回 `401` 时，GPROXY 刷新一次凭证并重试。仍被拒绝时，客户端收到一个普通的 `502` 和 JSON-RPC 错误。服务器的 `WWW-Authenticate` 不会被转发，因此客户端不会自己向服务器发起 OAuth。
+- 服务器的工具列表按服务器和凭证缓存 5 分钟。服务器新增或删除的工具最长要这么久才会反映出来。
+- 不代理 prompts 和 resources。

@@ -7,15 +7,13 @@ GPROXY 的儲存分三部分，各自獨立設定：資料庫、快取，以及�
 
 ## 資料庫
 
-資料庫儲存全部設定、身份、用量和日誌。原生程式（`gproxy`）可以開啟 SQLite、PostgreSQL 或 MySQL；Cloudflare Workers 宿主可以開啟 D1 或 libSQL。
+資料庫儲存全部設定、身份、用量和日誌。原生程式（`gproxy`）可以開啟 SQLite、PostgreSQL 或 MySQL。
 
 | 後端 | 連線方式 | 適用範圍 |
 | --- | --- | --- |
 | SQLite（預設） | `<data-dir>/gproxy.db`，或 `--dsn` 中的檔案路徑、`sqlite://` URL | 原生程式，始終編譯在內 |
 | PostgreSQL | `--dsn` 中的 `postgres://…` | 原生程式，`postgres` feature（預設開啟） |
 | MySQL | `--dsn` 中的 `mysql://…` | 原生程式，`mysql` feature（預設開啟） |
-| D1 | Worker 的 D1 binding（預設名為 `DB`） | Workers 宿主 |
-| libSQL / Turso | `GPROXY_DATABASE_URL` 中的 `libsql://` 或 `https://` URL，權杖放在 `GPROXY_LIBSQL_TOKEN` | Workers 宿主 |
 
 MySQL 需要 8.0.13 或更新版本，這是第一個支援 JSON 預設值表示式的版本。PostgreSQL 和 MySQL 驅動均帶 TLS 支援。
 
@@ -29,7 +27,7 @@ gproxy serve --dsn 'postgres://gproxy:…@db.internal:5432/gproxy'
 
 `GPROXY_PERSISTENCE` 可取 `sqlite`、`postgres` 或 `mysql`。v2、v3 部署遺留的 `sqlite://` DSN 仍然接受，程式取其中的檔案路徑。`:memory:` 會被拒絕：資料庫隨處理程序消失的執行個體會照常初始化管理員、服務流量，然後把這些全部丟掉。
 
-本次構建不包含的後端會在啟動時被拒絕，錯誤資訊會指出提供該後端的 feature。問題在處理程序啟動時就會暴露，而不是等到第一個請求。原生程式同樣拒絕 D1 和 libSQL，這兩種只能由 Workers 宿主開啟，相關 binding 見 [Cloudflare Workers](/zh-tw/deployment/edge)。在 Workers 宿主中，`GPROXY_DATABASE_URL` 優先於 D1 binding。libSQL 透過 HTTP 存取資料庫，使用的是 Worker 呼叫上游時用的同一個 fetch 傳輸。
+本次構建不包含的後端會在啟動時被拒絕，錯誤資訊會指出提供該後端的 feature。問題在處理程序啟動時就會暴露，而不是等到第一個請求。
 
 ### 表結構同步
 
@@ -48,18 +46,18 @@ INFO gproxy::instance: schema is up to date warnings=0
 - 執行版本化遷移；
 - 修改欄位的型別、轉換欄位中的資料，或修改已有的外部索引鍵。
 
-這些變更需要顯式遷移，而且 GPROXY 不保證遷移在每個原生後端上都在單個交易中完成。
+這些變更需要顯式遷移，而且 GPROXY 不保證遷移在每個後端上都在單個交易中完成。
 
-同步報告會列出警告，例如 D1 上的型別差異。警告列表為空並不能證明所有變更都已應用。在確認啟動完成之前，請閱讀日誌中的診斷資訊。
+同步報告會列出警告。警告列表為空並不能證明所有變更都已應用。在確認啟動完成之前，請閱讀日誌中的診斷資訊。
 
 ### Store API 與批處理
 
-原生 SeaORM 連線和 Cloudflare D1 透過同一套 store API 存取。所有實體存取器都經過同一個泛型倉儲，普通 CRUD 不需要按表手寫，每個方法作為一個原子批執行。建立 store 不會開啟資料庫，也不會修改表結構。
+所有後端都透過同一套 store API 存取。所有實體存取器都經過同一個泛型倉儲，普通 CRUD 不需要按表手寫，每個方法作為一個原子批執行。建立 store 不會開啟資料庫，也不會修改表結構。
 
 呼叫方可以依賴以下行為：
 
 - 讀取結果與輸入順序一致，保留重複項，缺失的 id 對應 `None`，呼叫方可以把結果逐一對應到請求。
-- 鍵謂詞會被拆分，使每條語句都不超過 D1 的 100 個繫結參數上限，拆分後的語句仍在同一個批中執行。呼叫方自己寫的 SQL 不會被拆分，資料庫本身的請求數和大小限制仍然適用。
+- 鍵謂詞會被拆分，使每條語句都不超過連線的繫結參數上限（驅動沒有給出上限時按 1000 個），拆分後的語句仍在同一個批中執行。呼叫方自己寫的 SQL 不會被拆分，資料庫本身的請求數和大小限制仍然適用。
 - SQL 錯誤會回滾交易性寫入。條件寫入影響 0 行時回傳衝突，不會回滾同一批中的其他語句。
 - 不會自動重試。提交結果不確定時（例如連線中斷），請先檢查已儲存的狀態，再決定是否重新寫入。
 
@@ -67,7 +65,7 @@ INFO gproxy::instance: schema is up to date warnings=0
 
 金額和限額以縮放後的整數儲存，不使用浮點數。最小單位是 `0.000000001`，可表示範圍約為 ±92 億。
 
-SQL 欄位型別為 `BIGINT`。實體以文字形式在 D1 的 JavaScript 邊界上傳遞這些值，使比較、排序和加法在資料庫內仍按數值進行；JSON 中使用十進位字串也是出於同樣的原因。
+SQL 欄位型別為 `BIGINT`，使比較、排序和加法在資料庫內按數值進行；JSON 中則使用十進位字串。
 
 計算使用 decimal 型別，並且只對整次結算舍入一次，採用四捨六入五成雙（ties to even）。遞增計數器之前，結算會檢查負值和有符號溢位。
 
@@ -81,9 +79,8 @@ SQL 欄位型別為 `BIGINT`。實體以文字形式在 D1 的 JavaScript 邊界
 | --- | --- | --- |
 | 記憶體 | 原生程式的預設值（`memory` feature） | 不共享，僅一個處理程序 |
 | Redis / Valkey | `GPROXY_REDIS_URL`；程式需帶 `redis` feature 構建 | 使用同一 Redis 的所有執行個體 |
-| 資料庫 | Workers 宿主的預設值 | 使用同一資料庫的所有 isolate |
 
-原生程式在啟動時連線 Redis，連不上就退出。限流計數儲存在快取裡，連不上 Redis 的執行個體即使接受了流量，也只能把受限流的請求逐個拒絕。資料庫快取只用於 Workers 宿主，原生程式會拒絕這種設定。發布版程式使用預設 feature 集，其中不含 `redis` 和 `s3`；需要它們的部署請自行構建（見[構建](/zh-tw/development/building)）。
+原生程式在啟動時連線 Redis，連不上就退出。限流計數儲存在快取裡，連不上 Redis 的執行個體即使接受了流量，也只能把受限流的請求逐個拒絕。發布版程式使用預設 feature 集，其中不含 `redis` 和 `s3`；需要它們的部署請自行構建（見[構建](/zh-tw/development/building)）。
 
 ### 操作
 
@@ -108,17 +105,11 @@ Redis 出故障時，GPROXY 不會改用處理程序內快取。如果兩個執�
 
 ### 部署多個執行個體
 
-多個執行個體需要共享快取：原生執行個體使用 Redis，Workers 上使用資料庫快取。如果每個程序各用自己的快取，每個執行個體會各自統計限流、各自重新整理同一個 OAuth 權杖，也收不到其他執行個體發出的設定失效通知。
+多個執行個體需要共享快取，也就是 Redis。如果每個程序各用自己的快取，每個執行個體會各自統計限流、各自重新整理同一個 OAuth 權杖，也收不到其他執行個體發出的設定失效通知。
 
 登入工作階段同樣儲存在快取中，所以在一個執行個體上發起的登入可以在另一個執行個體上完成。在負載均衡後面，這是常見情況。
 
 多個部署或多套環境共用一台 Redis 時，請為每個部署設定獨立的 namespace（預設為 `gproxy`）。通知 channel 名中包含資料庫編號，因為 Redis Pub/Sub 會忽略 `SELECT`。
-
-### 資料庫快取
-
-Workers isolate 沒有常駐處理程序，也沒有 Redis，因此 Workers 宿主把快取放在 D1 或 libSQL 資料庫的三張表中。過期時間在 SQL 中比較，同一資料庫上的所有 isolate 對哪些條目仍然有效的判斷一致。
-
-這種後端沒有通知傳輸。訂閱只會收到最初的 resync 提示，此後再無訊息。Workers 宿主改為在每個請求開始時讀取一次設定 revision，這就是它全部的同步機制。
 
 ## 設定同步
 
@@ -151,10 +142,10 @@ publish  ConfigurationChanged { revision, scopes }
 
 檔案儲存是可選的，設定後端之前處於關閉狀態。
 
-| 後端 | 選擇方式 | 原生程式 | Workers 宿主 |
-| --- | --- | --- | --- |
-| 本機檔案系統 | `--file-storage-dir`（`fs` feature，預設開啟） | 支援 | 不支援 |
-| S3 相容儲存，含 R2 | `[file_storage]` 設定塊（`s3` feature） | 支援 | 支援 |
+| 後端 | 選擇方式 |
+| --- | --- |
+| 本機檔案系統 | `--file-storage-dir`（`fs` feature，預設開啟） |
+| S3 相容儲存，含 R2 | `[file_storage]` 設定塊（`s3` feature） |
 
 檔案儲存儲存發布內容的正文（`/publications/{id}` 提供的位元組）和下載的 tokenizer 詞表。檔案元資料和歸屬儲存在資料庫中，儲存後端只儲存內容。
 
@@ -166,7 +157,6 @@ publish  ConfigurationChanged { revision, scopes }
 
 - SQLite：停止處理程序後複製 `<data-dir>/gproxy.db`，或使用 SQLite 的線上備份。請把主密鑰和副本儲存在一起，沒有主密鑰就無法讀取加密資料庫中的憑證密鑰。
 - PostgreSQL 和 MySQL：使用資料庫自帶的匯出工具。
-- D1 和 libSQL / Turso：使用平台提供的快照。
 - 邏輯匯出：`gproxy export --out config.json --include-secrets`。匯出內容是設定而非歷史資料，不包含身份、用量和 capture。見[設定](/zh-tw/reference/configuration#匯出與匯入設定)。
 
 每個加密密鑰都繫結到所在行的 id，把某一行的密鑰恢復到另一行上是行不通的。這樣可以防止密鑰在行之間被調換，對整庫恢復沒有影響。

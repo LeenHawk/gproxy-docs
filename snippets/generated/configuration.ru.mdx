@@ -12,7 +12,7 @@
 | `cors_origins` | `Array<string>` | Нет | `[]` | Browser origins allowed to call the APIs. Empty means same-origin only. |
 | `data_dir` | `string \| null` | Нет | `null` | Root for instance state a backend resolves relative paths against: the SQLite file, the local file-storage root, downloaded vocabularies. |
 | `file_storage` | `FileStorageConfig \| null` | Нет | `null` | None keeps file-backed resources (publications, vocabularies) disabled; core refuses those operations rather than inventing a location. |
-| `host` | `string` | Нет | `"127.0.0.1"` | Listen address of a native host. Ignored by the edge host, which is given its socket by the runtime. |
+| `host` | `string` | Нет | `"127.0.0.1"` | Listen address. |
 | `master_key` | `MasterKeyConfig` | Нет | `{"key":{"kind":"none"},"next":{"kind":"none"},"rotate":false}` |  |
 | `oauth` | `OAuthIssuerConfig` | Нет | `{"access_ttl_secs":3600,"cli_client_ids":[],"code_ttl_secs":300,"device_ttl_secs":900,"refresh_ttl_secs":2592000}` |  |
 | `port` | `integer` | Нет | `8787` |  |
@@ -23,7 +23,7 @@
 
 ## CacheBackendConfig
 
-Shared TTL state, counters and invalidation notices. `Memory` is per process: correct for a single instance, and silently wrong for several, which is why a multi-instance deployment must name `Redis` or `Store`.
+Shared TTL state, counters and invalidation notices. `Memory` is per process: correct for a single instance, and silently wrong for several, which is why a multi-instance deployment must name `Redis`.
 
 ### memory
 
@@ -38,14 +38,6 @@ Shared TTL state, counters and invalidation notices. `Memory` is per process: co
 | `kind` | `"redis"` | Да | — |  |
 | `namespace` | `string \| null` | Нет | — |  |
 | `url` | `string` | Да | — |  |
-
-### store
-
-The database itself as the cache, for edge deployments with no Redis.
-
-| Поле | Тип | Обязательно | По умолчанию | Описание |
-| --- | --- | --- | --- | --- |
-| `kind` | `"store"` | Да | — |  |
 
 ## ConsoleConfig
 
@@ -148,15 +140,6 @@ Any SeaORM connection string (`postgres://`, `mysql://`, `sqlite://`).
 | --- | --- | --- | --- | --- |
 | `dsn` | `string` | Да | — |  |
 | `kind` | `"url"` | Да | — |  |
-
-### d1
-
-A Cloudflare D1 binding name, resolved from the Worker environment.
-
-| Поле | Тип | Обязательно | По умолчанию | Описание |
-| --- | --- | --- | --- | --- |
-| `binding` | `string` | Да | — |  |
-| `kind` | `"d1"` | Да | — |  |
 
 ### libsql
 
@@ -264,7 +247,7 @@ A Cloudflare D1 binding name, resolved from the Worker environment.
       "default": null
     },
     "host": {
-      "description": "Listen address of a native host. Ignored by the edge host, which is\ngiven its socket by the runtime.",
+      "description": "Listen address.",
       "type": "string",
       "default": "127.0.0.1"
     },
@@ -330,7 +313,7 @@ A Cloudflare D1 binding name, resolved from the Worker environment.
   "additionalProperties": false,
   "$defs": {
     "CacheBackendConfig": {
-      "description": "Shared TTL state, counters and invalidation notices. `Memory` is per\nprocess: correct for a single instance, and silently wrong for several,\nwhich is why a multi-instance deployment must name `Redis` or `Store`.",
+      "description": "Shared TTL state, counters and invalidation notices. `Memory` is per\nprocess: correct for a single instance, and silently wrong for several,\nwhich is why a multi-instance deployment must name `Redis`.",
       "oneOf": [
         {
           "type": "object",
@@ -364,19 +347,6 @@ A Cloudflare D1 binding name, resolved from the Worker environment.
           "required": [
             "kind",
             "url"
-          ]
-        },
-        {
-          "description": "The database itself as the cache, for edge deployments with no Redis.",
-          "type": "object",
-          "properties": {
-            "kind": {
-              "type": "string",
-              "const": "store"
-            }
-          },
-          "required": [
-            "kind"
           ]
         }
       ]
@@ -618,23 +588,6 @@ A Cloudflare D1 binding name, resolved from the Worker environment.
           "required": [
             "kind",
             "dsn"
-          ]
-        },
-        {
-          "description": "A Cloudflare D1 binding name, resolved from the Worker environment.",
-          "type": "object",
-          "properties": {
-            "binding": {
-              "type": "string"
-            },
-            "kind": {
-              "type": "string",
-              "const": "d1"
-            }
-          },
-          "required": [
-            "kind",
-            "binding"
           ]
         },
         {

@@ -50,7 +50,7 @@
       "default": null
     },
     "host": {
-      "description": "Listen address of a native host. Ignored by the edge host, which is\ngiven its socket by the runtime.",
+      "description": "Listen address.",
       "type": "string",
       "default": "127.0.0.1"
     },
@@ -116,7 +116,7 @@
   "additionalProperties": false,
   "$defs": {
     "CacheBackendConfig": {
-      "description": "Shared TTL state, counters and invalidation notices. `Memory` is per\nprocess: correct for a single instance, and silently wrong for several,\nwhich is why a multi-instance deployment must name `Redis` or `Store`.",
+      "description": "Shared TTL state, counters and invalidation notices. `Memory` is per\nprocess: correct for a single instance, and silently wrong for several,\nwhich is why a multi-instance deployment must name `Redis`.",
       "oneOf": [
         {
           "type": "object",
@@ -150,19 +150,6 @@
           "required": [
             "kind",
             "url"
-          ]
-        },
-        {
-          "description": "The database itself as the cache, for edge deployments with no Redis.",
-          "type": "object",
-          "properties": {
-            "kind": {
-              "type": "string",
-              "const": "store"
-            }
-          },
-          "required": [
-            "kind"
           ]
         }
       ]
@@ -404,23 +391,6 @@
           "required": [
             "kind",
             "dsn"
-          ]
-        },
-        {
-          "description": "A Cloudflare D1 binding name, resolved from the Worker environment.",
-          "type": "object",
-          "properties": {
-            "binding": {
-              "type": "string"
-            },
-            "kind": {
-              "type": "string",
-              "const": "d1"
-            }
-          },
-          "required": [
-            "kind",
-            "binding"
           ]
         },
         {

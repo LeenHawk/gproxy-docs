@@ -16,7 +16,6 @@ export const HomeGet = ({ locale = 'en' }) => {
       terminal: 'Or install the CLI from a terminal:',
       all: 'All platforms',
       containers: 'Container images',
-      hosted: 'Hosted deployment',
       upgrade: 'Upgrading from v3',
       label: 'Download and install',
     },
@@ -27,7 +26,6 @@ export const HomeGet = ({ locale = 'en' }) => {
       terminal: '或者在终端里安装 CLI：',
       all: '全部平台',
       containers: '容器镜像',
-      hosted: '托管部署',
       upgrade: '从 v3 升级',
       label: '下载与安装',
     },
@@ -38,7 +36,6 @@ export const HomeGet = ({ locale = 'en' }) => {
       terminal: '或者在終端機裡安裝 CLI：',
       all: '全部平台',
       containers: '容器映像',
-      hosted: '託管部署',
       upgrade: '從 v3 升級',
       label: '下載與安裝',
     },
@@ -49,7 +46,6 @@ export const HomeGet = ({ locale = 'en' }) => {
       terminal: 'Или установите CLI из терминала:',
       all: 'Все платформы',
       containers: 'Образы контейнеров',
-      hosted: 'Облачное развёртывание',
       upgrade: 'Переход с v3',
       label: 'Загрузка и установка',
     },
@@ -118,8 +114,6 @@ export const HomeGet = ({ locale = 'en' }) => {
         <a href={`${prefix}/download`}>{copy.all}</a>
         <span aria-hidden="true">·</span>
         <a href={`${prefix}/deployment/containers`}>{copy.containers}</a>
-        <span aria-hidden="true">·</span>
-        <a href={`${prefix}/deployment/edge`}>{copy.hosted}</a>
         <span aria-hidden="true">·</span>
         <a href={`${prefix}/deployment/v3-to-v4`}>{copy.upgrade}</a>
       </p>

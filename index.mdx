@@ -23,10 +23,9 @@ GPROXY does not run models; the upstream service does the inference. It also
 cannot add features an upstream lacks: converting a request to another format
 does not give a model tool calling or image input it does not have.
 
-It runs as a native server (the CLI, or a container) with a web console, as a
-desktop or mobile application with the console built in, or on Cloudflare
-Workers, Netlify and Vercel with a hosted database. Rust programs can embed it
-as a library.
+It runs as a native server (the CLI, or a container) with a web console, or as
+a desktop or mobile application with the console built in. Rust programs can
+embed it as a library.
 
 ## An example
 
@@ -50,8 +49,8 @@ format at `/v1beta/models/fast:generateContent`.
 - [Concepts](/introduction/concepts) defines the terms used everywhere else:
   channel, provider, credential, model route, gateway API key and rule.
 - *Installation and upgrades* covers the [packages](/download) for each
-  platform, [containers](/deployment/containers), [hosted
-  deployments](/deployment/edge) and moving from older versions, starting
+  platform, [containers](/deployment/containers) and moving from older
+  versions, starting
   with [v3 to v4](/deployment/v3-to-v4).
 - The *Tutorial* takes a fresh instance to a working request in the
   [quick start](/getting-started/quick-start), then shows [the same request

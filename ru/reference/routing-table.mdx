@@ -6,8 +6,7 @@ description: "Полная таблица входящих маршрутов v4
 На этой странице перечислены все HTTP-маршруты экземпляра и порядок, в котором
 разбирается путь запроса. Она пригодится, когда нужно понять, какой URL ведёт к
 какой операции, что меняет префикс провайдера или пространства имён и как
-запрос переключается между провайдерами при сбоях. Нативный хост и хост Workers
-монтируют одну и ту же таблицу. Сам `gproxy-protocol` путей не объявляет:
+запрос переключается между провайдерами при сбоях. Сам `gproxy-protocol` путей не объявляет:
 соответствие URL и операций определяет описанный здесь входной слой.
 
 Полные схемы запросов и ответов для каждого маршрута приведены в
@@ -30,7 +29,7 @@ description: "Полная таблица входящих маршрутов v4
 | `GET` | `/publications/{id}` | опубликованное тело. Сам id служит учётными данными, ключ не нужен |
 | — | `/admin/api/…` | API управления |
 | — | `/portal/api/…` | API личного кабинета пользователя |
-| — | всё остальное | входная обработка (OAuth issuer, сервисы провайдеров, плоскость данных, консоль) |
+| — | всё остальное | входная обработка (OAuth issuer, шлюз MCP, сервисы провайдеров, плоскость данных, консоль) |
 
 ```sh
 curl -s http://127.0.0.1:8787/healthz
@@ -61,11 +60,15 @@ curl -s http://127.0.0.1:8787/healthz
 3. OAuth issuer по адресу `{mount}/v1/oauth/…`. Эти пути принадлежат самому
    экземпляру, а не upstream, и отвечают ошибками в формате OAuth, поэтому
    сопоставляются раньше плоскости данных.
-4. Сервисный маршрут канала, например `/backend-api/…` у Codex или `/api/…` у
+4. Шлюз MCP по адресам `{mount}/connect/mcp` и
+   `{mount}/connect/mcp/{server}`: инструменты зарегистрированных MCP-серверов.
+   На точке монтирования провайдера оба адреса означают этот один сервер. См.
+   [MCP-серверы](/ru/guides/mcp-servers).
+5. Сервисный маршрут канала, например `/backend-api/…` у Codex или `/api/…` у
    Claude Code. Только на точке монтирования провайдера или пространства имён:
    для сопоставления нужен канал, а агрегированная точка его не задаёт.
-5. [Плоскость данных](#data-plane-endpoints).
-6. Консоль с SPA-откатом, если она включена.
+6. [Плоскость данных](#data-plane-endpoints).
+7. Консоль с SPA-откатом, если она включена.
 
 Запрос, не подошедший ни под один пункт, получает 404.
 
@@ -424,7 +427,7 @@ POST   /admin/api/{family}/batch     batch
 бы строк он ни затрагивал: сохраняются либо все элементы, либо ни одного.
 
 Семейства пользователей и доступа: `users`, `api-keys`, `organizations`,
-`teams`, `permissions`, `rate-limits` и `oauth-clients`. Для членства в
+`teams`, `permissions`, `rate-limits`, `mcp-scopes` и `oauth-clients`. Для членства в
 организациях и командах есть отдельные конечные точки
 (`organizations/{id}/members`, `teams/{id}/members`). Некоторые семейства
 отличаются от шести маршрутов:
@@ -444,7 +447,8 @@ POST   /admin/api/{family}/batch     batch
 Семейства конфигурации: `providers`, `credentials`, `models`,
 `provider-models`, `routes`, `route-members`, `connection-profiles`,
 `rule-sets`, `rules`, `provider-rule-sets`, `operation-rules`,
-`operation-endpoints`, `quotas`, `price-rules`, `price-rates`, `price-tiers`.
+`operation-endpoints`, `quotas`, `price-rules`, `price-rates`, `price-tiers`,
+`mcp-tool-natures`.
 
 Другие конечные точки управления:
 
@@ -463,6 +467,7 @@ POST   /admin/api/{family}/batch     batch
 - Правила: `rule-sets/{id}/rules`, `rule-sets/{id}/rule-presets/{preset}`,
   `rule-presets`.
 - Квоты: `quotas/status`, `quotas/{id}/reset`, `quotas/{id}/limit-reset`.
+- MCP: `mcp-tools/{providerId}`; см. [MCP-серверы](/ru/guides/mcp-servers).
 - Каталоги: `channels`, `tls-presets`, `default-model-catalog`,
   `default-model-catalog/apply-prices`.
 - Токенизатор: `tokenizer-vocabs`, `tokenizer-auth`.

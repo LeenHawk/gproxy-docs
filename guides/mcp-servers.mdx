@@ -1,0 +1,199 @@
+---
+title: "MCP servers"
+description: "Put MCP servers behind GPROXY: register a server, sign in to it, give clients one address and a gateway key, and restrict tools with scopes."
+---
+
+GPROXY fronts MCP servers (Model Context Protocol, streamable HTTP) the way it fronts model providers. An instance administrator registers a server as a provider; users, teams and organizations sign in to it; and any MCP client reaches it through GPROXY with only a gateway API key. A client that cannot do OAuth itself needs no change.
+
+The gateway understands tools: it lists them, filters them by scope, routes calls to the right server and audits each call. Only tools are proxied. Prompts and resources are not.
+
+## Registering a server
+
+A server is a provider whose `channel` is `mcp`. It is listed in `GET /admin/api/channels` as "MCP server".
+
+| Field | Meaning |
+| --- | --- |
+| `name` | The server's name. It appears in the URL and as the tool prefix, so keep it to `[A-Za-z0-9_-]`. |
+| `baseUrl` | The server's MCP endpoint, for example `https://mcp.deepwiki.com/mcp`. Required. |
+| `config.headers` | Optional. An object of fixed headers sent on every request, for example `{"X-Tenant":"acme"}`. |
+| `config.auth_header` | Optional. The header a pasted secret is sent in, verbatim. Without it the secret is sent as `Authorization: Bearer <secret>`. |
+
+```sh
+curl -s -X POST http://127.0.0.1:8787/admin/api/providers \
+  -H "Authorization: Bearer $GPROXY_KEY" -H 'content-type: application/json' \
+  -d '{"name":"deepwiki","channel":"mcp",
+       "baseUrl":"https://mcp.deepwiki.com/mcp"}'
+```
+
+The provider's proxy and connection profile apply as for any provider. Models, routes, operation rules and rewrite rules do not apply to an MCP server.
+
+## Signing in
+
+A credential of an MCP server has one of three kinds:
+
+| Kind | Secret | Use |
+| --- | --- | --- |
+| `oauth` | Obtained by signing in | Servers that require OAuth |
+| `api_key` | `{"api_key": "..."}` | A secret you paste |
+| `none` | `{}` | Servers without authentication |
+
+OAuth uses the same authorization-code sign-in as other credentials: `POST /admin/api/credential-login/authcode/start`, then `/complete`. See [Logging in to obtain a credential](/guides/providers#logging-in-to-obtain-a-credential). GPROXY discovers the server's authorization server from its protected-resource metadata (RFC 9728, also read from the `WWW-Authenticate` challenge) and the authorization server's metadata (RFC 8414 or OIDC), registers itself dynamically (RFC 7591), and uses PKCE S256 and the `resource` parameter (RFC 8707). It refreshes the token before it expires, and once more after a `401`.
+
+After you approve, the browser is sent to `http://127.0.0.1:47821/callback`. Nothing listens there, so the page does not load; paste the address from the address bar back into the dialog.
+
+<Warning>
+A server whose authorization server does not support dynamic client registration cannot be signed in to with OAuth in this version.
+</Warning>
+
+### Who can use a server
+
+A caller can use a server only when its key can see a live credential of that provider. This is the ordinary [credential visibility](/guides/permissions#credential-visibility) rule, decided by the key's binding.
+
+When several credentials are visible, the caller's own is preferred, then its team's, then its organization's, then a shared one. A session keeps the credential it started with.
+
+## The two addresses
+
+| Address | What it serves |
+| --- | --- |
+| `https://<gproxy>/connect/mcp/<name>` | One server. Tools keep their own names. `https://<gproxy>/<name>/connect/mcp` is the same address. |
+| `https://<gproxy>/connect/mcp` | Every server the caller can use, aggregated. `?servers=a,b` narrows it. |
+
+On the aggregated address a tool is named `<server>__<tool>`. A name that is longer than 64 characters, or that has characters outside `[A-Za-z0-9_-]`, is not offered there; reach such a tool through the server's own address.
+
+## Configuring a client
+
+A client needs the URL and the gateway key, nothing else: the transport is streamable HTTP, and the key is sent as `Authorization: Bearer <key>` or in `x-api-key`.
+
+Claude Code:
+
+```sh
+claude mcp add --transport http deepwiki https://gproxy.example/connect/mcp/deepwiki \
+  --header "Authorization: Bearer sk-..."
+```
+
+Codex, in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.deepwiki]
+url = "https://gproxy.example/connect/mcp/deepwiki"
+bearer_token_env_var = "GPROXY_API_KEY"
+```
+
+A client that signs in to GPROXY with OAuth instead of a key needs a token with the OAuth scope `gproxy:mcp`.
+
+## Scopes
+
+MCP is allowed by default: a user or key with no MCP rule may use every server it can see a credential for. The model [permission rules](/guides/permissions#permission-rules) are not consulted for MCP.
+
+A rule has a subject, a scope, an action and a priority. The subject is one user or one API key, never both.
+
+### Scope syntax
+
+| Scope | Covers |
+| --- | --- |
+| `mcp:*` | Everything |
+| `mcp:<server>:*` | Every tool of one server |
+| `mcp:<server>:<tool>` | One tool |
+| `mcp:*:<tool>` | A tool of that name on any server |
+| `mcp:<server>:@read` | The server's tools of nature `read` |
+| `mcp:<server>:@write` | The server's tools of nature `write` |
+| `mcp:<server>:@destructive` | The server's tools of nature `destructive` |
+
+`*` stands for the whole server part or the whole tool part; it is not a pattern inside a name. The nature forms also accept `*` as the server: `mcp:*:@destructive`.
+
+### Evaluation
+
+- A subject with no rule is allowed everything.
+- Otherwise the rules are tried from the highest priority down, and the first one that matches decides. At equal priority a `deny` wins.
+- A tool that no rule matches is denied.
+- A key's rules only narrow its user's: the user's rules are evaluated, then the key's, and both must allow.
+- Rules apply to every caller, instance administrators included.
+
+A tool the caller may not call does not appear in the tool list, and calling it answers "Unknown tool".
+
+### Examples
+
+Read-only access to one server, nothing else:
+
+| Scope | Action | Priority |
+| --- | --- | --- |
+| `mcp:deepwiki:@read` | `allow` | 0 |
+
+Everything except destructive tools:
+
+| Scope | Action | Priority |
+| --- | --- | --- |
+| `mcp:*` | `allow` | 0 |
+| `mcp:*:@destructive` | `deny` | 10 |
+
+One server, minus one tool:
+
+| Scope | Action | Priority |
+| --- | --- | --- |
+| `mcp:notion:*` | `allow` | 0 |
+| `mcp:notion:delete_page` | `deny` | 10 |
+
+### Managing rules
+
+Rules are the `mcp-scopes` family of the management API, for instance administrators: list, create, batch, and get, update or delete by ID under `/admin/api/mcp-scopes`. The list accepts `userId`, `apiKeyId`, `ownerUserId`, `search`, `page` and `pageSize`.
+
+| API field | Meaning |
+| --- | --- |
+| `userId` / `apiKeyId` | The subject: exactly one of them. It cannot be changed afterwards. |
+| `scope` | A scope in the syntax above |
+| `action` | `allow` or `deny` |
+| `priority` | Higher values are tried first; default `0` |
+
+```sh
+curl -s -X POST http://127.0.0.1:8787/admin/api/mcp-scopes \
+  -H "Authorization: Bearer $GPROXY_KEY" -H 'content-type: application/json' \
+  -d '{"userId":"<user id>","scope":"mcp:deepwiki:@read","action":"allow"}'
+```
+
+## Tool nature
+
+Each tool is `read`, `write` or `destructive`. The nature comes from the tool's MCP annotations, with the specification's conservative defaults:
+
+| Annotations | Nature |
+| --- | --- |
+| `readOnlyHint: true` | `read` |
+| otherwise, `destructiveHint: false` | `write`: changes things, but is not destructive |
+| otherwise | `destructive` |
+
+A tool that declares nothing is therefore `destructive`.
+
+An administrator can override the nature of a tool. The tool list offered to callers carries the hints of the resulting nature. Overrides are the `mcp-tool-natures` family (`/admin/api/mcp-tool-natures`), with `providerId`, `tool` and `nature`; only `nature` can be changed afterwards.
+
+`GET /admin/api/mcp-tools/{providerId}` returns the server's tools with the declared nature, the effective nature and the ID of the override, if any. It asks the server live, so the provider needs a base URL and a live credential, and the request answers `502` when the server cannot be reached.
+
+## Audit
+
+Every tool call writes one record to the audit trail, with the action `mcp.tools.call`:
+
+```text
+GET /admin/api/audit?action=mcp.tools.call
+```
+
+| Field | Content |
+| --- | --- |
+| `actorUserId`, `actorApiKeyId`, `sourceIp` | Who called |
+| `entityKind`, `entityId` | `provider` and the server's provider ID |
+| `outcome` | `ok` or `error` |
+| `detail.server`, `detail.tool` | The server's name and the tool |
+| `detail.credentialId` | The credential used, or `null` |
+| `detail.durationMs` | How long the call took |
+| `detail.outcome` | `ok`, `tool_error`, `input_required`, `refused` or `failed` |
+| `detail.arguments`, `detail.result` | Present only when downstream body logging is on (the setting `enableDownstreamLogBody`). Sensitive field names are redacted. |
+
+See [Usage, logs, and audit](/guides/observability).
+
+## Protocol behaviour and limits
+
+- Towards clients, GPROXY speaks MCP revision 2026-07-28 (stateless, no `initialize`) and the session-based revisions 2024-11-05 to 2025-11-25.
+- Towards servers, it prefers 2026-07-28 and falls back to `initialize` and a session, which is what servers such as DeepWiki and Notion speak today (2025-11-25).
+- For a session-based server, the mapping from the caller's session to the upstream session and credential is stored durably, so any instance can continue a session.
+- Every answer is one JSON body. There is no SSE stream towards clients and no GET stream, and progress notifications are dropped.
+- Server-initiated requests (sampling, elicitation) work only as `input_required` results, when both the client and the server speak 2026-07-28; they pass through unchanged. A session-based server is opened without client capabilities and cannot ask.
+- When a server answers `401`, GPROXY refreshes the credential once and retries. If the server still refuses, the client gets a plain `502` with a JSON-RPC error. The server's `WWW-Authenticate` is never forwarded, so a client never starts OAuth with the server itself.
+- A server's tool list is cached for 5 minutes, per server and credential. A tool the server adds or removes can take that long to show.
+- Prompts and resources are not proxied.

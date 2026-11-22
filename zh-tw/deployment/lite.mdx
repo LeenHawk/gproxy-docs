@@ -1,0 +1,195 @@
+---
+title: "Cloudflare Workers、Netlify 與 Vercel"
+description: "在 serverless 平台上執行 gproxy-lite：不帶資料庫的單租戶引擎。"
+sidebarTitle: "Serverless（gproxy-lite）"
+---
+
+完整的閘道需要一個處理程序和一個資料庫，因此只能原生執行或在容器中執行。serverless 平台執行的是 `gproxy-lite`：一個獨立的輕量引擎，使用同樣的渠道和同樣的協定轉換，編譯為一個 WebAssembly 模組，每個平台搭配一層很薄的 JavaScript 外殼。
+
+## 有什麼，沒有什麼
+
+`gproxy-lite` 只服務一位維運者。它有：
+
+- 完整閘道的全部渠道，包括透過 OAuth 登入的渠道；
+- HTTP 上的全部操作，支援所有方言：內容生成（串流或非串流）、token 計數、嵌入、圖片、模型清單、壓縮、檔案和影片。上游使用用戶端的方言時直接透傳，否則先轉換；
+- Cloudflare 上的 WebSocket 操作，轉送給支援 WebSocket 的上游。
+
+它沒有：
+
+- 使用者、組織、團隊、API Key 和權限：一把存取金鑰放行所有請求；
+- 預算、配額、計價、用量記錄、限流和稽核記錄；
+- 每個供應商多把憑證、憑證選擇，以及換另一把憑證重試；
+- 路由、別名和層級：請求要指明供應商；
+- 重寫規則和按操作設定的路由規則：路由方式是渠道的預設值；
+- 控制台、管理 API 和多執行個體同步；
+- MCP 伺服器和渠道服務路由（用量頁面、配額查詢）；
+- 本機模型目錄和 tokenizer：上游不支援的操作會被拒絕，不做估算；
+- 檔案儲存：經過轉換的圖片請求不能回傳 URL，只能回傳 `b64_json`；
+- 把 Responses WebSocket 用戶端轉換到 HTTP 上游。
+
+需要其中任何一項時，請使用[容器](/zh-tw/deployment/containers)部署。
+
+## 設定
+
+全部設定是環境變數 `GPROXY_LITE_CONFIG` 中的一份 JSON 文件。其中有存取金鑰和上游憑證，請當作機密保存。
+
+```json
+{
+  "access_key": "what clients send as their API key",
+  "providers": [
+    { "name": "openai", "channel": "openai", "credential": "sk-..." },
+    {
+      "name": "local",
+      "channel": "custom",
+      "base_url": "https://llm.example.com",
+      "config": { "dialects": ["openai_chat"] },
+      "credential": "upstream-key"
+    },
+    {
+      "name": "vertex",
+      "channel": "vertex",
+      "credential": { "kind": "service_account", "secret": { "type": "service_account" } }
+    },
+    { "name": "codex", "channel": "codex" }
+  ]
+}
+```
+
+| 欄位 | 含義 |
+| --- | --- |
+| `access_key` | 用戶端出示的金鑰：作為 bearer token，或放在 `x-api-key`、`x-goog-api-key`、`?key=` 中。 |
+| `providers[].name` | 字母、數字、`.`、`_` 和 `-`。它是路徑前綴，也是模型前綴。`lite` 為保留名稱。 |
+| `providers[].channel` | 渠道 id，見[渠道目錄](/zh-tw/reference/channel-catalog)。 |
+| `providers[].base_url`、`config` | 渠道自己的設定，與完整閘道中供應商的設定相同。 |
+| `providers[].credential` | 貼上的 API Key 寫成字串；渠道自有格式的金鑰寫成 `{ "kind", "secret" }`。需要登入的渠道不填。 |
+
+引擎無法使用的設定（未知渠道、名稱重複、渠道不接受的憑證）在啟動時被拒絕，此後每個請求都回傳 `500` 並說明原因。
+
+## 指定供應商
+
+- `/{provider}/v1/...` 送往該供應商。模型名是上游自己的名稱。
+- 不帶前綴時，模型欄位寫成 `provider/model`。
+- 只設定了一個供應商時，前綴可以省略。
+
+設定了多個供應商時，不帶前綴的 `GET /v1/models` 列出所有供應商的模型，每個 id 前面加上供應商名。
+
+```sh
+curl https://your-deployment.example/v1/chat/completions \
+  -H "Authorization: Bearer $ACCESS_KEY" -H "Content-Type: application/json" \
+  -d '{"model":"openai/gpt-5.5","messages":[{"role":"user","content":"Hi"}]}'
+```
+
+## 登入 OAuth 渠道
+
+沒有 `credential` 的供應商透過三個路徑登入，這些路徑都需要存取金鑰。瀏覽器重新導向不需要到達部署本身。
+
+<Steps>
+  <Step title="開始">
+    ```sh
+    curl -X POST https://your-deployment.example/lite/login/start \
+      -H "Authorization: Bearer $ACCESS_KEY" -H "Content-Type: application/json" \
+      -d '{"provider":"codex"}'
+    ```
+
+    回應中有一個 `session`，另有一個要在瀏覽器中開啟的 `authorize_url`；裝置碼登入時則是 `user_code` 和 `verification_uri`。兩種流程都支援的渠道可以傳 `"mode": "authorization_code"` 或 `"device_code"`。
+  </Step>
+  <Step title="授權">
+    開啟該 URL 並同意授權。授權碼登入最後會停在一個打不開的頁面（`localhost` 位址），或一個顯示授權碼的頁面：複製完整位址，或複製授權碼。
+  </Step>
+  <Step title="完成">
+    ```sh
+    curl -X POST https://your-deployment.example/lite/login/complete \
+      -H "Authorization: Bearer $ACCESS_KEY" -H "Content-Type: application/json" \
+      -d '{"session":"...","callback_url":"http://localhost:1455/auth/callback?code=...&state=..."}'
+    ```
+
+    `callback_url` 和 `code` 只傳送其中一個。裝置碼登入只傳送 `session`；回應為 `{"status":"pending"}` 時，每隔 `interval_secs` 秒重複一次。`{"status":"ready"}` 表示憑證已儲存。
+  </Step>
+</Steps>
+
+`GET /lite/status` 列出每個供應商及其憑證的狀態：`none`、`configured`、`signed_in` 或 `dead`。`dead` 表示上游拒絕續期該憑證，`reason` 是原因，只有重新登入才能取代它。
+
+## 保持登入
+
+會過期的憑證在三種情況下續期：請求發現它即將過期時，上游回傳 `401` 時，以及依排程定時續期，這樣一段時間沒有請求也不會掉登入。每個範本每天執行一次排程，時間是 UTC 04:00。`POST /lite/renew`（需要存取金鑰）可以隨時手動執行同樣的操作，並回傳每個可續期供應商的結果：
+
+```json
+{
+  "renewals": [
+    { "provider": "codex", "outcome": "renewed" },
+    { "provider": "claude", "outcome": "not_due" },
+    { "provider": "kiro", "outcome": "no_credential" },
+    { "provider": "gemini", "outcome": "failed", "reason": "..." }
+  ]
+}
+```
+
+只要有一次續期失敗，這次執行就會在平台的日誌中記為失敗。
+
+| 平台 | 由什麼執行 | 排程寫在哪裡 | 限制 |
+| --- | --- | --- | --- |
+| Cloudflare Workers | Cron Trigger 和 Worker 的 `scheduled` 處理函式 | `wrangler.toml` 中的 `[triggers] crons` | 所有方案的最小間隔都是一分鐘。Free 方案每個帳號最多五個 Cron Trigger。 |
+| Netlify | Scheduled Function `renew` | `netlify.toml` 中的 `[functions."renew"] schedule` | 所有方案可用。只在已發布的部署上執行，每次最多 30 秒，沒有 URL。 |
+| Vercel | 請求 `GET /lite/renew` 的 Cron Job | `vercel.json` 中的 `crons` | Hobby：每天最多一次，在指定的那一小時內啟動；更頻繁的運算式會導致部署失敗。Pro：最小間隔一分鐘。 |
+
+在 Vercel 上，把環境變數 `CRON_SECRET` 設為至少 16 個字元的隨機字串，然後重新部署。Vercel 把它作為定時請求的 Bearer 權杖送出，函式只接受帶有它的定時請求。沒有 `CRON_SECRET` 時定時請求會被拒絕，不會依排程續期。
+
+每天一次足以保住 refresh token，它的有效期以天計或更長。如果排程沒有執行，或者間隔比工作階段的有效期還長（`playground` 渠道每十分鐘輪換一次 Cookie），請求仍然會續期憑證；閒置太久的憑證需要重新登入。
+
+同一個憑證的續期不會重疊，因為有些上游在 refresh token 被使用兩次時會撤銷這次登入的全部權杖。續期前先取得租約：一個僅在不存在時才建立的儲存項目，30 秒後過期。其他實例發現租約已被占用時，最多等待 10 秒，然後使用續期後的憑證。持有者中途結束時，租約到期，下一次續期接手。續期時間超過租約的，仍可能與下一次續期重疊，這時儲存哪個結果由比較並交換決定。
+
+## 狀態
+
+引擎記住的所有內容都在每個部署的一個鍵值儲存中：登入取得或更新過的憑證、進行中的登入，以及協定轉換在請求之間保留的狀態。貼上的憑證留在設定中，只有在渠道更新它之後才寫入儲存。憑證依上游簽發的原樣儲存，沒有完整閘道的主金鑰加密，請限制誰能讀取該儲存。
+
+| 平台 | 儲存 | 比較並交換 |
+| --- | --- | --- |
+| Cloudflare Workers | 一個使用 SQLite 儲存的 Durable Object | 原子：該物件一次只執行一個呼叫，其儲存是強一致的。 |
+| Netlify | Netlify Blobs，以強一致方式讀取 | 寫入是原子的（`onlyIfMatch`、`onlyIfNew`）。Blobs 沒有條件刪除，因此刪除時寫入一個墓碑，鍵仍然存在；釋放的租約就是這樣一個墓碑，下一次續期會覆寫它。 |
+| Vercel | Marketplace 中的 Upstash Redis | 原子：在單一主節點上執行一個 Lua 指令碼。 |
+
+## 部署
+
+範本位於[儲存庫](https://github.com/LeenHawk/gproxy)的 `deploy/lite`。先建置模組，這需要帶 `wasm32-unknown-unknown` 目標的 Rust，以及與 `Cargo.lock` 中版本一致的 `wasm-bindgen-cli`：
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.130
+sh deploy/lite/build.sh
+```
+
+所有渠道都會編譯進模組。模組大小為 10.7 MB，gzip 壓縮後 4.0 MB。
+
+<Tabs>
+  <Tab title="Cloudflare Workers">
+    ```sh
+    cd deploy/lite/cloudflare
+    wrangler secret put GPROXY_LITE_CONFIG
+    wrangler deploy
+    ```
+
+    Worker 在 `wrangler.toml` 中宣告了它的 Durable Object，不需要事先建立任何資源。在本機執行時，把 `dev.vars.example` 複製為 `.dev.vars`，然後啟動 `wrangler dev`。
+  </Tab>
+  <Tab title="Netlify">
+    ```sh
+    cd deploy/lite/netlify
+    npm install
+    netlify env:set GPROXY_LITE_CONFIG '{"access_key":"..."}' --secret
+    netlify deploy --prod
+    ```
+
+    引擎以 Netlify Function 的形式執行。函式最多執行 60 秒，串流回應也不例外，更長的生成會被截斷。WebSocket 請求回傳 `501`。
+  </Tab>
+  <Tab title="Vercel">
+    從 Marketplace 為專案加入 Upstash Redis，它會設定 `KV_REST_API_URL` 和 `KV_REST_API_TOKEN`。然後：
+
+    ```sh
+    cd deploy/lite/vercel
+    vercel env add GPROXY_LITE_CONFIG
+    vercel env add CRON_SECRET
+    vercel deploy --prod
+    ```
+
+    引擎以 Node.js 函式的形式執行，最長執行時間為 300 秒。WebSocket 請求回傳 `501`。
+  </Tab>
+</Tabs>

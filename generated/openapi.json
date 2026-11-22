@@ -2130,7 +2130,7 @@
             "additionalProperties": false,
             "properties": {
               "create": {
-                "$ref": "#/components/schemas/Input_ModelWrite"
+                "$ref": "#/components/schemas/Input_ProviderWrite"
               }
             },
             "required": [
@@ -2171,7 +2171,7 @@
             "additionalProperties": false,
             "properties": {
               "create": {
-                "$ref": "#/components/schemas/Input_ProviderModelWrite"
+                "$ref": "#/components/schemas/Input_CredentialWrite"
               }
             },
             "required": [
@@ -2212,7 +2212,7 @@
             "additionalProperties": false,
             "properties": {
               "create": {
-                "$ref": "#/components/schemas/Input_RouteWrite"
+                "$ref": "#/components/schemas/Input_ModelWrite"
               }
             },
             "required": [
@@ -2253,7 +2253,7 @@
             "additionalProperties": false,
             "properties": {
               "create": {
-                "$ref": "#/components/schemas/Input_RouteMemberWrite"
+                "$ref": "#/components/schemas/Input_ProviderModelWrite"
               }
             },
             "required": [
@@ -2294,7 +2294,7 @@
             "additionalProperties": false,
             "properties": {
               "create": {
-                "$ref": "#/components/schemas/Input_ConnectionProfileWrite"
+                "$ref": "#/components/schemas/Input_RouteWrite"
               }
             },
             "required": [
@@ -2335,7 +2335,7 @@
             "additionalProperties": false,
             "properties": {
               "create": {
-                "$ref": "#/components/schemas/Input_RuleSetWrite"
+                "$ref": "#/components/schemas/Input_RouteMemberWrite"
               }
             },
             "required": [
@@ -2376,7 +2376,7 @@
             "additionalProperties": false,
             "properties": {
               "create": {
-                "$ref": "#/components/schemas/Input_RewriteRuleWrite"
+                "$ref": "#/components/schemas/Input_ConnectionProfileWrite"
               }
             },
             "required": [
@@ -2417,7 +2417,7 @@
             "additionalProperties": false,
             "properties": {
               "create": {
-                "$ref": "#/components/schemas/Input_ProviderRuleSetWrite"
+                "$ref": "#/components/schemas/Input_RuleSetWrite"
               }
             },
             "required": [
@@ -2458,7 +2458,7 @@
             "additionalProperties": false,
             "properties": {
               "create": {
-                "$ref": "#/components/schemas/Input_OperationRuleWrite"
+                "$ref": "#/components/schemas/Input_RewriteRuleWrite"
               }
             },
             "required": [
@@ -2499,7 +2499,7 @@
             "additionalProperties": false,
             "properties": {
               "create": {
-                "$ref": "#/components/schemas/Input_OperationEndpointWrite"
+                "$ref": "#/components/schemas/Input_ProviderRuleSetWrite"
               }
             },
             "required": [
@@ -2581,7 +2581,7 @@
             "additionalProperties": false,
             "properties": {
               "create": {
-                "$ref": "#/components/schemas/Input_QuotaWrite"
+                "$ref": "#/components/schemas/Input_OperationRuleWrite"
               }
             },
             "required": [
@@ -2622,7 +2622,7 @@
             "additionalProperties": false,
             "properties": {
               "create": {
-                "$ref": "#/components/schemas/Input_PriceRuleWrite"
+                "$ref": "#/components/schemas/Input_OperationEndpointWrite"
               }
             },
             "required": [
@@ -2663,7 +2663,7 @@
             "additionalProperties": false,
             "properties": {
               "create": {
-                "$ref": "#/components/schemas/Input_PriceRateWrite"
+                "$ref": "#/components/schemas/Input_QuotaWrite"
               }
             },
             "required": [
@@ -2704,7 +2704,7 @@
             "additionalProperties": false,
             "properties": {
               "create": {
-                "$ref": "#/components/schemas/Input_PriceTierWrite"
+                "$ref": "#/components/schemas/Input_PriceRuleWrite"
               }
             },
             "required": [
@@ -2717,6 +2717,88 @@
             "properties": {
               "update": {
                 "$ref": "#/components/schemas/Input_BatchPatch23"
+              }
+            },
+            "required": [
+              "update"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "delete": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "delete"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "Input_BatchItem24": {
+        "description": "One step of a batch write. Every item of one batch lands in a single\nrevision commit: either all of them are durable or none is.",
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "create": {
+                "$ref": "#/components/schemas/Input_PriceRateWrite"
+              }
+            },
+            "required": [
+              "create"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "update": {
+                "$ref": "#/components/schemas/Input_BatchPatch24"
+              }
+            },
+            "required": [
+              "update"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "delete": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "delete"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "Input_BatchItem25": {
+        "description": "One step of a batch write. Every item of one batch lands in a single\nrevision commit: either all of them are durable or none is.",
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "create": {
+                "$ref": "#/components/schemas/Input_PriceTierWrite"
+              }
+            },
+            "required": [
+              "create"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "update": {
+                "$ref": "#/components/schemas/Input_BatchPatch25"
               }
             },
             "required": [
@@ -2868,7 +2950,7 @@
             "additionalProperties": false,
             "properties": {
               "create": {
-                "$ref": "#/components/schemas/Input_RateLimitWrite"
+                "$ref": "#/components/schemas/Input_McpScopeWrite"
               }
             },
             "required": [
@@ -2909,7 +2991,7 @@
             "additionalProperties": false,
             "properties": {
               "create": {
-                "$ref": "#/components/schemas/Input_OAuthClientWrite"
+                "$ref": "#/components/schemas/Input_McpToolNatureWrite"
               }
             },
             "required": [
@@ -2950,7 +3032,7 @@
             "additionalProperties": false,
             "properties": {
               "create": {
-                "$ref": "#/components/schemas/Input_ProviderWrite"
+                "$ref": "#/components/schemas/Input_RateLimitWrite"
               }
             },
             "required": [
@@ -2991,7 +3073,7 @@
             "additionalProperties": false,
             "properties": {
               "create": {
-                "$ref": "#/components/schemas/Input_CredentialWrite"
+                "$ref": "#/components/schemas/Input_OAuthClientWrite"
               }
             },
             "required": [
@@ -3046,7 +3128,7 @@
             "type": "string"
           },
           "patch": {
-            "$ref": "#/components/schemas/Input_ModelPatch"
+            "$ref": "#/components/schemas/Input_ProviderPatch"
           }
         },
         "required": [
@@ -3061,7 +3143,7 @@
             "type": "string"
           },
           "patch": {
-            "$ref": "#/components/schemas/Input_ProviderModelPatch"
+            "$ref": "#/components/schemas/Input_CredentialPatch"
           }
         },
         "required": [
@@ -3076,7 +3158,7 @@
             "type": "string"
           },
           "patch": {
-            "$ref": "#/components/schemas/Input_RoutePatch"
+            "$ref": "#/components/schemas/Input_ModelPatch"
           }
         },
         "required": [
@@ -3091,7 +3173,7 @@
             "type": "string"
           },
           "patch": {
-            "$ref": "#/components/schemas/Input_RouteMemberPatch"
+            "$ref": "#/components/schemas/Input_ProviderModelPatch"
           }
         },
         "required": [
@@ -3106,7 +3188,7 @@
             "type": "string"
           },
           "patch": {
-            "$ref": "#/components/schemas/Input_ConnectionProfilePatch"
+            "$ref": "#/components/schemas/Input_RoutePatch"
           }
         },
         "required": [
@@ -3121,7 +3203,7 @@
             "type": "string"
           },
           "patch": {
-            "$ref": "#/components/schemas/Input_RuleSetPatch"
+            "$ref": "#/components/schemas/Input_RouteMemberPatch"
           }
         },
         "required": [
@@ -3136,7 +3218,7 @@
             "type": "string"
           },
           "patch": {
-            "$ref": "#/components/schemas/Input_RewriteRulePatch"
+            "$ref": "#/components/schemas/Input_ConnectionProfilePatch"
           }
         },
         "required": [
@@ -3151,7 +3233,7 @@
             "type": "string"
           },
           "patch": {
-            "$ref": "#/components/schemas/Input_ProviderRuleSetPatch"
+            "$ref": "#/components/schemas/Input_RuleSetPatch"
           }
         },
         "required": [
@@ -3166,7 +3248,7 @@
             "type": "string"
           },
           "patch": {
-            "$ref": "#/components/schemas/Input_OperationRulePatch"
+            "$ref": "#/components/schemas/Input_RewriteRulePatch"
           }
         },
         "required": [
@@ -3181,7 +3263,7 @@
             "type": "string"
           },
           "patch": {
-            "$ref": "#/components/schemas/Input_OperationEndpointPatch"
+            "$ref": "#/components/schemas/Input_ProviderRuleSetPatch"
           }
         },
         "required": [
@@ -3211,7 +3293,7 @@
             "type": "string"
           },
           "patch": {
-            "$ref": "#/components/schemas/Input_QuotaPatch"
+            "$ref": "#/components/schemas/Input_OperationRulePatch"
           }
         },
         "required": [
@@ -3226,7 +3308,7 @@
             "type": "string"
           },
           "patch": {
-            "$ref": "#/components/schemas/Input_PriceRulePatch"
+            "$ref": "#/components/schemas/Input_OperationEndpointPatch"
           }
         },
         "required": [
@@ -3241,7 +3323,7 @@
             "type": "string"
           },
           "patch": {
-            "$ref": "#/components/schemas/Input_PriceRatePatch"
+            "$ref": "#/components/schemas/Input_QuotaPatch"
           }
         },
         "required": [
@@ -3251,6 +3333,36 @@
         "type": "object"
       },
       "Input_BatchPatch23": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "patch": {
+            "$ref": "#/components/schemas/Input_PriceRulePatch"
+          }
+        },
+        "required": [
+          "id",
+          "patch"
+        ],
+        "type": "object"
+      },
+      "Input_BatchPatch24": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "patch": {
+            "$ref": "#/components/schemas/Input_PriceRatePatch"
+          }
+        },
+        "required": [
+          "id",
+          "patch"
+        ],
+        "type": "object"
+      },
+      "Input_BatchPatch25": {
         "properties": {
           "id": {
             "type": "string"
@@ -3316,7 +3428,7 @@
             "type": "string"
           },
           "patch": {
-            "$ref": "#/components/schemas/Input_RateLimitPatch"
+            "$ref": "#/components/schemas/Input_McpScopePatch"
           }
         },
         "required": [
@@ -3331,7 +3443,7 @@
             "type": "string"
           },
           "patch": {
-            "$ref": "#/components/schemas/Input_OAuthClientPatch"
+            "$ref": "#/components/schemas/Input_McpToolNaturePatch"
           }
         },
         "required": [
@@ -3346,7 +3458,7 @@
             "type": "string"
           },
           "patch": {
-            "$ref": "#/components/schemas/Input_ProviderPatch"
+            "$ref": "#/components/schemas/Input_RateLimitPatch"
           }
         },
         "required": [
@@ -3361,7 +3473,7 @@
             "type": "string"
           },
           "patch": {
-            "$ref": "#/components/schemas/Input_CredentialPatch"
+            "$ref": "#/components/schemas/Input_OAuthClientPatch"
           }
         },
         "required": [
@@ -19194,6 +19306,78 @@
           }
         ]
       },
+      "Input_McpScopePatch": {
+        "description": "The subject of a rule does not change; delete the rule and write another.",
+        "properties": {
+          "action": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "priority": {
+            "default": null,
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "scope": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Input_McpScopeWrite": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "apiKeyId": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "priority": {
+            "default": null,
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "scope": {
+            "type": "string"
+          },
+          "userId": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "scope",
+          "action"
+        ],
+        "type": "object"
+      },
       "Input_McpServer": {
         "additionalProperties": true,
         "properties": {
@@ -19585,6 +19769,44 @@
           "mcp_tool_listing"
         ],
         "type": "string"
+      },
+      "Input_McpToolNaturePatch": {
+        "properties": {
+          "nature": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Input_McpToolNatureWrite": {
+        "properties": {
+          "id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "nature": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string"
+          },
+          "tool": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "providerId",
+          "tool",
+          "nature"
+        ],
+        "type": "object"
       },
       "Input_McpToolReference": {
         "additionalProperties": true,
@@ -40728,7 +40950,7 @@
             ]
           },
           "required": {
-            "description": "The provider cannot serve a request without it. Everything else has a\nchannel default.",
+            "description": "The provider cannot serve a request without it. Everything else has a\ndefault.",
             "type": "boolean"
           }
         },
@@ -52393,7 +52615,7 @@
         "type": "object"
       },
       "Output_LoginMode": {
-        "description": "How a credential for this channel comes into existence.",
+        "description": "How a credential for an upstream comes into existence.",
         "oneOf": [
           {
             "const": "authorization_code",
@@ -52407,7 +52629,7 @@
           },
           {
             "const": "api_key",
-            "description": "A key the operator pastes. No channel trait is involved: the secret is\nstored as given and the channel injects it at request time.",
+            "description": "A secret the operator pastes. No trait is involved: the secret is\nstored as given and the upstream kind injects it at request time.",
             "type": "string"
           }
         ]
@@ -53066,6 +53288,48 @@
         },
         "type": "object"
       },
+      "Output_McpScopeDto": {
+        "properties": {
+          "action": {
+            "description": "`allow` or `deny`.",
+            "type": "string"
+          },
+          "apiKeyId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "priority": {
+            "description": "Higher wins; at one priority a refusal wins.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "scope": {
+            "description": "`mcp:<server>:<tool>`; either part may be `*`, the tool part may be\n`@read`, `@write` or `@destructive`, and `mcp:*` is everything.",
+            "type": "string"
+          },
+          "userId": {
+            "description": "The rule's subject: exactly one of the two is set.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "apiKeyId",
+          "scope",
+          "action",
+          "priority"
+        ],
+        "type": "object"
+      },
       "Output_McpTool": {
         "additionalProperties": true,
         "properties": {
@@ -53277,6 +53541,50 @@
         ],
         "type": "object"
       },
+      "Output_McpToolDto": {
+        "description": "One tool of a server, with what the server says it does and what the\ngateway treats it as.",
+        "properties": {
+          "declaredNature": {
+            "description": "From the server's annotations: `read`, `write` or `destructive`.",
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "nature": {
+            "description": "The override when there is one, else `declared_nature`.",
+            "type": "string"
+          },
+          "overrideId": {
+            "description": "The override's id, when the administrator set one.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "title",
+          "description",
+          "declaredNature",
+          "nature",
+          "overrideId"
+        ],
+        "type": "object"
+      },
       "Output_McpToolFilter": {
         "additionalProperties": true,
         "properties": {
@@ -53336,6 +53644,31 @@
           "mcp_tool_listing"
         ],
         "type": "string"
+      },
+      "Output_McpToolNatureDto": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "nature": {
+            "description": "`read`, `write` or `destructive`.",
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string"
+          },
+          "tool": {
+            "description": "The tool's name as the server lists it.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "providerId",
+          "tool",
+          "nature"
+        ],
+        "type": "object"
       },
       "Output_MediaProcessing": {
         "enum": [
@@ -56620,7 +56953,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_UserSessionDto"
+              "$ref": "#/components/schemas/Output_OrganizationMemberDto"
             },
             "type": "array"
           },
@@ -56653,7 +56986,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_AuditEventDto"
+              "$ref": "#/components/schemas/Output_TeamMemberDto"
             },
             "type": "array"
           },
@@ -56686,7 +57019,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_ProviderDto"
+              "$ref": "#/components/schemas/Output_UserSessionDto"
             },
             "type": "array"
           },
@@ -56719,7 +57052,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_CredentialDto"
+              "$ref": "#/components/schemas/Output_AuditEventDto"
             },
             "type": "array"
           },
@@ -56752,7 +57085,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_ModelDto"
+              "$ref": "#/components/schemas/Output_ProviderDto"
             },
             "type": "array"
           },
@@ -56785,7 +57118,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_ProviderModelDto"
+              "$ref": "#/components/schemas/Output_CredentialDto"
             },
             "type": "array"
           },
@@ -56818,7 +57151,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_RouteDto"
+              "$ref": "#/components/schemas/Output_ModelDto"
             },
             "type": "array"
           },
@@ -56851,7 +57184,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_RouteMemberDto"
+              "$ref": "#/components/schemas/Output_ProviderModelDto"
             },
             "type": "array"
           },
@@ -56884,7 +57217,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_ConnectionProfileDto"
+              "$ref": "#/components/schemas/Output_RouteDto"
             },
             "type": "array"
           },
@@ -56917,7 +57250,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_RuleSetDto"
+              "$ref": "#/components/schemas/Output_RouteMemberDto"
             },
             "type": "array"
           },
@@ -56983,7 +57316,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_RewriteRuleDto"
+              "$ref": "#/components/schemas/Output_ConnectionProfileDto"
             },
             "type": "array"
           },
@@ -57016,7 +57349,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_ProviderRuleSetDto"
+              "$ref": "#/components/schemas/Output_RuleSetDto"
             },
             "type": "array"
           },
@@ -57049,7 +57382,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_OperationRuleDto"
+              "$ref": "#/components/schemas/Output_RewriteRuleDto"
             },
             "type": "array"
           },
@@ -57082,7 +57415,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_OperationEndpointDto"
+              "$ref": "#/components/schemas/Output_ProviderRuleSetDto"
             },
             "type": "array"
           },
@@ -57115,7 +57448,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_QuotaDto"
+              "$ref": "#/components/schemas/Output_OperationRuleDto"
             },
             "type": "array"
           },
@@ -57148,7 +57481,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_PriceRuleDto"
+              "$ref": "#/components/schemas/Output_OperationEndpointDto"
             },
             "type": "array"
           },
@@ -57181,7 +57514,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_PriceRateDto"
+              "$ref": "#/components/schemas/Output_QuotaDto"
             },
             "type": "array"
           },
@@ -57214,7 +57547,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_PriceTierDto"
+              "$ref": "#/components/schemas/Output_PriceRuleDto"
             },
             "type": "array"
           },
@@ -57247,7 +57580,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_QuotaObservationDto"
+              "$ref": "#/components/schemas/Output_PriceRateDto"
             },
             "type": "array"
           },
@@ -57280,7 +57613,7 @@
         "properties": {
           "items": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/Output_PriceTierDto"
             },
             "type": "array"
           },
@@ -57314,6 +57647,72 @@
           "items": {
             "items": {
               "$ref": "#/components/schemas/Output_OrganizationDto"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "offset": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "total": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "type": "object"
+      },
+      "Output_Page30": {
+        "description": "One page of results. `total` counts every row the filters match, not the\npage, so a console can render a pager without a second request.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Output_QuotaObservationDto"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "offset": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "total": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "type": "object"
+      },
+      "Output_Page31": {
+        "description": "One page of results. `total` counts every row the filters match, not the\npage, so a console can render a pager without a second request.",
+        "properties": {
+          "items": {
+            "items": {
+              "type": "string"
             },
             "type": "array"
           },
@@ -57412,7 +57811,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_RateLimitDto"
+              "$ref": "#/components/schemas/Output_McpScopeDto"
             },
             "type": "array"
           },
@@ -57445,7 +57844,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_OAuthClientDto"
+              "$ref": "#/components/schemas/Output_McpToolNatureDto"
             },
             "type": "array"
           },
@@ -57478,7 +57877,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_OrganizationMemberDto"
+              "$ref": "#/components/schemas/Output_RateLimitDto"
             },
             "type": "array"
           },
@@ -57511,7 +57910,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Output_TeamMemberDto"
+              "$ref": "#/components/schemas/Output_OAuthClientDto"
             },
             "type": "array"
           },
@@ -76581,7 +76980,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page11"
+                  "$ref": "#/components/schemas/Output_Page13"
                 }
               }
             },
@@ -76873,7 +77272,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page18"
+                  "$ref": "#/components/schemas/Output_Page20"
                 }
               }
             },
@@ -76993,7 +77392,7 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/Input_BatchItem14"
+                  "$ref": "#/components/schemas/Input_BatchItem16"
                 },
                 "type": "array"
               }
@@ -77983,7 +78382,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page13"
+                  "$ref": "#/components/schemas/Output_Page15"
                 }
               }
             },
@@ -78103,7 +78502,7 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/Input_BatchItem9"
+                  "$ref": "#/components/schemas/Input_BatchItem11"
                 },
                 "type": "array"
               }
@@ -79193,7 +79592,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page28"
+                  "$ref": "#/components/schemas/Output_Page30"
                 }
               }
             },
@@ -80904,6 +81303,1159 @@
         "x-gproxy-section": "logs"
       }
     },
+    "/admin/api/mcp-scopes": {
+      "get": {
+        "parameters": [
+          {
+            "description": "",
+            "in": "query",
+            "name": "apiKeyId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "credentialId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "enabled",
+            "required": false,
+            "schema": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
+            "in": "query",
+            "name": "everyone",
+            "required": false,
+            "schema": {
+              "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "organizationId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Rows whose subject is this user or one of the user's API keys — for the\nfamilies whose rule names one subject or the other.",
+            "in": "query",
+            "name": "ownerUserId",
+            "required": false,
+            "schema": {
+              "description": "Rows whose subject is this user or one of the user's API keys — for the\nfamilies whose rule names one subject or the other.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "1-based. Zero and absent both mean the first page.",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "description": "1-based. Zero and absent both mean the first page.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Clamped to 1..=500; absent means 50.",
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "description": "Clamped to 1..=500; absent means 50.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "providerId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Case-insensitive substring of the family's natural name column.",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "description": "Case-insensitive substring of the family's natural name column.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "teamId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "userId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Administrative scope selected by the caller.",
+            "in": "header",
+            "name": "x-gproxy-admin-scope",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Page6"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Envelope"
+                }
+              }
+            },
+            "description": "Gateway error"
+          }
+        },
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "bearer": []
+          },
+          {
+            "anthropicKey": []
+          },
+          {
+            "googleKey": []
+          }
+        ],
+        "summary": "GET /admin/api/mcp-scopes",
+        "tags": [
+          "Management"
+        ],
+        "x-gproxy-section": "mcp-scopes"
+      },
+      "post": {
+        "parameters": [
+          {
+            "description": "Administrative scope selected by the caller.",
+            "in": "header",
+            "name": "x-gproxy-admin-scope",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Input_McpScopeWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_McpScopeDto"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Envelope"
+                }
+              }
+            },
+            "description": "Gateway error"
+          }
+        },
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "bearer": []
+          },
+          {
+            "anthropicKey": []
+          },
+          {
+            "googleKey": []
+          }
+        ],
+        "summary": "POST /admin/api/mcp-scopes",
+        "tags": [
+          "Management"
+        ],
+        "x-gproxy-section": "mcp-scopes"
+      }
+    },
+    "/admin/api/mcp-scopes/batch": {
+      "post": {
+        "parameters": [
+          {
+            "description": "Administrative scope selected by the caller.",
+            "in": "header",
+            "name": "x-gproxy-admin-scope",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/Input_BatchItem6"
+                },
+                "type": "array"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/Output_McpScopeDto"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Envelope"
+                }
+              }
+            },
+            "description": "Gateway error"
+          }
+        },
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "bearer": []
+          },
+          {
+            "anthropicKey": []
+          },
+          {
+            "googleKey": []
+          }
+        ],
+        "summary": "POST /admin/api/mcp-scopes/batch",
+        "tags": [
+          "Management"
+        ],
+        "x-gproxy-section": "mcp-scopes"
+      }
+    },
+    "/admin/api/mcp-scopes/{id}": {
+      "delete": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Administrative scope selected by the caller.",
+            "in": "header",
+            "name": "x-gproxy-admin-scope",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Success without a response body"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Envelope"
+                }
+              }
+            },
+            "description": "Gateway error"
+          }
+        },
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "bearer": []
+          },
+          {
+            "anthropicKey": []
+          },
+          {
+            "googleKey": []
+          }
+        ],
+        "summary": "DELETE /admin/api/mcp-scopes/{id}",
+        "tags": [
+          "Management"
+        ],
+        "x-gproxy-section": "mcp-scopes"
+      },
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Administrative scope selected by the caller.",
+            "in": "header",
+            "name": "x-gproxy-admin-scope",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_McpScopeDto"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Envelope"
+                }
+              }
+            },
+            "description": "Gateway error"
+          }
+        },
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "bearer": []
+          },
+          {
+            "anthropicKey": []
+          },
+          {
+            "googleKey": []
+          }
+        ],
+        "summary": "GET /admin/api/mcp-scopes/{id}",
+        "tags": [
+          "Management"
+        ],
+        "x-gproxy-section": "mcp-scopes"
+      },
+      "patch": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Administrative scope selected by the caller.",
+            "in": "header",
+            "name": "x-gproxy-admin-scope",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Input_McpScopePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_McpScopeDto"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Envelope"
+                }
+              }
+            },
+            "description": "Gateway error"
+          }
+        },
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "bearer": []
+          },
+          {
+            "anthropicKey": []
+          },
+          {
+            "googleKey": []
+          }
+        ],
+        "summary": "PATCH /admin/api/mcp-scopes/{id}",
+        "tags": [
+          "Management"
+        ],
+        "x-gproxy-section": "mcp-scopes"
+      }
+    },
+    "/admin/api/mcp-tool-natures": {
+      "get": {
+        "parameters": [
+          {
+            "description": "",
+            "in": "query",
+            "name": "apiKeyId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "credentialId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "enabled",
+            "required": false,
+            "schema": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
+            "in": "query",
+            "name": "everyone",
+            "required": false,
+            "schema": {
+              "description": "Rows that name neither a user nor a key, which cover everyone — for\nthe same families as `owner_user_id`, whose grouping by user cannot\nreach them.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "organizationId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Rows whose subject is this user or one of the user's API keys — for the\nfamilies whose rule names one subject or the other.",
+            "in": "query",
+            "name": "ownerUserId",
+            "required": false,
+            "schema": {
+              "description": "Rows whose subject is this user or one of the user's API keys — for the\nfamilies whose rule names one subject or the other.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "1-based. Zero and absent both mean the first page.",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "description": "1-based. Zero and absent both mean the first page.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Clamped to 1..=500; absent means 50.",
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "description": "Clamped to 1..=500; absent means 50.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "providerId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Case-insensitive substring of the family's natural name column.",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "description": "Case-insensitive substring of the family's natural name column.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "teamId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "userId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Administrative scope selected by the caller.",
+            "in": "header",
+            "name": "x-gproxy-admin-scope",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Page7"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Envelope"
+                }
+              }
+            },
+            "description": "Gateway error"
+          }
+        },
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "bearer": []
+          },
+          {
+            "anthropicKey": []
+          },
+          {
+            "googleKey": []
+          }
+        ],
+        "summary": "GET /admin/api/mcp-tool-natures",
+        "tags": [
+          "Management"
+        ],
+        "x-gproxy-section": "mcp-tool-natures"
+      },
+      "post": {
+        "parameters": [
+          {
+            "description": "Administrative scope selected by the caller.",
+            "in": "header",
+            "name": "x-gproxy-admin-scope",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Input_McpToolNatureWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_McpToolNatureDto"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Envelope"
+                }
+              }
+            },
+            "description": "Gateway error"
+          }
+        },
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "bearer": []
+          },
+          {
+            "anthropicKey": []
+          },
+          {
+            "googleKey": []
+          }
+        ],
+        "summary": "POST /admin/api/mcp-tool-natures",
+        "tags": [
+          "Management"
+        ],
+        "x-gproxy-section": "mcp-tool-natures"
+      }
+    },
+    "/admin/api/mcp-tool-natures/batch": {
+      "post": {
+        "parameters": [
+          {
+            "description": "Administrative scope selected by the caller.",
+            "in": "header",
+            "name": "x-gproxy-admin-scope",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/Input_BatchItem7"
+                },
+                "type": "array"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/Output_McpToolNatureDto"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Envelope"
+                }
+              }
+            },
+            "description": "Gateway error"
+          }
+        },
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "bearer": []
+          },
+          {
+            "anthropicKey": []
+          },
+          {
+            "googleKey": []
+          }
+        ],
+        "summary": "POST /admin/api/mcp-tool-natures/batch",
+        "tags": [
+          "Management"
+        ],
+        "x-gproxy-section": "mcp-tool-natures"
+      }
+    },
+    "/admin/api/mcp-tool-natures/{id}": {
+      "delete": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Administrative scope selected by the caller.",
+            "in": "header",
+            "name": "x-gproxy-admin-scope",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Success without a response body"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Envelope"
+                }
+              }
+            },
+            "description": "Gateway error"
+          }
+        },
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "bearer": []
+          },
+          {
+            "anthropicKey": []
+          },
+          {
+            "googleKey": []
+          }
+        ],
+        "summary": "DELETE /admin/api/mcp-tool-natures/{id}",
+        "tags": [
+          "Management"
+        ],
+        "x-gproxy-section": "mcp-tool-natures"
+      },
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Administrative scope selected by the caller.",
+            "in": "header",
+            "name": "x-gproxy-admin-scope",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_McpToolNatureDto"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Envelope"
+                }
+              }
+            },
+            "description": "Gateway error"
+          }
+        },
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "bearer": []
+          },
+          {
+            "anthropicKey": []
+          },
+          {
+            "googleKey": []
+          }
+        ],
+        "summary": "GET /admin/api/mcp-tool-natures/{id}",
+        "tags": [
+          "Management"
+        ],
+        "x-gproxy-section": "mcp-tool-natures"
+      },
+      "patch": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Administrative scope selected by the caller.",
+            "in": "header",
+            "name": "x-gproxy-admin-scope",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Input_McpToolNaturePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_McpToolNatureDto"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Envelope"
+                }
+              }
+            },
+            "description": "Gateway error"
+          }
+        },
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "bearer": []
+          },
+          {
+            "anthropicKey": []
+          },
+          {
+            "googleKey": []
+          }
+        ],
+        "summary": "PATCH /admin/api/mcp-tool-natures/{id}",
+        "tags": [
+          "Management"
+        ],
+        "x-gproxy-section": "mcp-tool-natures"
+      }
+    },
+    "/admin/api/mcp-tools/{provider_id}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Administrative scope selected by the caller.",
+            "in": "header",
+            "name": "x-gproxy-admin-scope",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Output_McpToolDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Output_Envelope"
+                }
+              }
+            },
+            "description": "Gateway error"
+          }
+        },
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "bearer": []
+          },
+          {
+            "anthropicKey": []
+          },
+          {
+            "googleKey": []
+          }
+        ],
+        "summary": "GET /admin/api/mcp-tools/{provider_id}",
+        "tags": [
+          "Management"
+        ],
+        "x-gproxy-section": "mcp-tool-natures"
+      }
+    },
     "/admin/api/model-names": {
       "get": {
         "parameters": [
@@ -81099,7 +82651,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page29"
+                  "$ref": "#/components/schemas/Output_Page31"
                 }
               }
             },
@@ -81332,7 +82884,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page14"
+                  "$ref": "#/components/schemas/Output_Page16"
                 }
               }
             },
@@ -81452,7 +83004,7 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/Input_BatchItem10"
+                  "$ref": "#/components/schemas/Input_BatchItem12"
                 },
                 "type": "array"
               }
@@ -82079,7 +83631,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page7"
+                  "$ref": "#/components/schemas/Output_Page9"
                 }
               }
             },
@@ -82199,7 +83751,7 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/Input_BatchItem7"
+                  "$ref": "#/components/schemas/Input_BatchItem9"
                 },
                 "type": "array"
               }
@@ -82655,7 +84207,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page23"
+                  "$ref": "#/components/schemas/Output_Page25"
                 }
               }
             },
@@ -82775,7 +84327,7 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/Input_BatchItem19"
+                  "$ref": "#/components/schemas/Input_BatchItem21"
                 },
                 "type": "array"
               }
@@ -83281,7 +84833,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page22"
+                  "$ref": "#/components/schemas/Output_Page24"
                 }
               }
             },
@@ -83401,7 +84953,7 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/Input_BatchItem18"
+                  "$ref": "#/components/schemas/Input_BatchItem20"
                 },
                 "type": "array"
               }
@@ -84375,7 +85927,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page8"
+                  "$ref": "#/components/schemas/Output_Page10"
                 }
               }
             },
@@ -85438,7 +86990,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page26"
+                  "$ref": "#/components/schemas/Output_Page28"
                 }
               }
             },
@@ -85558,7 +87110,7 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/Input_BatchItem22"
+                  "$ref": "#/components/schemas/Input_BatchItem24"
                 },
                 "type": "array"
               }
@@ -86005,7 +87557,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page25"
+                  "$ref": "#/components/schemas/Output_Page27"
                 }
               }
             },
@@ -86125,7 +87677,7 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/Input_BatchItem21"
+                  "$ref": "#/components/schemas/Input_BatchItem23"
                 },
                 "type": "array"
               }
@@ -86572,7 +88124,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page27"
+                  "$ref": "#/components/schemas/Output_Page29"
                 }
               }
             },
@@ -86692,7 +88244,7 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/Input_BatchItem23"
+                  "$ref": "#/components/schemas/Input_BatchItem25"
                 },
                 "type": "array"
               }
@@ -87139,7 +88691,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page15"
+                  "$ref": "#/components/schemas/Output_Page17"
                 }
               }
             },
@@ -87259,7 +88811,7 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/Input_BatchItem11"
+                  "$ref": "#/components/schemas/Input_BatchItem13"
                 },
                 "type": "array"
               }
@@ -87706,7 +89258,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page21"
+                  "$ref": "#/components/schemas/Output_Page23"
                 }
               }
             },
@@ -87826,7 +89378,7 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/Input_BatchItem17"
+                  "$ref": "#/components/schemas/Input_BatchItem19"
                 },
                 "type": "array"
               }
@@ -88273,7 +89825,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page12"
+                  "$ref": "#/components/schemas/Output_Page14"
                 }
               }
             },
@@ -88393,7 +89945,7 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/Input_BatchItem8"
+                  "$ref": "#/components/schemas/Input_BatchItem10"
                 },
                 "type": "array"
               }
@@ -89222,7 +90774,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page24"
+                  "$ref": "#/components/schemas/Output_Page26"
                 }
               }
             },
@@ -89342,7 +90894,7 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/Input_BatchItem20"
+                  "$ref": "#/components/schemas/Input_BatchItem22"
                 },
                 "type": "array"
               }
@@ -89965,7 +91517,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page6"
+                  "$ref": "#/components/schemas/Output_Page8"
                 }
               }
             },
@@ -90085,7 +91637,7 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/Input_BatchItem6"
+                  "$ref": "#/components/schemas/Input_BatchItem8"
                 },
                 "type": "array"
               }
@@ -90532,7 +92084,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page17"
+                  "$ref": "#/components/schemas/Output_Page19"
                 }
               }
             },
@@ -90652,7 +92204,7 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/Input_BatchItem13"
+                  "$ref": "#/components/schemas/Input_BatchItem15"
                 },
                 "type": "array"
               }
@@ -91099,7 +92651,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page16"
+                  "$ref": "#/components/schemas/Output_Page18"
                 }
               }
             },
@@ -91219,7 +92771,7 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/Input_BatchItem12"
+                  "$ref": "#/components/schemas/Input_BatchItem14"
                 },
                 "type": "array"
               }
@@ -91725,7 +93277,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page19"
+                  "$ref": "#/components/schemas/Output_Page21"
                 }
               }
             },
@@ -91845,7 +93397,7 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/Input_BatchItem15"
+                  "$ref": "#/components/schemas/Input_BatchItem17"
                 },
                 "type": "array"
               }
@@ -92447,7 +93999,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page20"
+                  "$ref": "#/components/schemas/Output_Page22"
                 }
               }
             },
@@ -92567,7 +94119,7 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/Input_BatchItem16"
+                  "$ref": "#/components/schemas/Input_BatchItem18"
                 },
                 "type": "array"
               }
@@ -93088,7 +94640,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page10"
+                  "$ref": "#/components/schemas/Output_Page12"
                 }
               }
             },
@@ -94025,7 +95577,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page9"
+                  "$ref": "#/components/schemas/Output_Page11"
                 }
               }
             },
@@ -96608,7 +98160,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Output_Page10"
+                  "$ref": "#/components/schemas/Output_Page12"
                 }
               }
             },

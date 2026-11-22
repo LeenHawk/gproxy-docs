@@ -1,6 +1,6 @@
 ---
 title: "新增渠道"
-description: "v4 渠道的結構：BaseChannel 契約、可選能力 trait、從 Cargo feature 到完成註冊的步驟，以及如何在本倉庫之外發布渠道。"
+description: "v4 渠道的結構：UpstreamKind 與 BaseChannel 契約、可選能力 trait、從 Cargo feature 到完成註冊的步驟，以及如何在本倉庫之外發布渠道。"
 sidebarTitle: "新增渠道"
 ---
 
@@ -10,10 +10,10 @@ sidebarTitle: "新增渠道"
 
 渠道在編譯時連結，不在執行時載入。渠道可以放在兩個位置：
 
-- 本倉庫：作為 `gproxy-channel` 的一個模組，掛在獨立的 Cargo feature 後面，透過 PR 合入。合入後所有宿主都能使用，包括 Workers 宿主。見[向本倉庫新增渠道](#向本倉庫新增渠道)。
-- 自己的 crate：一個按公開契約實現 `BaseChannel` 的型別，連結進一個除此之外與原版相同的原生二進位檔或 Worker。本倉庫無需任何改動。見[在本倉庫之外](#在本倉庫之外)。
+- 本倉庫：作為 `gproxy-channel` 的一個模組，掛在獨立的 Cargo feature 後面，透過 PR 合入。合入後所有宿主都能使用。見[向本倉庫新增渠道](#向本倉庫新增渠道)。
+- 自己的 crate：一個按公開契約實現 `UpstreamKind` 和 `BaseChannel` 的型別，連結進一個除此之外與原版相同的二進位檔。本倉庫無需任何改動。見[在本倉庫之外](#在本倉庫之外)。
 
-兩種方式實現的是同一個 trait，寫法相同，區別只在註冊方式。預設不編譯任何具體渠道。
+兩種方式實現的是同樣的 trait，寫法相同，區別只在註冊方式。預設不編譯任何具體渠道。
 
 ## 什麼時候需要渠道
 
@@ -23,7 +23,32 @@ sidebarTitle: "新增渠道"
 
 ## BaseChannel 契約
 
-`BaseChannel` 是唯一必須實現的 trait，`id` 是其中唯一必須實現的方法。每個協議操作都有獨立的非同步方法和預設實現：用 `prepare`（HTTP）或 `prepare_connect`（WebSocket）構造請求，再交給宿主分配的 client 傳送。
+渠道實現兩個 trait，寫成兩個 `impl` 區塊：
+
+- `gproxy_upstream::UpstreamKind` 承載身份和帳戶側：`id`，以及 `display_name`、`login_modes`、`credential_kinds`、`validate_credential_secret`、`initial_credential_expiry`、`default_connection`、`default_connection_for`、`credential_refresh`、`oauth_authorization_code` 和 `oauth_device_code`。只有 `id` 必須實現。
+- `gproxy_channel::channel::BaseChannel` 繼承 `UpstreamKind`，承載模型側：descriptor、請求準備、各個操作、配額、用量和服務。它沒有必須實現的方法。
+
+```rust
+use gproxy_channel::channel::BaseChannel;
+use gproxy_upstream::UpstreamKind;
+
+pub struct Acme;
+
+impl UpstreamKind for Acme {
+    fn id(&self) -> &'static str {
+        "acme"
+    }
+    // plus the account-side methods the channel overrides
+}
+
+impl BaseChannel for Acme {
+    // descriptor, native_dialects, prepare, operations, quota, services
+}
+```
+
+帳戶側放在 `gproxy-upstream` crate 中，因為 MCP 伺服器也建立在它之上，見[架構](/zh-tw/development/architecture#workspace-中的-crate)。
+
+每個協議操作都有獨立的非同步方法和預設實現：用 `prepare`（HTTP）或 `prepare_connect`（WebSocket）構造請求，再交給宿主分配的 client 傳送。
 
 兩個準備鉤子預設都返回「不支援」。因此渠道支援的操作就是它準備或覆寫的那些，沒有別的。
 
@@ -37,7 +62,7 @@ sidebarTitle: "新增渠道"
     或渠道自己經同一個 client 的多次呼叫流程
 ```
 
-宿主傳入的是借用的檢視，能公開的欄位都公開：
+宿主傳入的是借用的檢視，能公開的欄位都公開。`ProviderView`、`CredentialView` 和 `CredentialContext` 來自 `gproxy_upstream`，`PrepareContext` 和 `OperationContext` 來自 `gproxy_channel::channel`：
 
 - `ProviderView`：`id`、`channel`、可選的 `base_url`，以及由渠道自行解碼為型別化設定的 `config` JSON。
 - `CredentialView`：`id`、`provider_id`、`auth_kind`、`secret` JSON（不實現 `Debug` 和 `Serialize`）、宿主記錄的公開 `metadata`、`version`、`expires_at_ms`。
@@ -53,13 +78,13 @@ sidebarTitle: "新增渠道"
 - 來源鑑權不會到達上游。轉發助手會丟棄逐跳請求頭，以及 `host`、`content-length`、`authorization`、`x-api-key`、`x-goog-api-key` 和 `api-key`；`strip_query_auth` 會從查詢串中刪除 `key`、`access_token` 和 `api_key`。之後由渠道根據憑證加上自己的鑑權。
 - 轉發的客戶端請求頭取全域性白名單、供應商 `allowed_headers` 與渠道宣告頭的並集，`content-type` 始終保留。列表缺失或為空時不增加任何允許項。
 - 端點覆蓋是完整的方法 URL，同時替換 base URL 和渠道的預設路徑，不會再往後拼接。
-- 非 2xx 應答作為回應返回，狀態碼、請求頭和惰性讀取的 body 保持原樣。錯誤變體只用於能力呼叫（登入、重新整理、配額），以及多次呼叫覆寫中的中間交換，因為那裡失敗的應答不是最終返回的回應。
+- 非 2xx 應答作為回應返回，狀態碼、請求頭和惰性讀取的 body 保持原樣。錯誤（`gproxy_upstream::UpstreamError`）只用於能力呼叫（登入、重新整理、配額），以及多次呼叫覆寫中的中間交換，因為那裡失敗的應答不是最終返回的回應。
 - `RefreshRejected` 表示上游明確拒絕了這把憑證（`invalid_grant`、已撤銷）。宿主預設把憑證標記為失效。渠道可以覆寫 `persist_rejection`，只針對當前記憶體中的憑證版本記住某個拒絕原因，下次嘗試前重新載入持久化的材料。短暫的傳輸失敗或 5xx 必須作為傳輸錯誤返回，讓宿主稍後重試；誤用 `RefreshRejected` 會讓一個正常的帳號失效。
 - `ContinuationElsewhere` 表示一條活動的上游連線由另一個宿主程序持有。宿主會把請求轉到那個例項，憑證本身沒有問題。
 
 ## 可選能力
 
-每項能力都是獨立的 trait，透過預設返回 `None` 的訪問器提供。渠道按上游實際提供的功能實現，各項之間互不依賴，例如可以報告配額視窗而不提供重置。
+每項能力都是獨立的 trait，透過預設返回 `None` 的訪問器提供。登入和重新整理的訪問器（`credential_refresh`、`oauth_authorization_code`、`oauth_device_code`）是 `UpstreamKind` 的方法，對應的 trait 來自 `gproxy_upstream`；其餘訪問器是 `BaseChannel` 的方法。渠道按上游實際提供的功能實現，各項之間互不依賴，例如可以報告配額視窗而不提供重置。
 
 | 訪問器 | 用途 |
 | --- | --- |
@@ -79,7 +104,7 @@ sidebarTitle: "新增渠道"
 
 ### 憑證與重新整理
 
-運維已有的金鑰走普通的憑證新增和更新介面，用 `validate_credential_secret` 校驗格式。如果材料在首次使用前需要聯網換取（例如尚未換取令牌的服務帳號金鑰），由 `initial_credential_expiry` 返回 `Some(0)`，並透過 `CredentialRefresh` 實現換取過程。
+運維已有的金鑰走普通的憑證新增和更新介面，用 `validate_credential_secret` 校驗格式（它和 `initial_credential_expiry` 都是 `UpstreamKind` 的方法）。如果材料在首次使用前需要聯網換取（例如尚未換取令牌的服務帳號金鑰），由 `initial_credential_expiry` 返回 `Some(0)`，並透過 `CredentialRefresh` 實現換取過程。
 
 重新整理返回完整替換的金鑰和過期時間，以及可選的公開 metadata（`None` 表示保留原值）。宿主用同一個版本 CAS 一起儲存這三項。金鑰不得放進 metadata。
 
@@ -91,7 +116,7 @@ sidebarTitle: "新增渠道"
 
 有兩項 descriptor 能力無法從訪問器推斷，具備的渠道需要在自己的 `descriptor` 中宣告：`websocket`（覆寫了某個 socket 操作）和 `paid_usage`（其 `QuotaModel::allows_paid_usage` 讀取憑證 metadata 中的 `allow_paid_usage` 標誌，控制台據此顯示對應開關）。
 
-跨請求狀態由宿主限定在一個供應商加一把憑證的範圍內，並以 CAS 寫入。binding 的預設狀態拒絕一切寫入，所以渠道只有在宿主提供狀態時才能使用。
+跨請求狀態由宿主限定在一個供應商加一把憑證的範圍內，並以 CAS 寫入（`gproxy_upstream::UpstreamState`）。binding 的預設狀態 `NoState` 拒絕一切寫入，所以渠道只有在宿主提供狀態時才能使用。
 
 ### 登入狀態（`provider_state`）
 
@@ -134,15 +159,15 @@ sidebarTitle: "新增渠道"
 
    模組文件要寫明每一條線協議事實的來源：廠商的 API 參考，或 `samples/` 下的 CLI 原始碼。其他渠道的程式碼不能作為來源。
 
-4. 實現 `BaseChannel`。最少需要 `id`、`native_dialects` 和 `prepare`。結構體是無狀態的單元結構體，一個例項服務該渠道下的所有供應商。
+4. 實現 `UpstreamKind` 和 `BaseChannel`。最少需要前者的 `id`，以及後者的 `native_dialects` 和 `prepare`。結構體是無狀態的單元結構體，一個例項服務該渠道下的所有供應商。
 
    同時覆寫 `descriptor`。預設實現會根據訪問器填好能力，但顯示名稱以及從供應商 `config` JSON 中解碼哪些鍵，只有渠道自己知道。管理介面只依據 descriptor 渲染供應商表單（啟用 `ts` feature 時它也是一個 TypeScript 型別），descriptor 中沒有的鍵就無法在介面上設定。追加 `HOST_CONFIG_KEYS` 來宣告宿主自己的鍵。
 
    當上遊需要多次交換、本地合成的應答、另一種傳輸方式，或需要把回應改寫為宣告的原生方言時，覆寫具體的操作方法，而不是 `prepare`。
 
-5. 宣告廠商客戶端傳送的內容。如果渠道模擬某個 CLI，匯出它的請求頭常量並據此構造白名單，這樣供應商的 `allowed_headers` 去不掉 CLI 自己的請求頭。同時把這些身份請求頭傳給轉發助手的丟棄列表，防止客戶端偽造。上游會對客戶端做指紋識別時，由 `default_connection` 返回預設連線配置；憑證或供應商上顯式指定的配置仍然優先。
+5. 宣告廠商客戶端傳送的內容。如果渠道模擬某個 CLI，匯出它的請求頭常量並據此構造白名單，這樣供應商的 `allowed_headers` 去不掉 CLI 自己的請求頭。同時把這些身份請求頭傳給轉發助手的丟棄列表，防止客戶端偽造。上游會對客戶端做指紋識別時，由 `default_connection`（`UpstreamKind` 的方法）返回預設連線配置；憑證或供應商上顯式指定的配置仍然優先。
 
-6. 把能力實現為獨立的型別，由訪問器返回。每個 trait 都有自己的規則：重新整理返回完整替換，不做合併；配額維度來自憑證 metadata 中的套餐資訊，不訪問網路；用量觀察者做累積快照，它的 `finish` 由宿主告知流是完整結束還是被中斷，因為讀到 EOF 並不代表用量完整。
+6. 把能力實現為獨立的型別，由訪問器返回：登入和重新整理寫在 `UpstreamKind` 的 impl 中，其餘寫在 `BaseChannel` 的 impl 中。每個 trait 都有自己的規則：重新整理返回完整替換，不做合併；配額維度來自憑證 metadata 中的套餐資訊，不訪問網路；用量觀察者做累積快照，它的 `finish` 由宿主告知流是完整結束還是被中斷，因為讀到 EOF 並不代表用量完整。
 
 7. 可複用的線協議機制放在 `src/channels/shared/`，按使用它們的 feature 條件編譯。策略留在渠道中，shared 模組只執行渠道要求的操作。
 
@@ -154,7 +179,6 @@ sidebarTitle: "新增渠道"
    | --- | --- |
    | `crates/gproxy-sdk/Cargo.toml` | `acme = ["gproxy-channel/acme"]`，並把 `"acme"` 加進 `channels` 列表 |
    | `crates/gproxy/Cargo.toml` | `acme = ["gproxy-sdk/acme"]` |
-   | `crates/gproxy-host-edge/Cargo.toml` | `acme = ["gproxy-sdk/acme"]` |
    | `crates/gproxy-app/src/v3/channels.rs` | 把 id 加進 `V4_CHANNELS`（並修改陣列長度），使 v3 匯入接受它 |
 
    註冊時重複的 id 會被拒絕。供應商引用未註冊的渠道屬於配置錯誤，不會回退到其他渠道。
@@ -170,24 +194,23 @@ cargo clippy -p gproxy-channel --all-features --target wasm32-unknown-unknown --
 cargo test   -p gproxy-channel --all-features
 ```
 
-`gproxy-channel` 預設不啟用任何渠道，所以這些命令必須帶 `--all-features`，否則一個渠道都不會編譯。每個渠道都必須能為原生目標和 `wasm32-unknown-unknown` 構建，Workers 宿主因此可以帶上完整的渠道集合。lint 報告的問題要透過修改程式碼解決，不要加 `#[allow]`。
+`gproxy-channel` 預設不啟用任何渠道，所以這些命令必須帶 `--all-features`，否則一個渠道都不會編譯。每個渠道都必須能為原生目標和 `wasm32-unknown-unknown` 構建：`gproxy-channel` 可以脫離閘道單獨使用，CI 會在該目標上檢查它。lint 報告的問題要透過修改程式碼解決，不要加 `#[allow]`。
 
 合入後不需要其他步驟：新渠道上的供應商會連同渠道的 descriptor 出現在 `GET /admin/api/channels` 中，控制台據此渲染表單。文件中的渠道參考由 CI 根據已註冊的渠道重新生成。
 
 ## 在本倉庫之外
 
-渠道可以放在獨立的 crate 中，不必 fork 就能發布，兩種宿主都支援。原生二進位檔仍是原版 `gproxy`（命令、引數、控制台和資料庫都相同），Worker 仍是原版 GPROXY Worker，只是在內建渠道之外多註冊了你的渠道。`examples/channel-plugin` 是一套完整可執行的三個 crate：一個檔案實現的 OpenAI 相容 API key 渠道，以及每個宿主幾行程式碼的入口。CI 每次改動都會構建這個示例，所以它與當前契約保持一致。
+渠道可以放在獨立的 crate 中，不必 fork 就能發布。二進位檔仍是原版 `gproxy`（命令、引數、控制台和資料庫都相同），只是在內建渠道之外多註冊了你的渠道。`examples/channel-plugin` 是一套完整可執行的兩個 crate：一個檔案實現的 OpenAI 相容 API key 渠道，以及二進位檔幾行程式碼的入口。CI 每次改動都會構建這個示例，所以它與當前契約保持一致。
 
 ### 目錄結構
 
 ```text
 my-gproxy/
-  channel/    渠道：一個實現 BaseChannel 的單元結構體，不依賴任何宿主
+  channel/    渠道：一個實現 UpstreamKind 和 BaseChannel 的單元結構體，不依賴任何宿主
   native/     gproxy 二進位制，帶上它
-  edge/       Cloudflare Worker，帶上它（只在部署到那裡時需要）
 ```
 
-渠道單獨成為一個 crate，兩個宿主才能都依賴它。渠道不能依賴原生宿主：`gproxy` 無法編譯到 wasm，Worker 也會因此無法編譯。
+渠道單獨成為一個 crate，只依賴公開契約，不依賴宿主。
 
 ```rust
 // native/src/main.rs
@@ -200,29 +223,7 @@ fn main() -> ExitCode {
 
 `main_with` 就是完整的原版 `main`：載入 `.env`，解析相同的引數，建立執行時並啟動。自帶執行時的程式改為呼叫 `gproxy::run_with(cli, channels)`。
 
-```rust
-// edge/src/lib.rs
-#[cfg(target_arch = "wasm32")]
-mod entry {
-    use std::sync::Arc;
-
-    use worker::{Context, Env, HttpRequest, event};
-
-    #[event(fetch)]
-    async fn fetch(
-        request: HttpRequest,
-        env: Env,
-        ctx: Context,
-    ) -> worker::Result<gproxy_host_edge::Response> {
-        gproxy_host_edge::fetch_with(request, env, ctx, || vec![Arc::new(my_channel::Acme)])
-            .await
-    }
-}
-```
-
-`fetch_with` 就是完整的原版 fetch handler。一個 Worker 模組只能有一個 `#[event(fetch)]`，所以 edge crate 依賴 `gproxy-host-edge` 時要關閉它的 `entry` feature，原版 handler 正是由這個 feature 宣告的。閉包在每個 isolate 中只執行一次，即第一個請求組裝例項時。
-
-在兩種宿主中，`id` 與內建渠道相同的渠道都會替換該內建渠道。要發布修改過的現有渠道，就用這種方式。
+`id` 與內建渠道相同的渠道會替換該內建渠道。要發布修改過的現有渠道，就用這種方式。
 
 ### 依賴
 
@@ -232,6 +233,7 @@ mod entry {
 # channel/Cargo.toml
 [dependencies]
 gproxy-channel = { path = "../../gproxy/crates/gproxy-channel" }
+gproxy-upstream = { path = "../../gproxy/crates/gproxy-upstream" }
 gproxy-protocol = { path = "../../gproxy/crates/gproxy-protocol", features = ["exhaustive"] }
 http = "1"
 serde = { version = "1", features = ["derive"] }
@@ -246,21 +248,10 @@ gproxy = { path = "../../gproxy/crates/gproxy", features = ["channels", "memory"
 ```
 
 ```toml
-# edge/Cargo.toml
-[lib]
-crate-type = ["cdylib", "rlib"]
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-my-channel = { path = "../channel" }
-gproxy-host-edge = { path = "../../gproxy/crates/gproxy-host-edge", default-features = false, features = ["channels", "d1", "libsql"] }
-worker = { version = "0.8", default-features = false, features = ["http"] }
-```
-
-```toml
 # Cargo.toml，workspace 根
 [workspace]
 resolver = "3"
-members = ["channel", "native", "edge"]
+members = ["channel", "native"]
 
 # 從 checkout 根目錄的 Cargo.toml 複製：patch 只在宣告它的 workspace 裡生效，
 # 而構建依賴這些。
@@ -271,28 +262,13 @@ btls-sys = { git = "https://github.com/0x676e67/btls", rev = "609f955e6de4df4a21
 
 checkout 自己的 patch 表裡還有 `glib`，只有桌面宿主會用到，倉庫外的 workspace 不需要這一項。第一次構建前，把 checkout 的 `Cargo.lock` 複製到根 `Cargo.toml` 旁邊，使依賴解析到 gproxy 測試過的版本。
 
-之所以使用 checkout 而不是 git 依賴，是因為原生控制台從 `crates/gproxy-host-axum/assets/web` 編譯進二進位檔，而這個目錄沒有提交到倉庫。先在 checkout 的 `console/` 中執行 `pnpm install && pnpm build`；或者從 features 中去掉 `embedded-console`，構建不帶控制台的二進位檔。下面的 Worker 構建同樣從 checkout 獲取控制台。
+之所以使用 checkout 而不是 git 依賴，是因為原生控制台從 `crates/gproxy-host-axum/assets/web` 編譯進二進位檔，而這個目錄沒有提交到倉庫。先在 checkout 的 `console/` 中執行 `pnpm install && pnpm build`；或者從 features 中去掉 `embedded-console`，構建不帶控制台的二進位檔。
 
-`gproxy` 和 `gproxy-host-edge` 的 feature 列表用法與原版構建相同：`channels` 啟用全部內建渠道，也可以只列出部署要用的渠道。
-
-### 構建 Worker
-
-checkout 中的 `deploy/cloudflare` 可以構建任意 Worker crate，不限於原版。用絕對路徑指向你的 crate，然後照常部署：
-
-```sh
-cd ../gproxy/deploy/cloudflare
-pnpm install
-GPROXY_EDGE_CRATE=/absolute/path/to/my-gproxy/edge pnpm run build
-pnpm run deploy
-```
-
-這一步會在你的 crate 中執行 `worker-build`，去掉除錯段，再把 Worker 複製到 checkout 的 `wrangler.toml`、控制台資源及其 headers 檔案旁邊。[邊緣部署](/zh-tw/deployment/edge)中的內容（D1 繫結、金鑰、`GPROXY_CONFIG`）全部照常適用。
-
-用於 Worker 的渠道必須能編譯到 `wasm32-unknown-unknown`，所有內建渠道都滿足這一點。具體來說：不使用 `tokio` 網路，不訪問檔案系統，用 `web-time` 代替 `std::time::Instant`，所有請求都透過宿主提供的 client 傳送。用 `cargo check --target wasm32-unknown-unknown -p my-channel` 檢查。
+`gproxy` 的 feature 列表用法與原版構建相同：`channels` 啟用全部內建渠道，也可以只列出部署要用的渠道。
 
 ### 公開契約
 
-渠道實現或接收的一切都在 `gproxy_channel::channel` 中公開：`BaseChannel`、上下文與檢視型別、所有能力 trait、descriptor 型別（包括 `HOST_CONFIG_KEYS`），以及構造請求所需的助手：處理客戶端請求頭的 `forwardable` 和 `HeaderAllowlist`、寫入運維配置的靜態請求頭的 `insert_configured`、清理查詢串的 `strip_query_auth`，以及 `standard_reason_observer`。協議詞彙（`Dialect`、`Operation`、`OperationKey`、`HttpBody`、`WireRequest`）來自 `gproxy_protocol`。
+渠道實現或接收的一切都在兩個 crate 中公開。`gproxy_upstream` 是帳戶側：`UpstreamKind`、`ProviderView`、`CredentialView`、`CredentialContext`、`LoginMode`、`ConfigKey`、`ConfigKeyKind`、`UpstreamError`、`UpstreamFuture`、`UpstreamState`，以及登入和重新整理的 trait（`OAuthAuthorizationCode`、`OAuthDeviceCode`、`CredentialRefresh`）及其型別。`gproxy_channel::channel` 是模型側：`BaseChannel`、`PrepareContext`、`OperationContext`、配額、用量、拒絕分類和服務的 trait、descriptor 型別（包括 `HOST_CONFIG_KEYS`），以及構造請求所需的助手：處理客戶端請求頭的 `forwardable` 和 `HeaderAllowlist`、寫入運維配置的靜態請求頭的 `insert_configured`、清理查詢串的 `strip_query_auth`，以及 `standard_reason_observer`。協議詞彙（`Dialect`、`Operation`、`OperationKey`、`HttpBody`、`WireRequest`）來自 `gproxy_protocol`。
 
 `gproxy_channel::channels::shared` 不公開。它針對本倉庫的渠道編寫，會隨這些渠道一起變化，需要時複製過去。
 
@@ -302,7 +278,7 @@ pnpm run deploy
 
 - 控制台與對待其他渠道一樣，根據 descriptor 渲染你的渠道：供應商表單來自 `config_keys`，憑證表單來自 `credential_kinds`，登入按鈕來自 `login_modes`，配額、重置、重新整理和付費用量控制元件來自 `capabilities`。缺少的是為內建 id 單獨編寫的內容，例如定製的提示文字或模型預設組。
 - 原生二進位檔的自更新會拒絕安裝。發布的版本是本倉庫的構建，裝上之後會丟掉你的渠道，下次重啟後其上的所有供應商都會失效。請基於新版本重新構建。檢查更新功能照常可用。
-- 契約隨 gproxy 的版本變化。實際變更都是增量的（多數協議型別帶 `#[non_exhaustive]`，`BaseChannel` 新增的方法都有預設實現），但仍應基於你實際執行的版本構建。寫 `ChannelCapabilities { quota_query: true, ..Default::default() }`，不要逐個列出欄位，這樣新增能力不會導致構建失敗。
+- 契約隨 gproxy 的版本變化。實際變更都是增量的（多數協議型別帶 `#[non_exhaustive]`，`UpstreamKind` 和 `BaseChannel` 新增的方法都有預設實現），但仍應基於你實際執行的版本構建。寫 `ChannelCapabilities { quota_query: true, ..Default::default() }`，不要逐個列出欄位，這樣新增能力不會導致構建失敗。
 
 ## 給編碼 Agent 的清單
 
@@ -312,8 +288,8 @@ pnpm run deploy
 
 1. 以 `crates/gproxy-channel/src/channels/nvidia.rs`（API key）或 `codex/`（OAuth）為模板，並閱讀 `samples/` 下廠商的線協議原始碼或其 API 參考。
 2. 在 `crates/gproxy-channel/Cargo.toml` 中加 feature，在 `src/channels/mod.rs` 的 `channels!` 中加一行，並把 feature 加進渠道用到的 `src/channels/shared/` 中的每個 `cfg(any(...))`。
-3. 編寫 `src/channels/<id>.rs` 或 `src/channels/<id>/`，覆寫 `descriptor`。
-4. 在第 9 步列出的四處轉發 feature：`crates/gproxy-sdk/Cargo.toml`（feature 和 `channels` 列表）、`crates/gproxy/Cargo.toml`、`crates/gproxy-host-edge/Cargo.toml`，以及 `crates/gproxy-app/src/v3/channels.rs` 中的 `V4_CHANNELS`（修改陣列長度）。
+3. 編寫 `src/channels/<id>.rs` 或 `src/channels/<id>/`：一個 `impl UpstreamKind`（`id` 和帳戶側）和一個 `impl BaseChannel`（模型側），並覆寫 `descriptor`。錯誤型別是 `gproxy_upstream::UpstreamError`。
+4. 在第 9 步列出的三處轉發 feature：`crates/gproxy-sdk/Cargo.toml`（feature 和 `channels` 列表）、`crates/gproxy/Cargo.toml`，以及 `crates/gproxy-app/src/v3/channels.rs` 中的 `V4_CHANNELS`（修改陣列長度）。
 5. 如果渠道支援 `allow_paid_usage` 或提供 WebSocket，在 descriptor 的 capabilities 中設定 `paid_usage` / `websocket`。
 6. 在 `crates/gproxy-channel/README.md` 中加一行，並在 `docs/guides/providers.mdx`、`docs/zh-tw/guides/providers.mdx`、`docs/zh-tw/guides/providers.mdx`、`docs/ru/guides/providers.mdx` 的「支援的渠道」表中加一行（文件改動在子模組中提交）。
 7. 執行 `pnpm --dir docs generate:reference`，把已註冊的渠道匯出到參考文件。不要提交生成的 JSON，CI 會匯出並提交。
@@ -321,9 +297,9 @@ pnpm run deploy
 
 倉庫外的渠道：
 
-1. 把 `examples/channel-plugin` 複製到 checkout 之外：`channel/` 必須複製，`native/` 和 `edge/` 按要部署的宿主選擇。加上前文帶 `[patch.crates-io]` 表的 workspace 根 `Cargo.toml`，並複製 `Cargo.lock`。
-2. 在每個 crate 的 `Cargo.toml` 中，用包自己的 `version` 和 `edition = "2024"` 替換 `*.workspace = true` 這些鍵，並把每個 `workspace = true` 依賴改為前文所示的路徑依賴。
+1. 把 `examples/channel-plugin`（`channel/` 和 `native/`）複製到 checkout 之外。加上前文帶 `[patch.crates-io]` 表的 workspace 根 `Cargo.toml`，並複製 `Cargo.lock`。
+2. 在每個 crate 的 `Cargo.toml` 中，用包自己的 `version` 和 `edition = "2024"` 替換 `*.workspace = true` 這些鍵，並把每個 `workspace = true` 依賴改為前文所示的路徑依賴。渠道 crate 同時依賴 `gproxy-channel` 和 `gproxy-upstream`。
 3. 重新命名包、二進位檔、結構體和 `ID`。除非就是要替換某個內建渠道，否則選一個內建渠道沒有用過的 id。
-4. 只基於 `gproxy_channel::channel` 實現，不要使用 `channels::shared`。
-5. 執行 `cargo clippy --all-targets -- -D warnings`；部署 Worker 時再執行 `cargo check --target wasm32-unknown-unknown -p <channel> -p <edge>`。
-6. 在全新的 `GPROXY_DATA_DIR` 上執行原生二進位檔，或按前文構建後在 `deploy/cloudflare` 中用 `wrangler dev --local` 執行 Worker，確認 `GET /admin/api/channels` 列出了這個 id。
+4. 只基於 `gproxy_upstream` 和 `gproxy_channel::channel` 實現，不要使用 `channels::shared`。
+5. 執行 `cargo clippy --all-targets -- -D warnings`。
+6. 在全新的 `GPROXY_DATA_DIR` 上執行原生二進位檔，確認 `GET /admin/api/channels` 列出了這個 id。

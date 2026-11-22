@@ -43,6 +43,10 @@ sidebarTitle: "权限、限流与配额"
 
 供应商服务路由是渠道声明的账户、用量等非模型端点。它们没有模型，也没有操作，因此只有覆盖整个供应商的规则（任意模型、不限操作）才能允许或拒绝它们。
 
+### MCP 服务器
+
+权限规则不用于 [MCP 服务器](/zh-cn/guides/mcp-servers)。工具默认允许，由 MCP scope 规则限制，其语法和判定方式与权限规则不同，见 [Scope](/zh-cn/guides/mcp-servers#scopes)。OAuth 访问令牌需要带有 scope `gproxy:mcp`。
+
 ## OAuth 访问令牌
 
 OAuth 访问令牌是用户交给其他程序使用的凭据，因此 GPROXY 在用户自身权限之外对它另加限制。

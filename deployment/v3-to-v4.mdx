@@ -4,7 +4,7 @@ description: "Back up a v3 deployment, start v4 on the same database, verify the
 sidebarTitle: "v3 to v4"
 ---
 
-These notes are for administrators moving a v3 deployment to v4. v4 recognizes a v3 database when it starts and converts it in place, on SQLite, PostgreSQL, MySQL and D1. You keep the same data directory or connection string and the same `GPROXY_MASTER_KEY`; there is nothing to export and no password to reset.
+These notes are for administrators moving a v3 deployment to v4. v4 recognizes a v3 database when it starts and converts it in place, on SQLite, PostgreSQL and MySQL. You keep the same data directory or connection string and the same `GPROXY_MASTER_KEY`; there is nothing to export and no password to reset.
 
 ## What changes
 
@@ -52,22 +52,15 @@ Then back up the database with v3 stopped:
     mysqldump --single-transaction --databases gproxy > gproxy-v3.sql
     ```
   </Tab>
-  <Tab title="D1">
-    ```sh
-    wrangler d1 export gproxy --remote --output=gproxy-v3.sql
-    ```
-  </Tab>
 </Tabs>
 
 ## Upgrading
 
 1. Stop all v3 instances.
-2. Install the v4 executable in place of v3, or change the container image to a v4 tag. For Workers, deploy the v4 Worker with the same D1 binding and secrets.
+2. Install the v4 executable in place of v3, or change the container image to a v4 tag.
 3. Start v4 with the same data directory or connection string and the same `GPROXY_MASTER_KEY`. You can also run the conversion as its own step with `gproxy migrate`, which takes the same path and exits.
 4. Watch the log. On SQLite you should see `migrating v3 database to v4`, a `migrated` line per table, `v3 import complete` with row, dropped and warning counts, and finally `v3 migration complete` with the path of the backup. Anything that changed meaning is printed under `Changed on the way in`, and rows with no v4 form are printed under `NOT migrated`.
 5. When the log shows the server listening, sign in to the console.
-
-A Worker converts its database on the first request after deployment. A partially converted instance serves no traffic and does not create a new administrator, so requests fail until the conversion has finished.
 
 ## How the conversion works
 
@@ -77,19 +70,18 @@ Before it opens the HTTP port, v4 takes a consistent snapshot of the v3 database
 
 If the conversion fails, the original file is left as it was: fix the cause the log names (for example, restore the original master key) and start again. If the process is interrupted before the rename, the path still holds the v3 database and the next start tries again. After the rename, the path holds a v4 database whose migration ledger marks it as current, and later starts are ordinary v4 starts. Nothing is imported twice.
 
-### PostgreSQL, MySQL and D1
+### PostgreSQL and MySQL
 
 v4 first reads the v3 data and checks it, including that the master key opens the credentials. Only then does it rename every v3 table to `gproxy_v3_<original name>` and create the v4 tables under the original names. Configuration, identity and usage history are converted from the renamed tables, and the instance opens to traffic only after the last step.
 
-Progress is kept in the table `gproxy_v3_upgrade`. Its `report_json` column holds the skipped rows and the warnings about changed meaning. Identity and usage are written in batches with a checkpoint after each, so an interrupted upgrade resumes where it stopped on the next start (or, on Workers, the next request).
+Progress is kept in the table `gproxy_v3_upgrade`. Its `report_json` column holds the skipped rows and the warnings about changed meaning. Identity and usage are written in batches with a checkpoint after each, so an interrupted upgrade resumes where it stopped on the next start.
 
 Each backend keeps a second process out in its own way:
 
 - PostgreSQL holds a session advisory lock for the whole upgrade and renames the v3 tables in one transaction.
 - MySQL holds a session lock (`GET_LOCK`) across DDL statements, which commit implicitly, and renames all v3 tables in one `RENAME TABLE` statement.
-- D1 renames the tables in transactional batches. A migration lease, checked on every write batch, keeps a second isolate from writing. The lease of an interrupted upgrade expires within 60 seconds.
 
-A second PostgreSQL or MySQL instance that finds the lock taken stops with `another instance is migrating this database; retry after it finishes`. On Workers the message asks you to retry after the lease is released.
+A second PostgreSQL or MySQL instance that finds the lock taken stops with `another instance is migrating this database; retry after it finishes`.
 
 After a failure, the v3 data is still in the archive tables and the v4 tables may already hold part of the import. Fix the reported error and restart; the upgrade continues. Do not delete `gproxy_v3_upgrade` or rename the archive tables while the upgrade is incomplete.
 
@@ -113,7 +105,7 @@ v3 cannot read a v4 database, and a partially converted database is neither. Rol
     3. Copy `gproxy.db.v3-*.bak` (or `gproxy.db` from your own backup) to `gproxy.db`.
     4. Reinstall the v3 executable or image tag and start it with the original settings and master key.
   </Tab>
-  <Tab title="PostgreSQL, MySQL and D1">
+  <Tab title="PostgreSQL and MySQL">
     1. Stop all instances.
     2. Restore the backup you took before the upgrade into an empty database.
     3. Start v3 against the restored database with the original master key.

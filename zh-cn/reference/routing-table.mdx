@@ -3,7 +3,7 @@ title: "路由与端点"
 description: "v4 完整的入站表、挂载点语法、OAuth 与管理路由、WebSocket surface、解析与失败转移预算。"
 ---
 
-本页列出实例提供的全部 HTTP 路由，以及请求路径的解析顺序。需要确认某个 URL 对应哪个操作、供应商或命名空间前缀会带来什么变化、请求如何在供应商之间失败转移时，可以查阅本页。原生宿主和 Workers 宿主挂载的是同一张路由表。`gproxy-protocol` 本身不声明任何路径，URL 与操作的对应关系由本页所述的入站层决定。
+本页列出实例提供的全部 HTTP 路由，以及请求路径的解析顺序。需要确认某个 URL 对应哪个操作、供应商或命名空间前缀会带来什么变化、请求如何在供应商之间失败转移时，可以查阅本页。`gproxy-protocol` 本身不声明任何路径，URL 与操作的对应关系由本页所述的入站层决定。
 
 各路由完整的请求与响应结构见 [HTTP API 参考](/zh-cn/reference/http-api)。
 
@@ -19,7 +19,7 @@ description: "v4 完整的入站表、挂载点语法、OAuth 与管理路由、
 | `GET` | `/publications/{id}` | 已发布的内容。id 本身就是凭据，因此不需要 key |
 | — | `/admin/api/…` | 管理 API |
 | — | `/portal/api/…` | 终端用户自己的 API |
-| — | 其余路径 | 入站处理（OAuth issuer、厂商服务、数据面、控制台） |
+| — | 其余路径 | 入站处理（OAuth issuer、MCP 网关、厂商服务、数据面、控制台） |
 
 ```sh
 curl -s http://127.0.0.1:8787/healthz
@@ -40,9 +40,10 @@ curl -s http://127.0.0.1:8787/healthz
 1. CORS 与客户端地址。CORS 预检请求在这一步直接应答，不会转发，因为它询问的是本实例接受什么。客户端地址按[可信代理规则](/zh-cn/reference/configuration#可信代理)解析，之后才会写入任何日志。
 2. 挂载点：路径开头哪一部分属于本网关，见[挂载点](#挂载点)。
 3. OAuth issuer，路径为 `{mount}/v1/oauth/…`。这些路径属于本实例而不是某个上游，并且使用 OAuth 的错误格式应答，所以排在数据面之前匹配。
-4. 渠道的厂商服务路由，例如 Codex 的 `/backend-api/…`、Claude Code 的 `/api/…`。只在供应商或命名空间挂载点上匹配：匹配它需要确定渠道，而聚合挂载点不指定渠道。
-5. [数据面](#数据面端点)。
-6. 控制台（启用时），带 SPA 回退。
+4. MCP 网关，路径为 `{mount}/connect/mcp` 和 `{mount}/connect/mcp/{server}`：已注册 MCP 服务器的工具。在供应商挂载点上，两者都指这一台服务器。见 [MCP 服务器](/zh-cn/guides/mcp-servers)。
+5. 渠道的厂商服务路由，例如 Codex 的 `/backend-api/…`、Claude Code 的 `/api/…`。只在供应商或命名空间挂载点上匹配：匹配它需要确定渠道，而聚合挂载点不指定渠道。
+6. [数据面](#数据面端点)。
+7. 控制台（启用时），带 SPA 回退。
 
 以上都不匹配的请求返回 404。
 
@@ -240,13 +241,13 @@ POST   /admin/api/{family}/batch     批量
 
 这些路由由同一份声明生成，因此不会有哪个资源族缺少其中一条。一次批量操作无论包含多少行，都是一个 revision 提交：要么全部写入，要么全部不写入。
 
-身份类资源族：`users`、`api-keys`、`organizations`、`teams`、`permissions`、`rate-limits` 和 `oauth-clients`。组织和团队成员通过各自的成员接口管理（`organizations/{id}/members`、`teams/{id}/members`）。以下资源族与六条路由有所不同：
+身份类资源族：`users`、`api-keys`、`organizations`、`teams`、`permissions`、`rate-limits`、`mcp-scopes` 和 `oauth-clients`。组织和团队成员通过各自的成员接口管理（`organizations/{id}/members`、`teams/{id}/members`）。以下资源族与六条路由有所不同：
 
 - `oauth-clients` 用 `POST …/{id}/retire` 代替删除，因为客户端签发过的授权仍然引用它。在它的批量操作中，delete 项表示停用；含停用的批量只能全部是 delete，因为停用在单独的事务中执行，不能与创建、修改放进同一个提交。已停用的 `client_id` 可以重新注册，新注册沿用原来的行，停用时撤销的授权仍保持撤销状态。
 - `api-keys` 的批量操作不接受创建：创建 key 时会返回明文，而批量操作没有地方返回它。
 - 会导致实例不再有任何启用中管理员的 `users` 批量操作整体被拒绝。
 
-配置类资源族：`providers`、`credentials`、`models`、`provider-models`、`routes`、`route-members`、`connection-profiles`、`rule-sets`、`rules`、`provider-rule-sets`、`operation-rules`、`operation-endpoints`、`quotas`、`price-rules`、`price-rates`、`price-tiers`。
+配置类资源族：`providers`、`credentials`、`models`、`provider-models`、`routes`、`route-members`、`connection-profiles`、`rule-sets`、`rules`、`provider-rule-sets`、`operation-rules`、`operation-endpoints`、`quotas`、`price-rules`、`price-rates`、`price-tiers`、`mcp-tool-natures`。
 
 其他管理端点：
 
@@ -255,6 +256,7 @@ POST   /admin/api/{family}/batch     批量
 - 模型与路由：`models/discover`、`models/discover/apply`、`models/test`、`model-names`、`operation-keys`、`providers/{id}/routing`、`providers/{id}/routing-defaults/reset`、`providers/{id}/default-rule-set`。
 - 规则：`rule-sets/{id}/rules`、`rule-sets/{id}/rule-presets/{preset}`、`rule-presets`。
 - 配额：`quotas/status`、`quotas/{id}/reset`、`quotas/{id}/limit-reset`。
+- MCP：`mcp-tools/{providerId}`，见 [MCP 服务器](/zh-cn/guides/mcp-servers)。
 - 目录：`channels`、`tls-presets`、`default-model-catalog`、`default-model-catalog/apply-prices`。
 - 词表：`tokenizer-vocabs`、`tokenizer-auth`。
 - 用户：`users/{id}/password`、`users/{id}/sessions`、`users/{id}/allowlist`；API key：`api-keys/{id}/rotate`、`api-keys/{id}/secret`。

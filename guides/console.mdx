@@ -227,8 +227,7 @@ The files are stored in the local data directory and work offline. No font reque
 until you choose to download. **Delete fonts and use system fonts** goes back
 to system fonts.
 
-Edge deployments serve bundled static fonts from the same origin. Headless
-packages contain neither the console nor fonts.
+Headless packages contain neither the console nor fonts.
 
 Versions up to v4.1.14 download from `https://gproxy.leenhawk.com/fonts/`,
 which the documentation site no longer serves; on those versions the download
@@ -239,6 +238,5 @@ fails and the console keeps system fonts. Upgrading fixes it.
 Run `pnpm --dir console lint`, `pnpm --dir console test` and
 `pnpm --dir console build`. The build type-checks the code, bundles it with
 Vite and copies the assets into the embedded console directory. A native
-binary built afterwards serves that bundle at `/console`; Edge deployments
-serve the same bundle as static assets in front of the gateway. See
+binary built afterwards serves that bundle at `/console`. See
 [Building](/development/building).
