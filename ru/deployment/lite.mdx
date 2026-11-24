@@ -150,7 +150,9 @@ curl https://your-deployment.example/v1/chat/completions \
 
 ## Развёртывание
 
-Шаблоны находятся в каталоге `deploy/lite` [репозитория](https://github.com/LeenHawk/gproxy). Сначала соберите модуль. Для этого нужен Rust с целью `wasm32-unknown-unknown` и `wasm-bindgen-cli` той версии, что указана в `Cargo.lock`:
+Кнопки Cloudflare, Netlify и Vercel в [README репозитория](https://github.com/LeenHawk/gproxy#readme) развёртывают эти шаблоны без Rust. Их шаг сборки, `npm run build`, запускает `prepare-lite.mjs`: он скачивает `gproxy-lite.zip` из выпуска `staging`, который собирается из `main`, сверяет его с `SHA256SUMS` этого выпуска и распаковывает в `lite/`. Чтобы взять стабильный выпуск, задайте `GPROXY_LITE_RELEASE` равным `latest` или тегу, например `v4.3.1`. Кнопка спрашивает `GPROXY_LITE_CONFIG`; на Vercel она также подключает Upstash Redis и спрашивает `CRON_SECRET`.
+
+Чтобы собрать модуль самостоятельно: шаблоны находятся в каталоге `deploy/lite` [репозитория](https://github.com/LeenHawk/gproxy). Уже существующий `lite/` скрипт `prepare-lite.mjs` не трогает. Для сборки нужен Rust с целью `wasm32-unknown-unknown` и `wasm-bindgen-cli` той версии, что указана в `Cargo.lock`:
 
 ```sh
 rustup target add wasm32-unknown-unknown

@@ -150,7 +150,9 @@ Everything the engine remembers is in one key-value store per deployment: creden
 
 ## Deploying
 
-The templates are in `deploy/lite` of the [repository](https://github.com/LeenHawk/gproxy). Build the module first; this needs Rust with the `wasm32-unknown-unknown` target and `wasm-bindgen-cli` at the version in `Cargo.lock`:
+The Cloudflare, Netlify and Vercel buttons in the [repository's README](https://github.com/LeenHawk/gproxy#readme) deploy these templates without a Rust toolchain. Their build step, `npm run build`, runs `prepare-lite.mjs`: it downloads `gproxy-lite.zip` from the `staging` release, which is built from `main`, checks it against that release's `SHA256SUMS` and unpacks it into `lite/`. Set `GPROXY_LITE_RELEASE` to `latest` or to a tag such as `v4.3.1` to use a stable release instead. The button asks for `GPROXY_LITE_CONFIG`; on Vercel it also adds Upstash Redis and asks for `CRON_SECRET`.
+
+To build the module yourself, the templates are in `deploy/lite` of the [repository](https://github.com/LeenHawk/gproxy). `prepare-lite.mjs` keeps a `lite/` that is already there. Building this needs Rust with the `wasm32-unknown-unknown` target and `wasm-bindgen-cli` at the version in `Cargo.lock`:
 
 ```sh
 rustup target add wasm32-unknown-unknown

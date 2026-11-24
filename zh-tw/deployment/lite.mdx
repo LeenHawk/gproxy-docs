@@ -150,7 +150,9 @@ curl https://your-deployment.example/v1/chat/completions \
 
 ## 部署
 
-範本位於[儲存庫](https://github.com/LeenHawk/gproxy)的 `deploy/lite`。先建置模組，這需要帶 `wasm32-unknown-unknown` 目標的 Rust，以及與 `Cargo.lock` 中版本一致的 `wasm-bindgen-cli`：
+[儲存庫 README](https://github.com/LeenHawk/gproxy#readme) 中的 Cloudflare、Netlify 與 Vercel 按鈕部署這些範本，不需要 Rust 工具鏈。它們的建置步驟 `npm run build` 執行 `prepare-lite.mjs`：從 `staging` 發布（由 `main` 建置）下載 `gproxy-lite.zip`，以該發布的 `SHA256SUMS` 校驗後解壓到 `lite/`。要使用穩定版，把 `GPROXY_LITE_RELEASE` 設為 `latest` 或某個標籤，例如 `v4.3.1`。按鈕會要求填寫 `GPROXY_LITE_CONFIG`；Vercel 還會加入 Upstash Redis，並要求填寫 `CRON_SECRET`。
+
+自行建置模組時，範本位於[儲存庫](https://github.com/LeenHawk/gproxy)的 `deploy/lite`。`prepare-lite.mjs` 不會覆寫已經存在的 `lite/`。建置需要帶 `wasm32-unknown-unknown` 目標的 Rust，以及與 `Cargo.lock` 中版本一致的 `wasm-bindgen-cli`：
 
 ```sh
 rustup target add wasm32-unknown-unknown
