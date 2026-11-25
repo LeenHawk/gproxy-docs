@@ -97,11 +97,16 @@ Firefox, что соответствует среде браузера, заяв
    сессии; без них GPROXY не сможет выполнять ротацию сессии.
 2. Вернитесь на страницу AI Studio и экспортируйте cookie сайта, включая
    HttpOnly, через Cookie-Editor в формате JSON или Header.
-3. Необязательно: откройте `accounts.google.com` и ещё раз сделайте экспорт
-   через Cookie-Editor. `LSID`, `__Host-1PLSID`, `__Host-3PLSID` и
-   `__Host-GAPS` принадлежат только этому хосту, поэтому в экспорте со
-   страницы AI Studio их нет. Вставьте этот экспорт сразу после экспорта
-   AI Studio; при импорте они объединяются в одни учётные данные. GPROXY
+3. Необязательно: `LSID`, `__Host-1PLSID`, `__Host-3PLSID` и `__Host-GAPS`
+   принадлежат только `accounts.google.com`. Cookie-Editor экспортирует cookie
+   текущей страницы и до них не добирается, а `accounts.google.com`
+   перенаправляет на `myaccount.google.com`. Чтобы включить их, используйте
+   расширение с экспортом по нескольким доменам, например
+   [Cookie Editor](https://chromewebstore.google.com/detail/cookie-editor/dhdfnoenjedcedipmdoeibpnmpojjpce)
+   от navbytes в Chrome Web Store: в его менеджере cookie отметьте
+   `.google.com`, `.aistudio.google.com` и `accounts.google.com` и
+   экспортируйте их вместе в JSON. Если экспортов несколько, вставьте их один
+   за другим; при импорте они объединяются в одни учётные данные. GPROXY
    отправляет эти cookie только при ротации сессии; если шаг 1 выдал cookie
    сессии, ротация работает и без них.
 4. На странице учётных данных выберите **Импорт → Cookie-Editor / Cookie Header**,

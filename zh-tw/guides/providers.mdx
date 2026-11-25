@@ -80,7 +80,7 @@ curl -s -X POST http://127.0.0.1:8787/admin/api/providers \
 
 1. 在瀏覽器中登入 [AI Studio](https://aistudio.google.com/)，再開啟一次 `www.google.com`。Google 在這一步才簽發可輪換的工作階段 Cookie，缺少它們時 GPROXY 無法輪換工作階段。
 2. 回到 AI Studio 頁面，以 Cookie-Editor 匯出本站的 JSON 或 Header，包含 HttpOnly Cookie。
-3. （選用）開啟 `accounts.google.com`，以 Cookie-Editor 再匯出一次。`LSID`、`__Host-1PLSID`、`__Host-3PLSID`、`__Host-GAPS` 只屬於這個網域，在 AI Studio 頁面匯不出來。把這份匯出緊接在 AI Studio 的匯出後面貼上，匯入時會合併為同一個憑證。GPROXY 只在輪換工作階段時傳送這幾個 Cookie；第 1 步已簽發工作階段 Cookie 時，不匯入也可以輪換。
+3. （選用）`LSID`、`__Host-1PLSID`、`__Host-3PLSID`、`__Host-GAPS` 只屬於 `accounts.google.com`，Cookie-Editor 只匯出目前頁面的 Cookie，拿不到它們；直接開啟 `accounts.google.com` 會跳轉到 `myaccount.google.com`，同樣拿不到。需要時改用能跨網域匯出的擴充功能，例如 Chrome 線上應用程式商店中 navbytes 發布的 [Cookie Editor](https://chromewebstore.google.com/detail/cookie-editor/dhdfnoenjedcedipmdoeibpnmpojjpce)：在它的 Cookie 管理器中勾選 `.google.com`、`.aistudio.google.com` 和 `accounts.google.com`，一起匯出為 JSON。分成幾份匯出時，把它們依序貼上，匯入時會合併為同一個憑證。GPROXY 只在輪換工作階段時傳送這幾個 Cookie；第 1 步已簽發工作階段 Cookie 時，不匯入也可以輪換。
 4. 開啟供應商的憑證頁，選擇 **匯入憑證 → Cookie-Editor / Cookie Header**，貼上並匯入。整組 Cookie 會儲存為一個憑證。一次匯入多個帳號時，把各帳號的匯出依序貼在一起，或每行一個 Cookie Header，每個帳號儲存為一個憑證。選擇其他已登入的 Google 身分時，可匯入 `{"cookies": [...], "auth_user": "1"}`；預設登入序號為 `0`。
 
 匯入後在憑證詳情中測試一次，再把供應商加入模型路由。

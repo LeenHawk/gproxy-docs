@@ -104,12 +104,18 @@ and is normally not needed.
    point; without them GPROXY cannot rotate the session.
 2. Return to the AI Studio page. In Cookie-Editor, export the site's cookies as
    JSON or Header, including HttpOnly cookies.
-3. Optional: open `accounts.google.com` and export again with Cookie-Editor.
-   `LSID`, `__Host-1PLSID`, `__Host-3PLSID` and `__Host-GAPS` belong to that
-   host only, so the AI Studio export cannot contain them. Paste this export
-   directly after the AI Studio one; the import merges them into one
-   credential. GPROXY sends these cookies only when it rotates the session; if
-   step 1 issued the session cookies, rotation works without them.
+3. Optional: `LSID`, `__Host-1PLSID`, `__Host-3PLSID` and `__Host-GAPS`
+   belong to `accounts.google.com` only. Cookie-Editor exports the current
+   page's cookies and cannot reach them, and opening `accounts.google.com`
+   redirects to `myaccount.google.com`. To include them, use an extension that
+   exports across domains, such as
+   [Cookie Editor](https://chromewebstore.google.com/detail/cookie-editor/dhdfnoenjedcedipmdoeibpnmpojjpce)
+   by navbytes in the Chrome Web Store: in its cookie manager select
+   `.google.com`, `.aistudio.google.com` and `accounts.google.com` and export
+   them together as JSON. If you export them separately, paste the exports one
+   after another; the import merges them into one credential. GPROXY sends
+   these cookies only when it rotates the session; if step 1 issued the
+   session cookies, rotation works without them.
 4. In the provider's credentials, choose **Import credentials → Cookie-Editor /
    Cookie Header**, paste the export, and import. The entire cookie jar becomes
    one credential. To import several accounts at once, paste their exports one
