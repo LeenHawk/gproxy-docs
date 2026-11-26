@@ -77,6 +77,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
       "storeHeadless": "GPROXY Headless",
       "fdroid": "Приложение также доступно в F-Droid",
       "scoop": "Также через Scoop",
+      "brew": "Также через Homebrew",
       "winget": "Через WinGet (Microsoft Store)",
       "quick": "Установка одной командой",
       "quickBody": "Устанавливает CLI и помогает настроить базу данных, администратора и прокси. Приложение с графическим интерфейсом можно скачать ниже.",
@@ -163,6 +164,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
       storeHeadless: 'GPROXY Headless',
       fdroid: 'The Application is also on F-Droid',
       scoop: 'Also with Scoop',
+      brew: 'Also with Homebrew',
       winget: 'With WinGet (Microsoft Store)',
       quick: 'One-line install',
       quickBody: 'Installs the CLI for this computer and walks you through the database, administrator account and proxy. For the desktop Application, download it below.',
@@ -230,6 +232,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
       storeHeadless: 'GPROXY Headless',
       fdroid: 'Application 也可从 F-Droid 安装',
       scoop: '也可通过 Scoop 安装',
+      brew: '也可通过 Homebrew 安装',
       winget: '通过 WinGet 安装（Microsoft Store）',
       quick: '一键安装',
       quickBody: '为本机安装 CLI，并引导你设置数据库、管理员账户和代理。需要桌面应用版请在下方下载。',
@@ -297,6 +300,7 @@ export const DownloadPage = ({ locale = 'en' }) => {
       storeHeadless: 'GPROXY Headless',
       fdroid: 'Application 也可從 F-Droid 安裝',
       scoop: '也可透過 Scoop 安裝',
+      brew: '也可透過 Homebrew 安裝',
       winget: '透過 WinGet 安裝（Microsoft Store）',
       quick: '一鍵安裝',
       quickBody: '為本機安裝 CLI，並引導你設定資料庫、管理員帳戶和代理。需要桌面應用版請在下方下載。',
@@ -335,9 +339,9 @@ export const DownloadPage = ({ locale = 'en' }) => {
     { arch, variant: 'musl', app: [{ asset: `gproxy-tauri-linux-${arch}-musl.apk`, label: 'Alpine APK' }, { asset: `gproxy-tauri-linux-${arch}-musl.zip`, label: 'ZIP' }], cli: [{ asset: `gproxy-linux-${arch}-musl.apk`, label: 'Alpine APK' }, { asset: `gproxy-linux-${arch}-musl.zip`, label: 'ZIP' }] },
   ]);
   const platforms = [
-    { id: 'linux', rows: linuxRows },
+    { id: 'linux', brew: 'brew install leenhawk/tap/gproxy   # gproxy-headless', rows: linuxRows },
     { id: 'windows', store: true, scoop: true, rows: ['x86_64', 'aarch64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-windows-${arch}.msix`, label: 'MSIX' }, { asset: `gproxy-tauri-windows-${arch}.zip`, label: 'ZIP' }], cli: [{ asset: `gproxy-windows-${arch}.msix`, label: 'MSIX' }, { asset: `gproxy-windows-${arch}.zip`, label: 'ZIP' }] })) },
-    { id: 'macos', rows: ['aarch64', 'x86_64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-macos-${arch}.dmg`, label: 'DMG' }, { asset: `gproxy-tauri-macos-${arch}.zip`, label: 'ZIP' }], cli: [{ asset: `gproxy-macos-${arch}.dmg`, label: 'DMG' }, { asset: `gproxy-macos-${arch}.zip`, label: 'ZIP' }] })) },
+    { id: 'macos', brew: 'brew install --cask leenhawk/tap/gproxy-desktop\nbrew install leenhawk/tap/gproxy   # gproxy-headless', rows: ['aarch64', 'x86_64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-macos-${arch}.dmg`, label: 'DMG' }, { asset: `gproxy-tauri-macos-${arch}.zip`, label: 'ZIP' }], cli: [{ asset: `gproxy-macos-${arch}.dmg`, label: 'DMG' }, { asset: `gproxy-macos-${arch}.zip`, label: 'ZIP' }] })) },
     { id: 'android', fdroid: true, rows: ['aarch64', 'x86_64'].map((arch) => ({ arch, app: [{ asset: `gproxy-tauri-android-${arch}.apk`, label: 'APK' }], cli: [{ asset: `gproxy-android-${arch}.deb`, label: 'Termux DEB' }, { asset: `gproxy-android-${arch}.zip`, label: 'ZIP' }] })) },
     { id: 'ohos', rows: [{ arch: 'aarch64', app: [{ asset: hap, label: 'HAP' }], cli: [] }] },
   ];
@@ -645,6 +649,13 @@ export const DownloadPage = ({ locale = 'en' }) => {
                     <footer className="dl-store">
                       <a href="https://raw.githubusercontent.com/LeenHawk/gproxy/dev/distribution/alpine/gproxy-alpine.rsa.pub">{copy.alpineKey} ↗</a>
                       <a href="https://github.com/LeenHawk/gproxy/blob/dev/distribution/alpine/README.txt">{copy.alpineGuide} ↗</a>
+                    </footer>
+                  ) : null}
+                  {platform.brew ? (
+                    <footer className="dl-store dl-scoop">
+                      <span>{copy.brew}</span>
+                      <a href="https://github.com/LeenHawk/homebrew-tap">LeenHawk/homebrew-tap ↗</a>
+                      <pre className="dl-code"><code>{platform.brew}</code></pre>
                     </footer>
                   ) : null}
                   {platform.fdroid ? (
