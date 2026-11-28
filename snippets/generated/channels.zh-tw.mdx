@@ -736,7 +736,7 @@ GPROXY 4.3.0. [下載 JSON](/generated/channels.json).
 | `management_base_url` | 字串 | 否 | Origin replacing https://management.\{region\}.kiro.dev, which serves the model catalogue and the usage limits. | `https://management.{region}.kiro.dev` |
 | `auth_base_url` | 字串 | 否 | The Kiro desktop auth host the device login and its refresh talk to. | `https://prod.us-east-1.auth.desktop.kiro.dev` |
 | `profile_arn` | 字串 | 否 | CodeWhisperer profile ARN for credentials whose login did not report one; a credential's own wins. | — |
-| `login_provider` | 字串 | 否 | Identity provider the device login opens: github or google. | — |
+| `login_provider` | 字串 | 否 | Identity provider the device login opens when the login names none: github or google. | — |
 | `sso_start_url` | 字串 | 否 | The Identity Center portal the authorization code is issued by; defaults to the Builder ID portal. | `https://view.awsapps.com/start` |
 | `headers` | HTTP 請求標頭 | 否 | Static headers added to every request. | — |
 | `forward_thinking` | 布林值 | 否 | Forward thinking blocks from request history. Defaults to true; disabling removes reasoning content and signatures without disabling model thinking. | — |

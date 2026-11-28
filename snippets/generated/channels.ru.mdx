@@ -736,7 +736,7 @@ GPROXY 4.3.0. [Скачать JSON](/generated/channels.json).
 | `management_base_url` | Строка | Нет | Origin replacing https://management.\{region\}.kiro.dev, which serves the model catalogue and the usage limits. | `https://management.{region}.kiro.dev` |
 | `auth_base_url` | Строка | Нет | The Kiro desktop auth host the device login and its refresh talk to. | `https://prod.us-east-1.auth.desktop.kiro.dev` |
 | `profile_arn` | Строка | Нет | CodeWhisperer profile ARN for credentials whose login did not report one; a credential's own wins. | — |
-| `login_provider` | Строка | Нет | Identity provider the device login opens: github or google. | — |
+| `login_provider` | Строка | Нет | Identity provider the device login opens when the login names none: github or google. | — |
 | `sso_start_url` | Строка | Нет | The Identity Center portal the authorization code is issued by; defaults to the Builder ID portal. | `https://view.awsapps.com/start` |
 | `headers` | HTTP-заголовки | Нет | Static headers added to every request. | — |
 | `forward_thinking` | Логическое значение | Нет | Forward thinking blocks from request history. Defaults to true; disabling removes reasoning content and signatures without disabling model thinking. | — |

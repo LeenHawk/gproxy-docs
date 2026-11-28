@@ -1625,6 +1625,14 @@
               "string",
               "null"
             ]
+          },
+          "variant": {
+            "default": null,
+            "description": "A `LoginVariant::id` the channel declares for this flow. Absent lets\nthe channel fall back to its provider configuration.",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -10580,6 +10588,14 @@
           },
           "providerId": {
             "type": "string"
+          },
+          "variant": {
+            "default": null,
+            "description": "A `LoginVariant::id` the channel declares for this flow. Absent lets\nthe channel fall back to its provider configuration.",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -39303,12 +39319,20 @@
               "$ref": "#/components/schemas/Output_LoginMode"
             },
             "type": "array"
+          },
+          "loginVariants": {
+            "description": "Named choices inside those flows; empty means each mode is one choice\n(`UpstreamKind::login_variants`).",
+            "items": {
+              "$ref": "#/components/schemas/Output_LoginVariant"
+            },
+            "type": "array"
           }
         },
         "required": [
           "id",
           "displayName",
           "loginModes",
+          "loginVariants",
           "credentialKinds",
           "capabilities",
           "configKeys"
@@ -43006,6 +43030,26 @@
         ],
         "type": "object"
       },
+      "Output_CredentialLoginVariantDto": {
+        "description": "One `LoginVariant` of the provider's channel.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/Output_LoginMode"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "mode"
+        ],
+        "type": "object"
+      },
       "Output_CredentialOwnerOptionDto": {
         "properties": {
           "id": {
@@ -43057,6 +43101,14 @@
             },
             "type": "array"
           },
+          "loginVariants": {
+            "default": [],
+            "description": "Named choices inside `login_modes`; empty means each mode is one choice.",
+            "items": {
+              "$ref": "#/components/schemas/Output_CredentialLoginVariantDto"
+            },
+            "type": "array"
+          },
           "name": {
             "type": "string"
           }
@@ -43069,6 +43121,7 @@
           "enabled",
           "credentialKinds",
           "loginModes",
+          "loginVariants",
           "capabilities"
         ],
         "type": "object"
@@ -52634,6 +52687,29 @@
             "type": "string"
           }
         ]
+      },
+      "Output_LoginVariant": {
+        "description": "One named way into a login flow, for an upstream whose single flow fronts\nseveral identity providers (Kiro's device login opens GitHub or Google; its\nauthorization code is AWS Builder ID or Identity Center). The host lists\nvariants instead of bare modes when a kind declares any, and hands the\nchosen id to the flow as `LoginContext::variant`.",
+        "properties": {
+          "id": {
+            "description": "Stable id the login request names; unique within the kind.",
+            "type": "string"
+          },
+          "label": {
+            "description": "What a UI shows. Usually a product name, so it is not translated.",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/Output_LoginMode",
+            "description": "The flow this variant runs."
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "mode"
+        ],
+        "type": "object"
       },
       "Output_LogprobCandidate": {
         "additionalProperties": true,

@@ -54,7 +54,8 @@
         "id": "aistudio",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -126,7 +127,8 @@
         "id": "antigravity",
         "loginModes": [
           "authorization_code"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -227,7 +229,8 @@
         "id": "aws_bedrock",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -327,7 +330,8 @@
         "id": "azure",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -413,7 +417,8 @@
         "id": "claudeapi",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -541,7 +546,8 @@
         "id": "claudecode",
         "loginModes": [
           "authorization_code"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": [
         {
@@ -1328,7 +1334,8 @@
         ],
         "displayName": "Claude Web (claude.ai session)",
         "id": "claudeweb",
-        "loginModes": []
+        "loginModes": [],
+        "loginVariants": []
       },
       "services": []
     },
@@ -1402,7 +1409,8 @@
         "loginModes": [
           "api_key",
           "device_code"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -1460,7 +1468,8 @@
         "id": "cloudflare_ai_gateway",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -1547,7 +1556,8 @@
         "loginModes": [
           "authorization_code",
           "device_code"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": [
         {
@@ -2351,7 +2361,8 @@
         "loginModes": [
           "api_key",
           "authorization_code"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -2444,7 +2455,8 @@
         "id": "copilotcli",
         "loginModes": [
           "device_code"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -2551,7 +2563,8 @@
         "id": "custom",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -2609,7 +2622,8 @@
         "id": "dashscope",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -2667,7 +2681,8 @@
         "id": "deepseek",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -2788,7 +2803,8 @@
         "id": "devin",
         "loginModes": [
           "authorization_code"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -2876,7 +2892,8 @@
         "loginModes": [
           "api_key",
           "device_code"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -2948,7 +2965,8 @@
         "id": "geminicli",
         "loginModes": [
           "authorization_code"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -3006,7 +3024,8 @@
         "id": "glm",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -3064,7 +3083,8 @@
         "id": "glmcode",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -3150,7 +3170,8 @@
         "id": "grokbuild",
         "loginModes": [
           "device_code"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -3252,7 +3273,8 @@
         "loginModes": [
           "api_key",
           "device_code"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -3303,7 +3325,7 @@
             "required": false
           },
           {
-            "description": "Identity provider the device login opens: github or google.",
+            "description": "Identity provider the device login opens when the login names none: github or google.",
             "kind": "string",
             "name": "login_provider",
             "placeholder": null,
@@ -3353,6 +3375,23 @@
         "loginModes": [
           "device_code",
           "authorization_code"
+        ],
+        "loginVariants": [
+          {
+            "id": "github",
+            "label": "GitHub",
+            "mode": "device_code"
+          },
+          {
+            "id": "google",
+            "label": "Google",
+            "mode": "device_code"
+          },
+          {
+            "id": "aws",
+            "label": "AWS Builder ID / IAM Identity Center",
+            "mode": "authorization_code"
+          }
         ]
       },
       "services": []
@@ -3411,7 +3450,8 @@
         "id": "minimax",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -3469,7 +3509,8 @@
         "id": "nvidia",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -3541,7 +3582,8 @@
         "id": "openai",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -3613,7 +3655,8 @@
         "id": "opencodego",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -3694,7 +3737,8 @@
         "loginModes": [
           "api_key",
           "device_code"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -3752,7 +3796,8 @@
         "id": "opendesign",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -3880,7 +3925,8 @@
         "id": "openrouter",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -3959,7 +4005,8 @@
         "id": "orcaterm",
         "loginModes": [
           "device_code"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -4015,7 +4062,8 @@
         ],
         "displayName": "Google AI Studio Playground",
         "id": "playground",
-        "loginModes": []
+        "loginModes": [],
+        "loginVariants": []
       },
       "services": []
     },
@@ -4094,7 +4142,8 @@
         "id": "trae",
         "loginModes": [
           "authorization_code"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -4180,7 +4229,8 @@
         "id": "vercel",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -4257,7 +4307,8 @@
         ],
         "displayName": "Google Vertex AI",
         "id": "vertex",
-        "loginModes": []
+        "loginModes": [],
+        "loginVariants": []
       },
       "services": []
     },
@@ -4315,7 +4366,8 @@
         "id": "vertexexpress",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -4394,7 +4446,8 @@
         "id": "volcengine_agent",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": [
         {
@@ -4483,7 +4536,8 @@
         "id": "volcengine_coding",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": [
         {
@@ -4586,7 +4640,8 @@
         "id": "workbuddy",
         "loginModes": [
           "device_code"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     },
@@ -4665,7 +4720,8 @@
         "id": "xai",
         "loginModes": [
           "api_key"
-        ]
+        ],
+        "loginVariants": []
       },
       "services": []
     }

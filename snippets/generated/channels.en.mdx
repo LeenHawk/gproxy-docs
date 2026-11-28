@@ -736,7 +736,7 @@ Login flows: Device code / Authorization code (PKCE). Manual credential kinds: `
 | `management_base_url` | String | No | Origin replacing https://management.\{region\}.kiro.dev, which serves the model catalogue and the usage limits. | `https://management.{region}.kiro.dev` |
 | `auth_base_url` | String | No | The Kiro desktop auth host the device login and its refresh talk to. | `https://prod.us-east-1.auth.desktop.kiro.dev` |
 | `profile_arn` | String | No | CodeWhisperer profile ARN for credentials whose login did not report one; a credential's own wins. | — |
-| `login_provider` | String | No | Identity provider the device login opens: github or google. | — |
+| `login_provider` | String | No | Identity provider the device login opens when the login names none: github or google. | — |
 | `sso_start_url` | String | No | The Identity Center portal the authorization code is issued by; defaults to the Builder ID portal. | `https://view.awsapps.com/start` |
 | `headers` | HTTP headers | No | Static headers added to every request. | — |
 | `forward_thinking` | Boolean | No | Forward thinking blocks from request history. Defaults to true; disabling removes reasoning content and signatures without disabling model thinking. | — |
