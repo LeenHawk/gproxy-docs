@@ -1,4 +1,29 @@
 {
   "version": 1,
-  "notifications": []
+  "notifications": [
+    {
+      "id": "rename-candidates-2026-12",
+      "severity": "info",
+      "published_at": "2026-11-28T12:42:29Z",
+      "expires_at": "2026-12-15T00:00:00+08:00",
+      "content": {
+        "en": {
+          "title": "GPROXY is getting a new name: suggest one",
+          "body": "GPROXY is hard to search for, so we plan to rename it in v5. Upgrading will need no action from you.\n\nSuggest a name, or give 👍 to the candidates you like:\n\n`github.com/LeenHawk/gproxy/discussions/374`\n\nSuggestions close on **2026-12-14**."
+        },
+        "zh-CN": {
+          "title": "GPROXY 要改名，征集新名字",
+          "body": "GPROXY 这个名字太泛，难以搜索。我们打算在 v5 改名，升级不需要你做任何事。\n\n欢迎来提名字，也可以给已有的候选点 👍：\n\n`github.com/LeenHawk/gproxy/discussions/374`\n\n征集截止到 **2026-12-14**。"
+        },
+        "zh-TW": {
+          "title": "GPROXY 要改名，徵集新名字",
+          "body": "GPROXY 這個名字太泛，難以搜尋。我們打算在 v5 改名，升級不需要你做任何事。\n\n歡迎來提名字，也可以替現有的候選按 👍：\n\n`github.com/LeenHawk/gproxy/discussions/374`\n\n徵集截止到 **2026-12-14**。"
+        },
+        "ru": {
+          "title": "GPROXY получит новое имя: предложите своё",
+          "body": "Имя GPROXY трудно найти в поиске, поэтому в v5 мы планируем переименовать проект. При обновлении ничего делать не нужно.\n\nПредложите имя или поставьте 👍 понравившимся вариантам:\n\n`github.com/LeenHawk/gproxy/discussions/374`\n\nПриём предложений до **2026-12-14**."
+        }
+      }
+    }
+  ]
 }
