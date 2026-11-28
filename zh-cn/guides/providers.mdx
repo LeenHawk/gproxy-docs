@@ -301,6 +301,8 @@ curl -s -X POST http://127.0.0.1:8787/admin/api/credentials/{id}/reveal \
 
 每个渠道提供下面一种或两种流程，在 `GET /admin/api/channels` 中以 `loginModes` 列出。请求渠道未提供的方式会被拒绝。
 
+部分渠道还会列出 `loginVariants`，即这些流程中的具名选项，每项包含 `id`、`label` 和对应的 `mode`。Kiro 列出 `github`、`google`（设备码）和 `aws`（授权码，Builder ID 或 IAM Identity Center）。在 start 请求中用 `variant` 传入所选的 `id`；不传时渠道使用供应商配置。
+
 | 流程 | 步骤 | 适用场景 |
 | --- | --- | --- |
 | 授权码 | start → complete | 带 PKCE 的浏览器跳转 |

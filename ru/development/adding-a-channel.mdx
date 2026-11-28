@@ -49,7 +49,7 @@ upstream-сервису: путь, зависящий от операции; т�
 Канал реализует два трейта в двух блоках `impl`:
 
 - `gproxy_upstream::UpstreamKind` содержит идентичность и сторону учётной
-  записи: `id`, а также `display_name`, `login_modes`, `credential_kinds`,
+  записи: `id`, а также `display_name`, `login_modes`, `login_variants`, `credential_kinds`,
   `validate_credential_secret`, `initial_credential_expiry`,
   `default_connection`, `default_connection_for`, `credential_refresh`,
   `oauth_authorization_code` и `oauth_device_code`. Обязателен только `id`.
@@ -519,7 +519,7 @@ btls-sys = { git = "https://github.com/0x676e67/btls", rev = "609f955e6de4df4a21
 
 - Консоль строит интерфейс вашего канала по дескриптору, как и для любого
   другого: форму провайдера по `config_keys`, форму учётных данных по
-  `credential_kinds`, кнопки входа по `login_modes`, элементы квот, сброса,
+  `credential_kinds`, варианты входа по `login_variants` (или по `login_modes`, если их нет), элементы квот, сброса,
   обновления и платного расхода по `capabilities`. Нет только доработок,
   написанных для встроенных id, например особого текста подсказки или группы
   предустановленных моделей.
@@ -555,6 +555,9 @@ btls-sys = { git = "https://github.com/0x676e67/btls", rev = "609f955e6de4df4a21
    `impl UpstreamKind` (`id` и сторона учётной записи) и один
    `impl BaseChannel` (сторона моделей); переопределите `descriptor`. Тип
    ошибки — `gproxy_upstream::UpstreamError`.
+   Если один способ входа ведёт к нескольким поставщикам удостоверений,
+   объявите их в `login_variants`, задайте в descriptor `login_variants:
+   self.login_variants()` и читайте `LoginContext::variant` в потоке.
 4. Пробросьте фичу в три места из шага 9: `crates/gproxy-sdk/Cargo.toml`
    (фича и список `channels`), `crates/gproxy/Cargo.toml`
    и `V4_CHANNELS` в

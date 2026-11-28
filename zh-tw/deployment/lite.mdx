@@ -91,7 +91,7 @@ curl https://your-deployment.example/v1/chat/completions \
       -d '{"provider":"codex"}'
     ```
 
-    回應中有一個 `session`，另有一個要在瀏覽器中開啟的 `authorize_url`；裝置碼登入時則是 `user_code` 和 `verification_uri`。兩種流程都支援的渠道可以傳 `"mode": "authorization_code"` 或 `"device_code"`。
+    回應中有一個 `session`，另有一個要在瀏覽器中開啟的 `authorize_url`；裝置碼登入時則是 `user_code` 和 `verification_uri`。兩種流程都支援的渠道可以傳 `"mode": "authorization_code"` 或 `"device_code"`。在 `GET /lite/status` 中列出 `login_variants` 的渠道還可以傳 `"variant"`，值為其中一項的 `id`，流程也隨之確定。
   </Step>
   <Step title="授權">
     開啟該 URL 並同意授權。授權碼登入最後會停在一個打不開的頁面（`localhost` 位址），或一個顯示授權碼的頁面：複製完整位址，或複製授權碼。

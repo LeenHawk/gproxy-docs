@@ -91,7 +91,7 @@ A provider without a `credential` is signed in through three paths, all behind t
       -d '{"provider":"codex"}'
     ```
 
-    The answer carries a `session` and either an `authorize_url` to open in a browser or, for a device login, a `user_code` and a `verification_uri`. A channel with both flows takes `"mode": "authorization_code"` or `"device_code"`.
+    The answer carries a `session` and either an `authorize_url` to open in a browser or, for a device login, a `user_code` and a `verification_uri`. A channel with both flows takes `"mode": "authorization_code"` or `"device_code"`. A channel whose entry in `GET /lite/status` lists `login_variants` also takes `"variant"` with one of their `id`s, which selects the flow as well.
   </Step>
   <Step title="Authorize">
     Open the URL and approve. An authorization code login ends on a page that does not load (a `localhost` address) or that shows a code: copy the whole address, or the code.

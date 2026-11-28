@@ -91,7 +91,7 @@ curl https://your-deployment.example/v1/chat/completions \
       -d '{"provider":"codex"}'
     ```
 
-    В ответе приходит `session` и либо `authorize_url`, который нужно открыть в браузере, либо, при входе по коду устройства, `user_code` и `verification_uri`. Канал с обоими способами принимает `"mode": "authorization_code"` или `"device_code"`.
+    В ответе приходит `session` и либо `authorize_url`, который нужно открыть в браузере, либо, при входе по коду устройства, `user_code` и `verification_uri`. Канал с обоими способами принимает `"mode": "authorization_code"` или `"device_code"`. Канал, у которого в `GET /lite/status` есть `login_variants`, также принимает `"variant"` с одним из их `id`; он же определяет способ входа.
   </Step>
   <Step title="Авторизация">
     Откройте URL и подтвердите доступ. Вход по коду авторизации заканчивается на странице, которая не загружается (адрес `localhost`) или показывает код: скопируйте адрес целиком или код.

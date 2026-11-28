@@ -25,7 +25,7 @@ sidebarTitle: "新增渠道"
 
 渠道实现两个 trait，写成两个 `impl` 块：
 
-- `gproxy_upstream::UpstreamKind` 承载身份和账户侧：`id`，以及 `display_name`、`login_modes`、`credential_kinds`、`validate_credential_secret`、`initial_credential_expiry`、`default_connection`、`default_connection_for`、`credential_refresh`、`oauth_authorization_code` 和 `oauth_device_code`。只有 `id` 必须实现。
+- `gproxy_upstream::UpstreamKind` 承载身份和账户侧：`id`，以及 `display_name`、`login_modes`、`login_variants`、`credential_kinds`、`validate_credential_secret`、`initial_credential_expiry`、`default_connection`、`default_connection_for`、`credential_refresh`、`oauth_authorization_code` 和 `oauth_device_code`。只有 `id` 必须实现。
 - `gproxy_channel::channel::BaseChannel` 继承 `UpstreamKind`，承载模型侧：descriptor、请求准备、各个操作、配额、用量和服务。它没有必须实现的方法。
 
 ```rust
@@ -276,7 +276,7 @@ checkout 自己的 patch 表里还有 `glib`，只有桌面宿主会用到，仓
 
 ### 与内置渠道的区别
 
-- 控制台与对待其他渠道一样，根据 descriptor 渲染你的渠道：供应商表单来自 `config_keys`，凭证表单来自 `credential_kinds`，登录按钮来自 `login_modes`，配额、重置、刷新和付费用量控件来自 `capabilities`。缺少的是为内置 id 单独编写的内容，例如定制的提示文字或模型预设组。
+- 控制台与对待其他渠道一样，根据 descriptor 渲染你的渠道：供应商表单来自 `config_keys`，凭证表单来自 `credential_kinds`，登录选项来自 `login_variants`（没有时来自 `login_modes`），配额、重置、刷新和付费用量控件来自 `capabilities`。缺少的是为内置 id 单独编写的内容，例如定制的提示文字或模型预设组。
 - 原生二进制的自更新会拒绝安装。发布的版本是本仓库的构建，装上之后会丢掉你的渠道，下次重启后其上的所有供应商都会失效。请基于新版本重新构建。检查更新功能照常可用。
 - 契约随 gproxy 的版本变化。实际变更都是增量的（多数协议类型带 `#[non_exhaustive]`，`UpstreamKind` 和 `BaseChannel` 新增的方法都有默认实现），但仍应基于你实际运行的版本构建。写 `ChannelCapabilities { quota_query: true, ..Default::default() }`，不要逐个列出字段，这样新增能力不会导致构建失败。
 
@@ -288,7 +288,7 @@ checkout 自己的 patch 表里还有 `glib`，只有桌面宿主会用到，仓
 
 1. 以 `crates/gproxy-channel/src/channels/nvidia.rs`（API key）或 `codex/`（OAuth）为模板，并阅读 `samples/` 下厂商的线协议源码或其 API 参考。
 2. 在 `crates/gproxy-channel/Cargo.toml` 中加 feature，在 `src/channels/mod.rs` 的 `channels!` 中加一行，并把 feature 加进渠道用到的 `src/channels/shared/` 中的每个 `cfg(any(...))`。
-3. 编写 `src/channels/<id>.rs` 或 `src/channels/<id>/`：一个 `impl UpstreamKind`（`id` 和账户侧）和一个 `impl BaseChannel`（模型侧），并覆写 `descriptor`。错误类型是 `gproxy_upstream::UpstreamError`。
+3. 编写 `src/channels/<id>.rs` 或 `src/channels/<id>/`：一个 `impl UpstreamKind`（`id` 和账户侧）和一个 `impl BaseChannel`（模型侧），并覆写 `descriptor`。错误类型是 `gproxy_upstream::UpstreamError`。如果一个登录流程对应多个身份提供方，在 `login_variants` 中声明它们，在 descriptor 中设置 `login_variants: self.login_variants()`，并在流程中读取 `LoginContext::variant`。
 4. 在第 9 步列出的三处转发 feature：`crates/gproxy-sdk/Cargo.toml`（feature 和 `channels` 列表）、`crates/gproxy/Cargo.toml`，以及 `crates/gproxy-app/src/v3/channels.rs` 中的 `V4_CHANNELS`（修改数组长度）。
 5. 如果渠道支持 `allow_paid_usage` 或提供 WebSocket，在 descriptor 的 capabilities 中设置 `paid_usage` / `websocket`。
 6. 在 `crates/gproxy-channel/README.md` 中加一行，并在 `docs/guides/providers.mdx`、`docs/zh-cn/guides/providers.mdx`、`docs/zh-tw/guides/providers.mdx`、`docs/ru/guides/providers.mdx` 的“支持的渠道”表中加一行（文档改动在子模块中提交）。

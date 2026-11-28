@@ -543,6 +543,12 @@ A channel offers one or both of these flows, reported as `loginModes` in
 `GET /admin/api/channels`. Requesting a mode the channel does not offer is
 refused.
 
+Some channels also list `loginVariants`: named choices inside those flows,
+each with an `id`, a `label` and the `mode` it runs. Kiro lists `github` and
+`google` (device code) and `aws` (authorization code, Builder ID or IAM
+Identity Center). Pass the chosen `id` as `variant` in the start request.
+Without it the channel uses its provider configuration.
+
 | Flow | Steps | For |
 | --- | --- | --- |
 | Authorization code | start → complete | A browser redirect with PKCE |

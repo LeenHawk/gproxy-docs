@@ -45,7 +45,7 @@ instead. See
 A channel implements two traits, in two `impl` blocks:
 
 - `gproxy_upstream::UpstreamKind` holds the identity and the account side:
-  `id`, plus `display_name`, `login_modes`, `credential_kinds`,
+  `id`, plus `display_name`, `login_modes`, `login_variants`, `credential_kinds`,
   `validate_credential_secret`, `initial_credential_expiry`,
   `default_connection`, `default_connection_for`, `credential_refresh`,
   `oauth_authorization_code` and `oauth_device_code`. `id` is the only
@@ -477,7 +477,8 @@ authentication never reaches the upstream.
 
 - The console renders your channel from its descriptor, like any other: the
   provider form from `config_keys`, the credential form from
-  `credential_kinds`, the login buttons from `login_modes`, and the quota,
+  `credential_kinds`, the login choices from `login_variants` (or
+  `login_modes` when there are none), and the quota,
   reset, refresh and paid-usage controls from `capabilities`. What it lacks is
   the per-channel extras written for built-in ids, such as a tailored hint text
   or a model preset group.
@@ -506,7 +507,10 @@ Built in (a pull request to this repository):
 3. Write `src/channels/<id>.rs` or `src/channels/<id>/`: one
    `impl UpstreamKind` (`id` and the account side) and one `impl BaseChannel`
    (the model side); override `descriptor`. Errors are
-   `gproxy_upstream::UpstreamError`.
+   `gproxy_upstream::UpstreamError`. If one login flow fronts several identity
+   providers, declare them in `login_variants`, set `login_variants:
+   self.login_variants()` in the descriptor, and read `LoginContext::variant`
+   in the flow.
 4. Forward the feature in the three places listed in step 9:
    `crates/gproxy-sdk/Cargo.toml` (feature and `channels` list),
    `crates/gproxy/Cargo.toml`, and
