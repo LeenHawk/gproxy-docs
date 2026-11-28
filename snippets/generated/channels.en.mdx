@@ -562,13 +562,13 @@ Login flows: Authorization code (PKCE). Manual credential kinds: `oauth`.
 | `base_url` | String | No | Connect-RPC origin; defaults to https://server.codeium.com. Provider column, not config JSON. | `https://server.codeium.com` |
 | `authorize_url` | String | No | Devin browser PKCE authorization endpoint. | `https://app.devin.ai/auth/cli/continue` |
 | `token_url` | String | No | Devin authorization-code exchange endpoint. | `https://api.devin.ai/auth/cli/token` |
-| `client_name` | String | No | ClientMetadata #1 and #12; defaults to the CLI's own name. | — |
-| `client_version` | String | No | ClientMetadata #2 and #7; defaults to the captured CLI build. | — |
+| `client_name` | String | No | ClientMetadata #12 and #28, and #1 on account calls; defaults to the CLI's internal name, chisel. The chat call's #1 is always devin-cli. | — |
+| `client_version` | String | No | ClientMetadata #2 and #7; defaults to the captured CLI build (3000.15.14). | — |
 | `locale` | String | No | ClientMetadata #4; defaults to en. | — |
 | `os` | String | No | ClientMetadata #5; defaults to windows, as the capture carried. | — |
 | `models` | JSON | No | Operator-defined model aliases and additional selectors. Discovery uses the live upstream catalogue; unmapped selectors pass through unchanged and are never downgraded to another model. | — |
-| `max_tokens` | Integer | No | CompletionConfig #2 when the request names no cap. | — |
-| `context_window` | Integer | No | CompletionConfig #3. The reference declares this field max_newlines and writes the context window into it; the key is named for the use, not the declaration. Also accepted as max_newlines. | — |
+| `max_tokens` | Integer | No | CompletionConfig #2 when the request names no cap; defaults to 128000, as the CLI sends. | — |
+| `max_newlines` | Integer | No | CompletionConfig #3; defaults to 400, as Devin CLI 3000.15.14 sends. Also accepted as context_window. | — |
 | `headers` | HTTP headers | No | Static headers added to every call. | — |
 | `forward_thinking` | Boolean | No | Forward thinking blocks from request history. Defaults to true; disabling removes reasoning content and signatures without disabling model thinking. | — |
 | `credential_strategy` | String | No | How the host picks among this provider's credentials. | — |

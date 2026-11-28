@@ -2719,14 +2719,14 @@
             "required": false
           },
           {
-            "description": "ClientMetadata #1 and #12; defaults to the CLI's own name.",
+            "description": "ClientMetadata #12 and #28, and #1 on account calls; defaults to the CLI's internal name, chisel. The chat call's #1 is always devin-cli.",
             "kind": "string",
             "name": "client_name",
             "placeholder": null,
             "required": false
           },
           {
-            "description": "ClientMetadata #2 and #7; defaults to the captured CLI build.",
+            "description": "ClientMetadata #2 and #7; defaults to the captured CLI build (3000.15.14).",
             "kind": "string",
             "name": "client_version",
             "placeholder": null,
@@ -2754,16 +2754,16 @@
             "required": false
           },
           {
-            "description": "CompletionConfig #2 when the request names no cap.",
+            "description": "CompletionConfig #2 when the request names no cap; defaults to 128000, as the CLI sends.",
             "kind": "integer",
             "name": "max_tokens",
             "placeholder": null,
             "required": false
           },
           {
-            "description": "CompletionConfig #3. The reference declares this field max_newlines and writes the context window into it; the key is named for the use, not the declaration. Also accepted as max_newlines.",
+            "description": "CompletionConfig #3; defaults to 400, as Devin CLI 3000.15.14 sends. Also accepted as context_window.",
             "kind": "integer",
-            "name": "context_window",
+            "name": "max_newlines",
             "placeholder": null,
             "required": false
           },

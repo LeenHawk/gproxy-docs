@@ -562,13 +562,13 @@ GPROXY 4.3.0. [下载 JSON](/generated/channels.json).
 | `base_url` | 字符串 | 否 | Connect-RPC origin; defaults to https://server.codeium.com. Provider column, not config JSON. | `https://server.codeium.com` |
 | `authorize_url` | 字符串 | 否 | Devin browser PKCE authorization endpoint. | `https://app.devin.ai/auth/cli/continue` |
 | `token_url` | 字符串 | 否 | Devin authorization-code exchange endpoint. | `https://api.devin.ai/auth/cli/token` |
-| `client_name` | 字符串 | 否 | ClientMetadata #1 and #12; defaults to the CLI's own name. | — |
-| `client_version` | 字符串 | 否 | ClientMetadata #2 and #7; defaults to the captured CLI build. | — |
+| `client_name` | 字符串 | 否 | ClientMetadata #12 and #28, and #1 on account calls; defaults to the CLI's internal name, chisel. The chat call's #1 is always devin-cli. | — |
+| `client_version` | 字符串 | 否 | ClientMetadata #2 and #7; defaults to the captured CLI build (3000.15.14). | — |
 | `locale` | 字符串 | 否 | ClientMetadata #4; defaults to en. | — |
 | `os` | 字符串 | 否 | ClientMetadata #5; defaults to windows, as the capture carried. | — |
 | `models` | JSON | 否 | Operator-defined model aliases and additional selectors. Discovery uses the live upstream catalogue; unmapped selectors pass through unchanged and are never downgraded to another model. | — |
-| `max_tokens` | 整数 | 否 | CompletionConfig #2 when the request names no cap. | — |
-| `context_window` | 整数 | 否 | CompletionConfig #3. The reference declares this field max_newlines and writes the context window into it; the key is named for the use, not the declaration. Also accepted as max_newlines. | — |
+| `max_tokens` | 整数 | 否 | CompletionConfig #2 when the request names no cap; defaults to 128000, as the CLI sends. | — |
+| `max_newlines` | 整数 | 否 | CompletionConfig #3; defaults to 400, as Devin CLI 3000.15.14 sends. Also accepted as context_window. | — |
 | `headers` | HTTP 请求头 | 否 | Static headers added to every call. | — |
 | `forward_thinking` | 布尔值 | 否 | Forward thinking blocks from request history. Defaults to true; disabling removes reasoning content and signatures without disabling model thinking. | — |
 | `credential_strategy` | 字符串 | 否 | How the host picks among this provider's credentials. | — |
